@@ -60,3 +60,8 @@ See [storage](storage.md) and [clock and recovery](recovery-clock.md).
 ## A6-04 current contract (2026-11-05)
 
 [Wealth, pricing and funded yield](wealth-pricing.md) defines schema V21, persisted required-source contracts, fresh qualification/fee witnesses, assigned-bank FX pricing and time-weighted bank-funded deposit yield. Production installs bounded accrual/payout providers at stage 1 and daily Tier reevaluation at stage 7; empty domains remain dormant. Source snapshots and unpaid receivables remain distinct from spendable funds. Live branch adapters, issued cards, lending and trading are still separate packages. Earlier no-product/default-Tier2-denial descriptions apply to their historical delivery checkpoints.
+
+
+## A8-06-01 exact-time read foundation
+
+[Effective FX and prospective retirement](fx-effective-time.md) adds separate V47 intraday snapshots and exact-time/original-UUID reads. The daily definition, v1/v2 facts and publication-day index described above remain historical authorities. FxService.latest is now a shared mathematical/display view; live ages use authoritative effectiveMillis(originalUUID), while latestDaily/publication(LocalDate) remain explicitly daily. Intraday history uses a separate <=16 keyset API. Full production handover is not installed.

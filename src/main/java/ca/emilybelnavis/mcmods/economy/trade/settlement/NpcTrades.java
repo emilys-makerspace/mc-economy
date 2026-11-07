@@ -59,7 +59,7 @@ public final class NpcTrades {
         var publication=FxService.latest(reads);if(publication==null||!publication.updateId().equals(terms.source().fxSnapshot())||terms.source().marketCurrency()!=market.currency())throw new IllegalArgumentException("Price source FX unavailable");
         Rational cadPerMarket=Rational.of(publication.rates().get(market.currency())).divide(Rational.of(publication.rates().get(EconomyCurrency.CAD)));
         if(!cadPerMarket.equals(terms.source().cadPerMarketMajor()))throw new IllegalArgumentException("Price source FX changed");
-        Instant sourceEffective=publication.day().atStartOfDay(ZoneOffset.UTC).toInstant();Instant sourceExpiry=sourceEffective.plus(Duration.ofHours(48));
+        Instant sourceEffective=Instant.ofEpochMilli(FxService.effectiveMillis(reads,publication.updateId()));Instant sourceExpiry=sourceEffective.plus(Duration.ofHours(48));
         if(now.isBefore(sourceEffective)||!now.isBefore(sourceExpiry))throw new IllegalArgumentException("Price source FX stale");
         var ticks=StockStore.market(reads,market.id());long eligible=ticks==null?0:ticks.eligibleTicks(),tickRevision=ticks==null?0:ticks.revision();
         var priceState=MarketStore.price(reads,market.id(),offer.goods().priceKey());var key=new Pricing.Key(market.id(),offer.goods().priceKey(),terms.actor().value(),offer.side(),terms.epoch());

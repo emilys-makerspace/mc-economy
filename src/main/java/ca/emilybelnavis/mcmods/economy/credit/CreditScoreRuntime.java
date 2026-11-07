@@ -140,9 +140,13 @@ public final class CreditScoreRuntime {
         long utcEnd=Math.multiplyExact(Math.floorDiv(time,86_400_000L)+1,86_400_000L);
         long end=Math.min(boundary,Math.min(worldDay+ScorePolicy.DAY_MILLIS,utcEnd));
         if(source!=null)end=Math.min(end,source.effectiveAt());
-        if(end<=time)throw new IllegalStateException("Utilization fold did not advance");
         var pool=state.values.entrySet().stream().filter(e->e.getKey().startsWith("p.")).map(e->CreditReporting.decode(e.getValue())).toList();
         if(pool.size()>3)throw new IllegalStateException("Revolving active portfolio bound");
+        if(pool.stream().map(CreditReporting.Source::currency).distinct().count()>1) {
+            Long nextFx=FxService.nextEffectiveMillis(reads,time,end);
+            if(nextFx!=null)end=Math.min(end,nextFx);
+        }
+        if(end<=time)throw new IllegalStateException("Utilization fold did not advance");
         var area=integral(reads,pool,time,end);
         var total=new Fraction(new BigInteger(state.s("areaN")),new BigInteger(state.s("areaD"))).add(area.ratio());
         var daily=new Fraction(new BigInteger(state.s("dayN")),new BigInteger(state.s("dayD"))).add(area.ratio());
@@ -160,8 +164,11 @@ public final class CreditScoreRuntime {
     static Integral integral(JournalEngine.ReadView reads,List<CreditReporting.Source> pool,long start,long end) {
         if(pool.isEmpty())return new Integral(Fraction.ZERO,"NO_ACTIVE_REVOLVING_FACILITIES");
         boolean nativeUnit=pool.stream().map(CreditReporting.Source::currency).distinct().count()==1;
-        var publication=nativeUnit?null:FxService.publication(reads,Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate());
-        if(!nativeUnit&&publication==null)throw new IllegalStateException("CREDIT_UTILIZATION_HISTORICAL_FX_UNAVAILABLE");
+        var snapshot=nativeUnit?null:FxService.at(reads,start);
+        if(!nativeUnit&&(snapshot==null||start<snapshot.effectiveMillis()||start-snapshot.effectiveMillis()>=86_400_000L))
+            throw new IllegalStateException("CREDIT_UTILIZATION_HISTORICAL_FX_UNAVAILABLE");
+        if(!nativeUnit&&FxService.nextEffectiveMillis(reads,start,end)!=null)throw new IllegalStateException("CREDIT_UTILIZATION_FX_BOUNDARY_REQUIRED");
+        var publication=snapshot==null?null:snapshot.publication();
         Fraction owedStart=Fraction.ZERO,owedEnd=Fraction.ZERO,limit=Fraction.ZERO;
         for(var source:pool) {
             if(start<source.lastDay()||end>source.lastDay()+ScorePolicy.DAY_MILLIS)throw new IllegalStateException("CREDIT_UTILIZATION_DAILY_SOURCE_GAP");

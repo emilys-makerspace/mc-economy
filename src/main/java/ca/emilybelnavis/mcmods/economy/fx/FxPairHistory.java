@@ -36,6 +36,23 @@ public final class FxPairHistory {
         }
     }
 
+    public record ExactCursor(WorldId world,FxQuotes.Pair pair,long upperMillis,java.util.UUID upperId,long exclusiveMillis,java.util.UUID exclusiveId){
+        public ExactCursor{Objects.requireNonNull(world);Objects.requireNonNull(pair);Objects.requireNonNull(upperId);Objects.requireNonNull(exclusiveId);if(upperMillis<0||exclusiveMillis<0||exclusiveMillis>upperMillis||exclusiveMillis==upperMillis&&exclusiveId.toString().compareTo(upperId.toString())>0)throw new IllegalArgumentException("FX intraday cursor");}
+    }
+    public record ExactEntry(java.util.UUID id,long effectiveMillis,BigDecimal numerator,BigDecimal denominator,EffectiveFxSnapshot.Mode mode){}
+    public record ExactPage(List<ExactEntry> entries,ExactCursor next){public ExactPage{entries=List.copyOf(entries);}}
+    /** Keyset pages over only the additive intraday family; no synthesized daily points. */
+    public static ExactPage intradayPage(JournalEngine.ReadView reads,WorldId world,FxQuotes.Pair pair,ExactCursor cursor,int limit){
+        if(limit<1||limit>16||cursor!=null&&(!cursor.world().equals(world)||!cursor.pair().equals(pair)))throw new IllegalArgumentException("FX intraday cursor scope/page");
+        if(reads.query("SELECT name FROM sqlite_master WHERE type='table' AND name='effective_fx_snapshots'",List.of(),1).isEmpty())return new ExactPage(List.of(),null);
+        var head=reads.query("SELECT id,effective_ms FROM effective_fx_snapshots WHERE world_id=? ORDER BY effective_ms DESC,id DESC LIMIT 1",List.of(world.value().toString()),1);if(head.isEmpty())return new ExactPage(List.of(),null);
+        long upper=cursor==null?Long.parseLong(head.getFirst().get("effective_ms")):cursor.upperMillis();java.util.UUID upperId=cursor==null?java.util.UUID.fromString(head.getFirst().get("id")):cursor.upperId();
+        var parameters=new ArrayList<String>(List.of(world.value().toString(),Long.toString(upper),Long.toString(upper),upperId.toString()));String sql="SELECT payload FROM effective_fx_snapshots WHERE world_id=? AND (effective_ms<? OR (effective_ms=? AND id<=?))";
+        if(cursor!=null){sql+=" AND (effective_ms<? OR (effective_ms=? AND id<?))";parameters.add(Long.toString(cursor.exclusiveMillis()));parameters.add(Long.toString(cursor.exclusiveMillis()));parameters.add(cursor.exclusiveId().toString());}
+        sql+=" ORDER BY effective_ms DESC,id DESC LIMIT ?";parameters.add(Integer.toString(limit));var rows=reads.query(sql,parameters,limit);var entries=new ArrayList<ExactEntry>();for(var row:rows){var snapshot=EffectiveFxFacts.decode(row.get("payload"));entries.add(new ExactEntry(snapshot.id(),snapshot.effectiveMillis(),snapshot.rates().get(pair.source()),snapshot.rates().get(pair.target()),snapshot.mode()));}
+        ExactCursor next=null;if(entries.size()==limit){var last=entries.getLast();next=new ExactCursor(world,pair,upper,upperId,last.effectiveMillis(),last.id());}return new ExactPage(entries,next);
+    }
+
     public static Day day(JournalEngine.ReadView reads, FxQuotes.Pair pair, LocalDate date) {
         var publication = FxService.publication(reads, date);
         if (publication == null) return new Day(date, null, null);
@@ -49,7 +66,7 @@ public final class FxPairHistory {
         if (limit < 1 || limit > 100) throw new IllegalArgumentException("FX history page size");
         if (cursor != null && (!cursor.world().equals(world) || !cursor.pair().equals(pair)))
             throw new IllegalArgumentException("FX cursor scope");
-        var latest = FxService.latest(reads);
+        var latest = FxService.latestDaily(reads);
         if (latest == null) throw new IllegalStateException("FX_UNINITIALIZED");
         var origin = FxService.origin(reads);
         var first = LocalDate.ofEpochDay(origin / FxService.DAY_MILLIS);

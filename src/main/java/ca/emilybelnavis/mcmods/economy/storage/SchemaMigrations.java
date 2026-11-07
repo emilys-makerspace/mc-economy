@@ -8,7 +8,7 @@ import java.util.UUID;
 /** Ordered trusted SQL; the complete pending chain shares one transaction. */
 final class SchemaMigrations {
     static final int MINIMUM_SUPPORTED = 1;
-    static final int CURRENT = 46;
+    static final int CURRENT = 48;
     static final int APPLICATION_ID = 0x45434F4E;
     record Migration(int version, String name, List<String> statements) {
         Migration { statements = List.copyOf(statements); }
@@ -71,7 +71,23 @@ final class SchemaMigrations {
             new Migration(43,"trader stock loaded ticks and original progression",ca.emilybelnavis.mcmods.economy.trade.stock.StockSchema.statements()),
             new Migration(44,"atomic account NPC settlement and private bridge postings",npcStatements()),
             new Migration(45,"NPC cash settlement and physical custody",ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashSchema.statements()),
-            new Migration(46,"currency prime history and loan policy provenance",currencyPrimeStatements()));
+            new Migration(46,"currency prime history and loan policy provenance",currencyPrimeStatements()),
+            new Migration(47,"prospective fixed retirement and exact-time FX",effectiveFxStatements()),
+            new Migration(48,"financial-day macro provider and atomic handover",macroStatements()));
+
+    private static List<String> macroStatements() {
+        var statements=new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroSchema.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.statements());
+        return List.copyOf(statements);
+    }
+    private static List<String> effectiveFxStatements() {
+        var statements=new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.fx.EffectiveFxSchema.statements());
+        return List.copyOf(statements);
+    }
 
     private static List<String> currencyPrimeStatements() {
         var statements=new java.util.ArrayList<String>();

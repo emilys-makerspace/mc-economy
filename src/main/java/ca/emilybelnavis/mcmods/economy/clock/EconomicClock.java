@@ -73,6 +73,7 @@ public final class EconomicClock {
     private final Clock wall;
     private final Map<String, SystemDefinition> definitions;
     private final Map<String, DeferredSystem> deferred;
+    private final Map<String,String> installedSuccessors;
     private final Map<String, Integer> order = new HashMap<>();
     private final JournalEngine journal;
     public EconomicClock(FoundationStore store, Clock wall, Collection<SystemDefinition> systems) {
@@ -81,8 +82,12 @@ public final class EconomicClock {
 
     public EconomicClock(FoundationStore store, Clock wall, Collection<SystemDefinition> systems,
                          Map<String, DeferredSystem> deferred) {
+        this(store,wall,systems,deferred,Map.of());
+    }
+    public EconomicClock(FoundationStore store,Clock wall,Collection<SystemDefinition> systems,Map<String,DeferredSystem> deferred,Map<String,String> successors) {
         this.store = store; this.wall = wall;
         this.deferred = Map.copyOf(deferred);
+        this.installedSuccessors=Map.copyOf(successors);
         if (systems.size() > 64) throw new IllegalArgumentException("System registry bound");
         Map<String, SystemDefinition> copy = new TreeMap<>();
         for (var system : systems) if (copy.putIfAbsent(system.id(), system) != null) throw new IllegalArgumentException("Duplicate system");
@@ -134,6 +139,12 @@ public final class EconomicClock {
                     if (implementation == null || !signature(definition,implementation,origin).equals(version.get("implementation_id"))) throw failure("Historical simulator missing or changed");
                 }
             }
+            for(var row:tx.query("SELECT payload FROM fixed_system_retirements ORDER BY system_id",List.of(),64)) {
+                var retirement=FixedRetirements.decode(row.get("payload"));var definition=definitions.get(retirement.system());
+                if(definition==null||!FixedRetirements.retains(installedSuccessors.get(retirement.successor()),retirement.successorImplementations())
+                        ||!FixedRetirements.versions(tx::query,retirement.system()).equals(retirement.versions())
+                        ||!signature(definition,Objects.requireNonNull(definition.versions().get(retirement.version())),retirement.originMillis()).equals(retirement.signature()))throw failure("Retired fixed implementation/successor missing or changed");
+            }
             var meta = tx.query("SELECT * FROM economic_metadata", List.of(), 1).getFirst();
             if (!tx.query("SELECT u.update_id FROM economic_updates u WHERE NOT EXISTS(SELECT 1 FROM journal_records r WHERE r.sequence=u.journal_sequence AND r.record_type='foundation:economic-update') LIMIT 1",List.of(),1).isEmpty()) throw failure("Completion lacks authoritative economic record");
             var count = tx.query("SELECT count(*) AS count,COALESCE(max(economic_sequence),0) AS maximum FROM economic_updates", List.of(), 1).getFirst();
@@ -180,11 +191,25 @@ public final class EconomicClock {
         }
     }
 
+    /** Trusted reservation; an original receipt is returned before current successor/time checks. */
+    /** Pure retirement component for an atomic prospective macro activation. */
+    public JournalEngine.Commit prepareRetirement(JournalEngine.ReadView reads,UUID operation,String system,long takeover,DeadlineDispatcher.Successor successor) {
+        return FixedRetirements.prepare(reads,store.snapshot().worldId(),Objects.requireNonNull(definitions.get(system)),takeover,successor,Math.max(0,wall.millis()),operation);
+    }
+    public FixedRetirements.Receipt retire(String system,long takeoverMillis,DeadlineDispatcher dispatcher,String successorId) {
+        var original=store.transaction(tx->FixedRetirements.read(tx::query,system));
+        if(original!=null){if(original.takeoverMillis()!=takeoverMillis||!original.successor().equals(successorId))throw new IllegalArgumentException("Original retirement changed");return original;}
+        var successor=dispatcher.successorAt(successorId,takeoverMillis);
+        if(!FixedRetirements.retains(installedSuccessors.get(successorId),successor.implementations()))throw new IllegalArgumentException("Successor missing from fixed/domain registry");
+        return FixedRetirements.retire(store,wall,Objects.requireNonNull(definitions.get(system)),takeoverMillis,successor);
+    }
+
     /** Explicit future boundary; overdue intervals always retain the historical scheduled version. */
     public void scheduleVersion(String system, int version, long effectiveEndMillis) {
         var definition = Objects.requireNonNull(definitions.get(system)); var implementation = Objects.requireNonNull(definition.versions().get(version));
         store.transaction(tx -> {
             activateOpenedSystems(tx);
+            if(FixedRetirements.read(tx::query,system)!=null)throw new IllegalArgumentException("Fixed system retirement freezes its version schedule");
             var rows = tx.query("SELECT frontier_ms,origin_ms,active_observed_ms FROM economic_systems WHERE system_id=?", List.of(system), 1);
             if (rows.isEmpty()) throw new IllegalArgumentException("Economic system has no opening");
             long frontier = num(rows.getFirst(), "frontier_ms");
@@ -255,15 +280,15 @@ public final class EconomicClock {
 
     private void observe(FoundationStore.Transaction tx, long now) {
         activateOpenedSystems(tx);
-        tx.execute("UPDATE economic_systems SET active_observed_ms=CAST(? AS INTEGER) "
-                + "WHERE active_observed_ms<CAST(? AS INTEGER)", List.of(str(now), str(now)));
+        tx.execute("UPDATE economic_systems SET active_observed_ms=min(CAST(? AS INTEGER),COALESCE((SELECT first_excluded_ms-cadence_ms FROM fixed_system_retirements r WHERE r.system_id=economic_systems.system_id),CAST(? AS INTEGER))) "
+                + "WHERE active_observed_ms<min(CAST(? AS INTEGER),COALESCE((SELECT first_excluded_ms-cadence_ms FROM fixed_system_retirements r WHERE r.system_id=economic_systems.system_id),CAST(? AS INTEGER)))", List.of(str(now),str(now),str(now),str(now)));
         tx.execute("UPDATE economic_metadata SET observed_wall_ms=max(observed_wall_ms,CAST(? AS INTEGER)) WHERE singleton=1", List.of(str(now)));
     }
 
     private Journal.Intent nextIntent(FoundationStore.Transaction tx, long now) {
         activateOpenedSystems(tx);
         var next = tx.query("SELECT * FROM economic_systems", List.of(), 64).stream()
-                .filter(row -> nextEnd(row) <= now)
+                .filter(row -> nextEnd(row) <= now && !FixedRetirements.excludes(tx::query,row.get("system_id"),nextEnd(row)))
                 .min(Comparator.<Map<String,String>>comparingLong(this::nextEnd)
                         .thenComparingInt(row -> order.get(row.get("system_id"))).thenComparing(row -> row.get("system_id"))).orElse(null);
         if (next == null) return null;
@@ -280,6 +305,7 @@ public final class EconomicClock {
         return store.transaction(tx -> {
             activateOpenedSystems(tx);
             return tx.query("SELECT * FROM economic_systems", List.of(), 64).stream()
+                    .filter(row->!FixedRetirements.excludes(tx::query,row.get("system_id"),nextEnd(row)))
                     .map(this::nextEnd).min(Long::compareTo).orElse(null);
         });
     }
@@ -322,7 +348,7 @@ public final class EconomicClock {
         long debt = 0;
         boolean waiting = false;
         for (var row : tx.query("SELECT * FROM economic_systems", List.of(), 64)) {
-            long target = Math.max(now, observedTarget(row, meta));
+            long target = FixedRetirements.eligibleTarget(tx::query,row.get("system_id"),Math.max(now, observedTarget(row, meta)));
             long frontier = num(row, "frontier_ms");
             long cadence = definitions.get(row.get("system_id")).cadenceMillis();
             debt = Math.addExact(debt, Math.max(0, target - frontier) / cadence);
@@ -345,6 +371,7 @@ public final class EconomicClock {
         var state = reads.query("SELECT * FROM economic_systems WHERE system_id=?", List.of(system), 1).getFirst();
         long start = Long.parseLong(intent.request().fields().get("start")), end = Long.parseLong(intent.request().fields().get("end"));
         int version = Integer.parseInt(intent.request().fields().get("version"));
+        if(FixedRetirements.excludes(reads::query,system,end))throw failure("Economic interval was prospectively retired");
         var scheduled = reads.query("SELECT * FROM economic_versions WHERE system_id=? AND effective_end_ms<=? ORDER BY effective_end_ms DESC LIMIT 1", List.of(system,str(end)),1).getFirst();
         if (start != num(state,"frontier_ms") || end != Math.addExact(start,definition.cadenceMillis()) || Integer.parseInt(scheduled.get("version")) != version || !actor(system).equals(intent.actor())) throw failure("Economic request/checkpoint mismatch");
         var implementation = definition.versions().get(version);

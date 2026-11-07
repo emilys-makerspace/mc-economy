@@ -48,7 +48,7 @@ public final class FoundationRuntime implements FoundationStore {
         public static Configuration production(Clock wall,FinancialCalendar.Config config,List<ca.emilybelnavis.mcmods.economy.pricing.WealthValuation.Source> sources) {
             var valuation=ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.wealth(sources);
             return new Configuration(RecordCatalog.core(),List.of(),List.of(FxService.definition()),wall,
-                    Map.of(FxService.SYSTEM,FxService.deferred()),true,java.util.stream.Stream.of(ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.providers(valuation),ca.emilybelnavis.mcmods.economy.credit.CreditRuntime.providers(),java.util.List.of(ca.emilybelnavis.mcmods.economy.loan.LoanRuntime.provider(),ca.emilybelnavis.mcmods.economy.autopay.AutopayRuntime.provider()),ca.emilybelnavis.mcmods.economy.debt.DebtRuntime.providers(),ca.emilybelnavis.mcmods.economy.credit.CreditScoreRuntime.providers()).flatMap(java.util.Collection::stream).toList(),config,valuation);
+                    Map.of(FxService.SYSTEM,FxService.deferred()),true,java.util.stream.Stream.of(ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.providers(valuation),ca.emilybelnavis.mcmods.economy.credit.CreditRuntime.providers(),java.util.List.of(ca.emilybelnavis.mcmods.economy.loan.LoanRuntime.provider(),ca.emilybelnavis.mcmods.economy.autopay.AutopayRuntime.provider()),ca.emilybelnavis.mcmods.economy.debt.DebtRuntime.providers(),ca.emilybelnavis.mcmods.economy.credit.CreditScoreRuntime.providers(),java.util.List.<DeadlineDispatcher.Provider>of(new ca.emilybelnavis.mcmods.economy.simulation.macro.MacroProvider())).flatMap(java.util.Collection::stream).toList(),config,valuation);
         }
         public static Configuration core() { return new Configuration(RecordCatalog.core(),List.of(),List.of(),Clock.systemUTC()); }
     }
@@ -88,7 +88,7 @@ public final class FoundationRuntime implements FoundationStore {
             if(!progress.ready()) return progress;
             store.cleanShutdownEligible(false);
             projections=new ProjectionManager(store,configuration.projections());
-            clock=new EconomicClock(store,configuration.wall(),configuration.systems(),configuration.deferredSystems());
+            clock=new EconomicClock(store,configuration.wall(),configuration.systems(),configuration.deferredSystems(),DeadlineDispatcher.implementations(configuration.deadlineProviders()));
             if (!configuration.financialCalendar() && !store.transaction(tx -> tx.query(
                     "SELECT singleton FROM financial_calendar", List.of(), 1)).isEmpty())
                 throw new StorageException(StorageException.Kind.SCHEMA, "Installed financial calendar requires its scheduler");

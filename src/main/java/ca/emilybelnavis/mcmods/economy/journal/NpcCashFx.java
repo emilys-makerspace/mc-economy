@@ -51,21 +51,21 @@ public final class NpcCashFx {
         Instant expires=earlier(tradeExpiry,now.plusSeconds(30));
         // Retain the installed 48-hour policy and its actual legacy effective time. A8-06
         // will replace this shared daily reader with exact-effective-time snapshot reads.
-        expires=earlier(expires,publication.day().atStartOfDay(ZoneOffset.UTC).toInstant().plus(Duration.ofHours(48)));
+        expires=earlier(expires,Instant.ofEpochMilli(FxService.effectiveMillis(reads,publication.updateId())).plus(Duration.ofHours(48)));
         if(!expires.isAfter(now))throw new IllegalArgumentException("NPC_FX_EXPIRED");
         issued.values().removeIf(q->!now.isBefore(q.expiresAt()));
         if(issued.size()>=1024)throw new IllegalStateException("NPC_FX_QUOTE_OVERLOAD");
         FxQuotes.Quote conversion;ServicePricing.Quote priced;
         if(side==Pricing.Side.BUY) {
             conversion=conversions.issue(owner,new FxQuotes.Pair(cashCurrency,goodsGross.currency()),FxQuotes.Side.EXACT_CREDIT,
-                    goodsGross,publication,now,Duration.between(now,expires));
+                    goodsGross,FxService.snapshot(reads,publication.updateId()),now,Duration.between(now,expires));
             priced=pricing.quote(reads,world,owner,bank,ServicePricing.Service.NPC_CASH_FX,conversion.debit(),now,expires);
         } else {
             priced=pricing.quote(reads,world,owner,bank,ServicePricing.Service.NPC_CASH_FX,goodsGross,now,expires);
             long net=Math.subtractExact(goodsGross.minorUnits(),priced.fee().minorUnits());
             if(net<=0)throw new IllegalArgumentException("NPC_FX_NET_ZERO");
             conversion=conversions.issue(owner,new FxQuotes.Pair(goodsGross.currency(),cashCurrency),FxQuotes.Side.EXACT_DEBIT,
-                    new Money(goodsGross.currency(),net),publication,now,Duration.between(now,expires));
+                    new Money(goodsGross.currency(),net),FxService.snapshot(reads,publication.updateId()),now,Duration.between(now,expires));
         }
         if(!conversion.world().equals(world) || !conversion.actor().equals(owner))throw new IllegalArgumentException("NPC_FX_BOOK_WORLD");
         if(conversion.debit().minorUnits()<=0 || conversion.credit().minorUnits()<=0)throw new IllegalArgumentException("NPC_FX_ZERO_PRINCIPAL");
@@ -83,7 +83,7 @@ public final class NpcCashFx {
         supplier(reads,world,supplier);
         if(!supplier.equals(quote.supplier()))throw new IllegalArgumentException("NPC_FX_PROVIDER_STALE");
         var publication=publication(reads,now);
-        var conversion=conversions.requireFresh(quote.conversion().id(),owner,world,publication,1,now);
+        var conversion=conversions.requireFresh(quote.conversion().id(),owner,world,FxService.snapshot(reads,publication.updateId()),1,now);
         var priced=pricing.requireFresh(quote.pricing(),reads,world,owner,now);
         if(!conversion.equals(quote.conversion()) || conversion.pricing()!=null || conversion.fee().minorUnits()!=0
                 || !priced.institution().key().equals(supplier.key()) || priced.service()!=ServicePricing.Service.NPC_CASH_FX

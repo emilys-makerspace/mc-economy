@@ -70,9 +70,11 @@ public final class WealthValuation {
         var denomination = RebaseSettlement.denomination(reads).orElse(null);
         var fx = FxService.latest(reads);
         if (denomination == null || fx == null) return unavailable("VALUATION_FX_UNAVAILABLE",now);
-        var effective = fx.day().atStartOfDay(ZoneOffset.UTC).toInstant();
+        var effective = Instant.ofEpochMilli(FxService.effectiveMillis(reads,fx.updateId()));
         if (now.isBefore(effective) || now.isAfter(effective.plus(Duration.ofHours(48)))) return unavailable("VALUATION_FX_STALE",now);
         if (!fx.rates().containsKey(denomination.currency())) return unavailable("VALUATION_RATE_MISSING",now);
+        // Compatibility bytes are only fingerprint input, never emitted as a legacy FX fact.
+        // The authoritative UUID above resolves the exact effective time for both families.
         var canonical = new StringBuilder("1|").append(world.value()).append('|').append(owner.value()).append('|')
                 .append(denomination.currency()).append('|').append(denomination.revision()).append('|').append(fx.encode());
         var components = new ArrayList<ValuedComponent>();

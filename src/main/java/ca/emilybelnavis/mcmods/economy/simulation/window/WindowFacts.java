@@ -65,7 +65,7 @@ public final class WindowFacts {
     }
     public static RecordCatalog register(RecordCatalog catalog) {
         return catalog.with(new RecordCatalog.Key(OPEN,1),WindowFacts::decodeOpen)
-                .with(new RecordCatalog.Key(CLOSE,1),WindowFacts::decodeSnapshot);
+                .with(new RecordCatalog.Key(CLOSE,1),WindowFacts::decodeSnapshot).with(new RecordCatalog.Key(OPEN,2),WindowFacts::decodeOpen).with(new RecordCatalog.Key(CLOSE,2),WindowFacts::decodeSnapshot);
     }
     public static UUID stable(String value) { return UUID.nameUUIDFromBytes(("economy:a8:window:v1|"+value).getBytes(StandardCharsets.UTF_8)); }
     public static String digest(String value) {

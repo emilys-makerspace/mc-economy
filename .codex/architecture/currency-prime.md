@@ -35,3 +35,11 @@ Fixed servicing, collection/debt copies and source feeds preserve original UUID/
 V46 appends currency_prime_activation, currency_prime_policies, currency_prime_completions and activation_model_plans with indexed immutable evidence. Registered source codecs, startup/recovery/offline validation and clean backup/restore support46; old worlds retain the stopped complete-world upgrade-backup requirement. Validators bind exact schema, facts/projections, activation inheritance/FX source, source day indices/hashes, model output, chronological currency bounds, child/completion ordering and loan policy provenance. Old migrations, windows/plans, global policy facts and fixed contracts retain their meanings.
 
 A8-06-01 owns prospective fixed retirement and effective-time FX readers. A8-06-02 composes the full stage-0 provider over this scoped plan and prime child/completion interface, with shared activation/readiness and exact FX provenance. A8-07 owns public controls/manual override scheduling and production activation. No automatic dependent execution follows A8-05.
+
+
+## A8-06-01 shared FX migration
+
+[Exact-time FX](fx-effective-time.md) now supplies original-UUID/latest/frontier adapters for activation and historical prime-source validation. Publication day remains display/legacy history only; the48-hour activation freshness rule uses exact source milliseconds. A8-06-01 delivers retirement/read infrastructure without registering the combined provider or activating takeover.
+
+
+A8-06-02 now delivers the dormant [financial-day macro provider](macro-rates.md) under V48: atomic A/F/H handover, actual child-linked v2 window/publication facts, immutable selected baskets, chronological paused/manual/resume policies, and readiness through the separate dispatcher completion. Historical facts and fixed loan terms remain unchanged; A8-07 lifecycle activation is still unselected.

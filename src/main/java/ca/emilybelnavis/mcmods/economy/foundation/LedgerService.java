@@ -122,7 +122,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         var publication=ca.emilybelnavis.mcmods.economy.credit.CreditTreasury.publication(reads,now);
         if(publication==null)return new ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.Inputs(new ca.emilybelnavis.mcmods.economy.credit.CreditUnderwriting.FxSnapshot(new UUID(0,0),now,now,Map.of(),false),false,false,0);
         var fx=new ca.emilybelnavis.mcmods.economy.credit.CreditUnderwriting.FxSnapshot(publication.updateId(),
-                publication.day().atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),now,publication.rates(),true);
+                ca.emilybelnavis.mcmods.economy.fx.FxService.effectiveMillis(reads,publication.updateId()),now,publication.rates(),true);
         var player=((PartyRef.Player)owner.owner()).id();
         boolean reconciled=new ca.emilybelnavis.mcmods.economy.credit.CreditLiabilities().read(reads,owner.world(),player,java.time.Instant.ofEpochMilli(now)).available()
                 &&new ca.emilybelnavis.mcmods.economy.loan.LoanLiabilities().read(reads,owner.world(),player,java.time.Instant.ofEpochMilli(now)).available();
@@ -945,7 +945,8 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     }
 
     private static Deposits.FxSnapshot depositFx(JournalEngine.ReadView reads) {
-        var publication = ca.emilybelnavis.mcmods.economy.fx.FxService.publication(reads, java.time.LocalDate.now(java.time.ZoneOffset.UTC));
+        var publication = ca.emilybelnavis.mcmods.economy.fx.FxService.latest(reads);
+        if(publication!=null){long effective=ca.emilybelnavis.mcmods.economy.fx.FxService.effectiveMillis(reads,publication.updateId());long age=System.currentTimeMillis()-effective;if(age<0||age>=86_400_000L)return null;}
         return publication == null ? null : new Deposits.FxSnapshot(
                 publication.day() + "/" + publication.updateId() + "/" + publication.policyId(), publication.conversionRates());
     }

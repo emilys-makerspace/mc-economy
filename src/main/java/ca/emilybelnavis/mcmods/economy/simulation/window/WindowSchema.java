@@ -40,14 +40,22 @@ public final class WindowSchema {
                 while(rows.next()) {
                     var open=decodeOpen(rows.getString("payload"));
                     if(!open.world().value().toString().equals(world)||!open.id().toString().equals(rows.getString("id"))
-                            ||!open.id().toString().equals(rows.getString("operation_id"))||open.day()!=rows.getLong("day_index")
+                            ||open.day()!=rows.getLong("day_index")
                             ||open.boundaryMillis()!=rows.getLong("boundary_ms")||open.frontier()!=rows.getLong("input_frontier"))throw invalid("Window open projection");
-                    long sourceSequence=requireFact(c,open.world().value().toString(),open.id().toString(),OPEN,rows.getString("payload"));
+                    long sourceSequence=requireFact(c,open.world().value().toString(),rows.getString("operation_id"),OPEN,rows.getString("payload"));
                     if(open.frontier()>=sourceSequence)throw invalid("Window frontier is not prior to open");
                     try(var late=c.prepareStatement("SELECT 1 FROM activity_batches b JOIN journal_transactions t ON t.operation_id=b.operation_id WHERE b.day_index<=? AND t.sequence>? LIMIT 1")) {
                         late.setLong(1,open.day());late.setLong(2,open.frontier());try(var found=late.executeQuery()){if(found.next())throw invalid("Late source in globally sealed day");}
                     }
-                    if(previous==null) {
+                    boolean provider=providerFact(c,rows.getString("operation_id"),OPEN,open.id().toString(),"00-open",open.boundaryMillis());
+                    boolean transition=provider&&open.day()==open.firstDay();
+                    if(transition) {
+                        var a=ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeFacts.decodeActivation(scalar(c,"SELECT payload FROM currency_prime_activation WHERE world_id=?",world));
+                        long activated=Long.parseLong(scalar(c,"SELECT activated_ms FROM activity_activation WHERE singleton=1"));
+                        long seeded=Long.parseLong(scalar(c,"SELECT MAX(accounting_ms) FROM activity_batches WHERE seed=1"));
+                        if(open.originMillis()!=a.originMillis()||open.originMillis()!=Long.parseLong(scalar(c,"SELECT origin_ms FROM activity_activation WHERE singleton=1"))||open.firstDay()!=(a.effectiveMillis()-a.originMillis())/ActivityFacts.DAY_MILLIS||open.boundaryMillis()!=a.firstEventMillis()||!open.anchor().equals(a.fxSnapshot())||Math.max(activated,seeded)>a.effectiveMillis()||previous!=null&&(previous.day()>=open.day()||closeCount(c,previous.id().toString())!=11))throw invalid("Provider initial coverage");
+                        first=open.firstDay();
+                    } else if(previous==null) {
                         long origin=Long.parseLong(scalar(c,"SELECT origin_ms FROM activity_activation WHERE singleton=1"));
                         long activated=Long.parseLong(scalar(c,"SELECT activated_ms FROM activity_activation WHERE singleton=1"));
                         String ready=scalar(c,"SELECT MAX(accounting_ms) FROM activity_batches WHERE seed=1");
@@ -68,11 +76,12 @@ public final class WindowSchema {
                 while(rows.next()) {
                     var snapshot=decodeSnapshot(rows.getString("payload")); var open=snapshot.open();
                     if(!snapshot.currency().name().equals(rows.getString("currency"))||open.day()!=rows.getLong("day_index")
-                            ||!open.id().toString().equals(rows.getString("open_id"))||!snapshot.id().toString().equals(rows.getString("operation_id"))
+                            ||!open.id().toString().equals(rows.getString("open_id"))
                             ||!snapshot.hash().equals(rows.getString("hash")))throw invalid("Window close projection");
                     String openPayload=scalar(c,"SELECT payload FROM macro_window_opens WHERE id=?",open.id().toString());
                     if(openPayload==null||!decodeOpen(openPayload).equals(open))throw invalid("Window close/open linkage");
-                    requireFact(c,world,snapshot.id().toString(),CLOSE,rows.getString("payload"));
+                    requireFact(c,world,rows.getString("operation_id"),CLOSE,rows.getString("payload"));
+                    providerFact(c,rows.getString("operation_id"),CLOSE,snapshot.id().toString(),"01-close/"+snapshot.currency().name(),open.boundaryMillis());
                     for(var day:snapshot.days()) {
                         if(day.index()==open.day())validateDay(c,snapshot.currency(),open,day);
                         else {
@@ -96,9 +105,16 @@ public final class WindowSchema {
             s.setLong(1,day.index());s.setLong(2,open.frontier());try(var r=s.executeQuery()){if(r.next())throw invalid("Late source in sealed day");}
         }
     }
+    private static boolean providerFact(Connection c,String operation,String type,String legacy,String target,long boundary)throws SQLException {
+        String version=scalar(c,"SELECT r.record_version FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=?",operation,type);
+        if("1".equals(version)){if(!operation.equals(legacy))throw invalid("Legacy window operation");return false;}
+        if(!"2".equals(version))throw invalid("Window source version");
+        ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.requireChild(c,operation,target,boundary);
+        return true;
+    }
     private static long closeCount(Connection c,String id)throws SQLException{return Long.parseLong(scalar(c,"SELECT COUNT(*) FROM macro_window_closes WHERE open_id=?",id));}
     private static long requireFact(Connection c,String world,String operation,String type,String payload)throws SQLException {
-        try(var s=c.prepareStatement("SELECT t.sequence FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE t.world_id=? AND t.operation_id=? AND r.record_type=? AND r.record_version=1 AND r.payload=?")) {
+        try(var s=c.prepareStatement("SELECT t.sequence FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE t.world_id=? AND t.operation_id=? AND r.record_type=? AND r.record_version IN (1,2) AND r.payload=?")) {
             s.setString(1,world);s.setString(2,operation);s.setString(3,type);s.setString(4,payload);
             try(var r=s.executeQuery()){if(!r.next())throw invalid("Missing window source fact");long sequence=r.getLong(1);if(r.next())throw invalid("Duplicate window fact");return sequence;}
         }

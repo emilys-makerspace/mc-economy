@@ -72,7 +72,7 @@ public final class ActivationModelPlans {
                                           Map<EconomyCurrency,BigDecimal> fx,MacroModel.Config config) {
         var a=CurrencyPrimes.activation(reads,world).orElseThrow(()->new IllegalArgumentException("Activation unavailable"));
         var open=WindowStore.readOpen(reads,window);
-        if(!a.id().equals(activation)||!a.config().equals(config.id())||reference!=a.reference()||open==null||!open.world().equals(world)
+        if(!a.id().equals(activation)||(!a.config().equals(config.id())&&(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.read(reads,world).isEmpty()||open==null||!ca.emilybelnavis.mcmods.economy.simulation.macro.MacroControls.current(reads,world,open.boundaryMillis()).config().equals(config)))||reference!=a.reference()||open==null||!open.world().equals(world)
                 ||open.originMillis()!=a.originMillis()||open.boundaryMillis()<a.firstEventMillis()||!open.currencies().equals(a.currencies())||!open.config().equals(config.id()))throw new IllegalArgumentException("Activation model source mismatch");
         long first=(a.effectiveMillis()-a.originMillis())/ActivityFacts.DAY_MILLIS;
         if(open.firstDay()>first)throw new IllegalArgumentException("Activation begins before source coverage");
@@ -119,10 +119,10 @@ public final class ActivationModelPlans {
                     long sequence=fact(c,rows.getString("operation_id"),INPUT,activation+"|"+first+"|"+rows.getString("input_payload"));
                     if(fact(c,rows.getString("operation_id"),OUTPUT,activation+"|"+window+"|"+rows.getString("output_payload"))!=sequence)throw new SQLException("Activation model input/output transaction");
                     var open=WindowStore.readOpen(reads,window);
-                    if(fact(c,open.id().toString(),WindowFacts.OPEN,WindowFacts.encode(open))>=sequence)throw new SQLException("Activation model precedes open");
+                    if(fact(c,scalar(c,"SELECT operation_id FROM macro_window_opens WHERE id=?",open.id().toString()),WindowFacts.OPEN,WindowFacts.encode(open))>=sequence)throw new SQLException("Activation model precedes open");
                     for(var currency:a.currencies()) {
                         var snapshot=WindowStore.read(reads,window,currency);
-                        if(fact(c,snapshot.id().toString(),WindowFacts.CLOSE,WindowFacts.encode(snapshot))>=sequence)throw new SQLException("Activation model precedes close");
+                        if(fact(c,scalar(c,"SELECT operation_id FROM macro_window_closes WHERE open_id=? AND currency=?",window.toString(),currency.name()),WindowFacts.CLOSE,WindowFacts.encode(snapshot))>=sequence)throw new SQLException("Activation model precedes close");
                     }
                     String activationSequence=scalar(c,"SELECT t.sequence FROM currency_prime_activation a JOIN journal_transactions t ON t.operation_id=a.operation_id WHERE a.world_id=?",a.world().value().toString());
                     if(activationSequence==null||Long.parseLong(activationSequence)>=sequence)throw new SQLException("Activation model precedes activation");
@@ -133,8 +133,8 @@ public final class ActivationModelPlans {
     }
     private static String[] parts(String payload){if(payload==null||payload.length()>16384)throw new IllegalArgumentException("Activation model bound");var parts=payload.split("\\|",3);if(parts.length!=3)throw new IllegalArgumentException("Activation model fields");return parts;}
     private static long fact(Connection c,String operation,String type,String payload)throws SQLException {
-        if(!"1".equals(scalar(c,"SELECT COUNT(*) FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version=1 AND r.payload=?",operation,type,payload)))throw new SQLException("Activation model fact missing");
-        return Long.parseLong(scalar(c,"SELECT t.sequence FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version=1 AND r.payload=?",operation,type,payload));
+        if(!"1".equals(scalar(c,"SELECT COUNT(*) FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version IN (1,2) AND r.payload=?",operation,type,payload)))throw new SQLException("Activation model fact missing");
+        return Long.parseLong(scalar(c,"SELECT t.sequence FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version IN (1,2) AND r.payload=?",operation,type,payload));
     }
     private static String scalar(Connection c,String sql,String... params)throws SQLException{try(var q=c.prepareStatement(sql)){for(int i=0;i<params.length;i++)q.setString(i+1,params[i]);try(var r=q.executeQuery()){return r.next()?r.getString(1):null;}}}
     private static List<Map<String,String>> query(Connection c,String sql,List<String> params,int max) {

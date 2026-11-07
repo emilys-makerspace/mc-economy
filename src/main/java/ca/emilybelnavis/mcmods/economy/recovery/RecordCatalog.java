@@ -39,6 +39,11 @@ public final class RecordCatalog {
         catalog = ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashFacts.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeFacts.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.fx.EffectiveFxFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.macro.MacroFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.trade.catalog.CatalogFacts.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.trade.catalog.VillageMarketSource.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.clock.DeadlineDispatcher.register(InspectionAudit.register(FxFacts.register(catalog)));

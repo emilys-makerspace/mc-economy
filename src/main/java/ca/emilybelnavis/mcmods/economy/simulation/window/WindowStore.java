@@ -64,25 +64,7 @@ public final class WindowStore {
     }
     public static Snapshot close(FoundationStore store,UUID openId,EconomyCurrency currency) {
         var retained=store.transaction(tx->read(tx::query,openId,currency));if(retained!=null)return retained;
-        var snapshot=store.transaction(tx->{
-            var open=readOpen(tx::query,openId);if(open==null)throw unavailable("Window open is missing");
-            var state=ActivityStore.activation(tx::query);
-            if(state==null||state.sealedThroughDay()!=open.day())throw unavailable("Window seal is not current");
-            var amounts=new EnumMap<ActivityFacts.Kind,Amount>(ActivityFacts.Kind.class);
-            for(var row:tx.query("SELECT kind,count,minor FROM activity_day_counters WHERE day_index=? AND currency=? ORDER BY kind",
-                    List.of(Long.toString(open.day()),currency.name()),11)) {
-                amounts.put(ActivityFacts.Kind.valueOf(row.get("kind")),new Amount(Long.parseLong(row.get("count")),Long.parseLong(row.get("minor"))));
-            }
-            var capacity=tx.query("SELECT free_minor FROM activity_capacity_totals_history WHERE currency=? AND accounting_ms<? AND journal_sequence<=? ORDER BY accounting_ms DESC,journal_sequence DESC LIMIT 1",
-                    List.of(currency.name(),Long.toString(open.boundaryMillis()),Long.toString(open.frontier())),1);
-            // Ready seed proves absence is genuine zero, not an unobserved capacity source.
-            long free=capacity.isEmpty()?0:Long.parseLong(capacity.getFirst().get("free_minor"));
-            var rows=tx.query("SELECT payload FROM macro_window_closes WHERE currency=? AND day_index>=? AND day_index<? ORDER BY day_index",
-                    List.of(currency.name(),Long.toString(Math.max(open.firstDay(),open.day()-13)),Long.toString(open.day())),13);
-            var days=new ArrayList<Day>();
-            for(var row:rows){var previous=decodeSnapshot(row.get("payload"));days.add(previous.days().getLast());}
-            days.add(new Day(open.day(),amounts,free));return new Snapshot(open,currency,days);
-        });
+        var snapshot=store.transaction(tx->captureClose(tx::query,openId,currency));
         String payload=encode(snapshot);
         commit(store,CLOSE_KIND,snapshot.id(),snapshot.open().world(),payload,(intent,reads)->{
             if(!snapshot.open().equals(readOpen(reads,openId)))throw unavailable("Window open changed");
@@ -90,6 +72,57 @@ public final class WindowStore {
                     tx.execute("INSERT INTO macro_window_closes VALUES(?,?,?,?,?,?)",List.of(currency.name(),Long.toString(snapshot.open().day()),openId.toString(),snapshot.id().toString(),payload,snapshot.hash())));
         });
         return store.transaction(tx->read(tx::query,openId,currency));
+    }
+    /** Provider v2 starts an explicit prospective observation horizon at A; old v1 evidence is retained. */
+    public static JournalEngine.Commit prepareOpen(JournalEngine.ReadView reads,WorldId world,UUID operation,long boundary,long observed,UUID config,UUID anchor) {
+        var a=ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.activation(reads,world).orElseThrow();
+        long first=(a.effectiveMillis()-a.originMillis())/ActivityFacts.DAY_MILLIS;
+        var state=ActivityStore.activation(reads);
+        var seed=reads.query("SELECT MAX(accounting_ms) AS ready_ms FROM activity_batches WHERE seed=1",List.of(),1).getFirst().get("ready_ms");
+        if(state==null||!state.ready()||!state.world().equals(world)||state.originMillis()!=a.originMillis()||seed==null||Math.max(state.activatedMillis(),Long.parseLong(seed))>a.effectiveMillis())throw unavailable("Activation day lacks complete observation coverage");
+        long frontier=Long.parseLong(reads.query("SELECT COALESCE(MAX(sequence),0) AS frontier FROM journal_transactions",List.of(),1).getFirst().get("frontier"));
+        var open=new Open(stable("open|"+world.value()+"|"+boundary),world,a.originMillis(),boundary,first,frontier,config,anchor,stateSources(reads),EconomyCurrency.all());
+        validateProviderOpen(reads,open,observed);String payload=encode(open);
+        return new JournalEngine.Commit(List.of(new Journal.Record(OPEN,2,payload)),new Journal.Result(1,"WINDOW_OPENED",open.id().toString()),tx->{
+            tx.execute("INSERT INTO macro_window_opens VALUES(?,?,?,?,?,?)",List.of(open.id().toString(),Long.toString(open.day()),Long.toString(boundary),Long.toString(frontier),operation.toString(),payload));
+            tx.execute("UPDATE activity_activation SET sealed_through_day=? WHERE singleton=1",List.of(Long.toString(open.day())));
+        });
+    }
+    private static void validateProviderOpen(JournalEngine.ReadView reads,Open open,long observed) {
+        var a=ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.activation(reads,open.world()).orElseThrow();
+        if(open.boundaryMillis()>observed||open.firstDay()!=(a.effectiveMillis()-a.originMillis())/ActivityFacts.DAY_MILLIS||!open.anchor().equals(a.fxSnapshot())||open.boundaryMillis()<a.firstEventMillis())throw unavailable("Provider window horizon mismatch");
+        var prior=reads.query("SELECT payload FROM macro_window_opens ORDER BY day_index DESC LIMIT 1",List.of(),1);
+        if(!prior.isEmpty()) {
+            var previous=decodeOpen(prior.getFirst().get("payload"));
+            if(previous.day()>=open.day()||open.day()!=open.firstDay()&&(previous.day()+1!=open.day()||previous.firstDay()!=open.firstDay()||!previous.anchor().equals(open.anchor())))throw unavailable("Provider window must be sequential from activation");
+            if(reads.query("SELECT currency FROM macro_window_closes WHERE open_id=?",List.of(previous.id().toString()),11).size()!=11)throw unavailable("Previous currency closes are incomplete");
+        } else if(open.day()!=open.firstDay())throw unavailable("First provider window missing");
+        if(ActivityStore.activation(reads).sealedThroughDay()>=open.day())throw unavailable("Provider window already sealed");
+    }
+    public static JournalEngine.Commit prepareClose(JournalEngine.ReadView reads,UUID operation,UUID openId,EconomyCurrency currency) {
+        if(read(reads,openId,currency)!=null)throw unavailable("Window currency already closed");
+        var snapshot=captureClose(reads,openId,currency);String payload=encode(snapshot);
+        return new JournalEngine.Commit(List.of(new Journal.Record(CLOSE,2,payload)),new Journal.Result(1,"WINDOW_CLOSED",snapshot.hash()),tx->
+            tx.execute("INSERT INTO macro_window_closes VALUES(?,?,?,?,?,?)",List.of(currency.name(),Long.toString(snapshot.open().day()),openId.toString(),operation.toString(),payload,snapshot.hash())));
+    }
+    private static Snapshot captureClose(JournalEngine.ReadView reads,UUID openId,EconomyCurrency currency) {
+            var open=readOpen(reads,openId);if(open==null)throw unavailable("Window open is missing");
+            var state=ActivityStore.activation(reads);
+            if(state==null||state.sealedThroughDay()!=open.day())throw unavailable("Window seal is not current");
+            var amounts=new EnumMap<ActivityFacts.Kind,Amount>(ActivityFacts.Kind.class);
+            for(var row:reads.query("SELECT kind,count,minor FROM activity_day_counters WHERE day_index=? AND currency=? ORDER BY kind",
+                    List.of(Long.toString(open.day()),currency.name()),11)) {
+                amounts.put(ActivityFacts.Kind.valueOf(row.get("kind")),new Amount(Long.parseLong(row.get("count")),Long.parseLong(row.get("minor"))));
+            }
+            var capacity=reads.query("SELECT free_minor FROM activity_capacity_totals_history WHERE currency=? AND accounting_ms<? AND journal_sequence<=? ORDER BY accounting_ms DESC,journal_sequence DESC LIMIT 1",
+                    List.of(currency.name(),Long.toString(open.boundaryMillis()),Long.toString(open.frontier())),1);
+            // Ready seed proves absence is genuine zero, not an unobserved capacity source.
+            long free=capacity.isEmpty()?0:Long.parseLong(capacity.getFirst().get("free_minor"));
+            var rows=reads.query("SELECT payload FROM macro_window_closes WHERE currency=? AND day_index>=? AND day_index<? ORDER BY day_index",
+                    List.of(currency.name(),Long.toString(Math.max(open.firstDay(),open.day()-13)),Long.toString(open.day())),13);
+            var days=new ArrayList<Day>();
+            for(var row:rows){var previous=decodeSnapshot(row.get("payload"));days.add(previous.days().getLast());}
+            days.add(new Day(open.day(),amounts,free));return new Snapshot(open,currency,days);
     }
     public static Open readOpen(JournalEngine.ReadView reads,UUID id) {
         var rows=reads.query("SELECT payload FROM macro_window_opens WHERE id=?",List.of(id.toString()),1);

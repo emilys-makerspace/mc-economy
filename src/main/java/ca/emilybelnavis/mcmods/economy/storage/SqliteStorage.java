@@ -160,6 +160,11 @@ public final class SqliteStorage implements FoundationStore {
             ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.validate(connection);
+            ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.validate(connection);
+            ca.emilybelnavis.mcmods.economy.fx.EffectiveFxSchema.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.macro.MacroSchema.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.validate(connection);
             ca.emilybelnavis.mcmods.economy.journal.KioskUpgrades.validate(connection);
             LedgerProjection.validateSchema(connection);
             HoldSchema.validate(connection);
@@ -365,6 +370,11 @@ public final class SqliteStorage implements FoundationStore {
             ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.validate(connection);
+            ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.validate(connection);
+            ca.emilybelnavis.mcmods.economy.fx.EffectiveFxSchema.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.macro.MacroSchema.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.validate(connection);
             ca.emilybelnavis.mcmods.economy.journal.KioskUpgrades.validate(connection);
             LedgerProjection.validateSchema(connection);
             HoldSchema.validate(connection);
