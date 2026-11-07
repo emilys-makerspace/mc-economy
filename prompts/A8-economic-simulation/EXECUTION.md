@@ -1,6 +1,6 @@
 # A8 execution queue
 
-Status: technical revision 1 and all 12 packages approved by the user on 2026-11-07; A8-01 through A8-04-02 complete in their recorded scopes. Main gameplay decisions are recorded in [the phase plan](../../.codex/architecture/a8-planning.md), with [technical revision 1](../../.codex/architecture/a8-shared-contracts.md) source-confirmed by [A8-01](../../.codex/A8-01.md). Next selectable package: **A8-05**, currently **unselected**.
+Status: technical revision 1 and all 12 packages approved by the user on 2026-11-07; A8-01 through A8-05 complete in their recorded scopes. Main gameplay decisions are recorded in [the phase plan](../../.codex/architecture/a8-planning.md), with [technical revision 1](../../.codex/architecture/a8-shared-contracts.md) source-confirmed by [A8-01](../../.codex/A8-01.md). Next selectable package: **A8-06-01**, currently **unselected**.
 
 Follow [CONTRACT.md](CONTRACT.md), [project workflow](../../.codex/WORKFLOW.md) and [verification policy](../../.codex/VERIFICATION.md). Execution approval is recorded for all listed packages, subject to prerequisites. The user must still explicitly select the package to begin. A selection begins only that package; no automatic dependent execution, broad tests or game launches.
 
@@ -13,7 +13,7 @@ Follow [CONTRACT.md](CONTRACT.md), [project workflow](../../.codex/WORKFLOW.md) 
 | [A8-03-02](A8-03-02.md) | Entity hooks, stock and progression | [A8-03-01](A8-03-01.md) | Complete: owned entity hooks/stock/progression adapters |
 | [A8-04-01](A8-04-01.md) | Account, NPC and FX settlement | [A8-03-02](A8-03-02.md) | Complete: account/NPC/FX API foundation |
 | [A8-04-02](A8-04-02.md) | Cash and physical custody | [A8-04-01](A8-04-01.md) | Complete: cash/physical-custody APIs |
-| [A8-05](A8-05.md) | Currency-specific prime | [A8-04-02](A8-04-02.md); A8-02-02 model contract | Approved; unselected |
+| [A8-05](A8-05.md) | Currency-specific prime | [A8-04-02](A8-04-02.md); A8-02-02 model contract | Complete: prime/loan-capture foundation |
 | [A8-06-01](A8-06-01.md) | Fixed retirement and effective-time FX foundation | [A8-05](A8-05.md) | Approved; unselected |
 | [A8-06-02](A8-06-02.md) | Financial-day rate provider and FX handover | [A8-06-01](A8-06-01.md); all prior A8 package handoffs | Approved; unselected |
 | [A8-07](A8-07.md) | Configuration, diagnostics, menus and production integration | [A8-06-02](A8-06-02.md) | Approved; unselected |

@@ -76,15 +76,15 @@ public final class LoanEvents {
 
     private static Event event(Map<String, String> row) {
         int version = Integer.parseInt(row.get("record_version"));
-        if (version != 1) throw new IllegalArgumentException("Unsupported loan source version");
+        if (version != 1 && !(version == 2 && row.get("record_type").equals(Loans.FACT))) throw new IllegalArgumentException("Unsupported loan source version");
         var world = new WorldId(UUID.fromString(row.get("world_id")));
         String body = row.get("payload");
         Payload payload;
         WorldId sourceWorld;
         switch (row.get("record_type")) {
             case Loans.FACT -> {
-                Loans.validateFact(body);
-                var snapshot = Loans.decode(body);
+                Loans.validateFact(body,version);
+                var snapshot = Loans.decode(body,version);
                 payload = new ContractChanged(snapshot);
                 sourceWorld = snapshot.world();
             }

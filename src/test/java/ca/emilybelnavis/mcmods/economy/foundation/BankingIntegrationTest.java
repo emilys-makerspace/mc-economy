@@ -19,7 +19,7 @@ class BankingIntegrationTest {
         await(services, services.readiness());
         try {
             BankingIntegration api = services.ledger();
-            assertEquals(1, api.version());
+            assertEquals(2, api.version());
             assertTrue(api.collateralCapabilities().fixed());
             assertFalse(api.collateralCapabilities().variable());
             assertFalse(api.collateralCapabilities().secured());
@@ -28,6 +28,8 @@ class BankingIntegrationTest {
             var grant = PartyAuthorization.admit(services.worldId(), services.sessionId(), owner, false, party, false).orElseThrow();
             var inspection = PartyAuthorization.admit(services.worldId(), services.sessionId(), new PlayerId(UUID.randomUUID()), true, party, true).orElseThrow();
             assertThrows(IllegalArgumentException.class, () -> api.prime(inspection));
+            assertThrows(IllegalArgumentException.class, () -> api.prime(inspection,ca.emilybelnavis.mcmods.economy.api.EconomyCurrency.CAD));
+            assertThrows(IllegalArgumentException.class, () -> api.primeAt(inspection,ca.emilybelnavis.mcmods.economy.api.EconomyCurrency.CAD,0));
             assertThrows(IllegalArgumentException.class, () -> api.valuation(inspection));
             var bank = new InstitutionCatalog.InstitutionId("economy:bank/crownstone");
             assertThrows(IllegalArgumentException.class, () -> api.feeQuote(inspection, bank, ServicePricing.Service.FX, new Money(EconomyCurrency.CAD, 100)));

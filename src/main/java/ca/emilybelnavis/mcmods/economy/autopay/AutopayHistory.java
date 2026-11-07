@@ -31,8 +31,8 @@ final class AutopayHistory {
             var trackers = new LinkedHashMap<UUID,Autopay.Tracker>();
             long nextSequence = sequence; int nextPosition = position;
             for (var row : rows.stream().limit(16).toList()) {
-                if (!row.get("record_version").equals("1")) throw new IllegalStateException("Autopay historical source version");
-                fold(reads,world,new Journal.Record(row.get("record_type"),1,row.get("payload")),trackers);
+                if (!row.get("record_version").equals("1") && !(row.get("record_type").equals(Loans.FACT)&&row.get("record_version").equals("2"))) throw new IllegalStateException("Autopay historical source version");
+                fold(reads,world,new Journal.Record(row.get("record_type"),Integer.parseInt(row.get("record_version")),row.get("payload")),trackers);
                 nextSequence = Autopay.number(row,"sequence"); nextPosition = Integer.parseInt(row.get("position"));
             }
             boolean ready = rows.size() <= 16; long savedSequence = nextSequence; int savedPosition = nextPosition;

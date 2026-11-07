@@ -62,6 +62,8 @@ final class OfflineInspector {
                 ca.emilybelnavis.mcmods.economy.journal.NpcSettlement.validate(c);
                 ca.emilybelnavis.mcmods.economy.trade.settlement.NpcSchema.validate(c);
                 if(schema>=45) ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashSchema.validate(c);
+                if(schema>=46) { ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeSchema.validate(c);
+                    ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.validate(c); }
             }
             if (schema >= 42) {
                 ca.emilybelnavis.mcmods.economy.trade.market.MarketSchema.validate(c);

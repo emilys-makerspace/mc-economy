@@ -1,6 +1,6 @@
 # A8 shared prompt contract
 
-Status: gameplay, technical revision 1 and all 12 A8 packages approved by the user on 2026-11-07, subject to their prerequisites. A8-01 is complete as a document/source checkpoint; A8-02-01 is implemented/verified in its recorded source-counter scope. A8-02-02 is complete in its recorded immutable-window/model scope. A8-03-01 is complete in its recorded detached market/catalog/pricing scope. A8-03-02 is complete in its recorded owned entity/stock/progression scope. A8-04-01 is complete in its account/NPC/FX API scope. A8-04-02 is complete in its cash/physical-custody API scope. The next package is A8-05, unselected. Reading these prompts never authorizes execution.
+Status: gameplay, technical revision 1 and all 12 A8 packages approved by the user on 2026-11-07, subject to their prerequisites. A8-01 is complete as a document/source checkpoint; A8-02-01 is implemented/verified in its recorded source-counter scope. A8-02-02 is complete in its recorded immutable-window/model scope. A8-03-01 is complete in its recorded detached market/catalog/pricing scope. A8-03-02 is complete in its recorded owned entity/stock/progression scope. A8-04-01 is complete in its account/NPC/FX API scope. A8-04-02 is complete in its cash/physical-custody API scope. A8-05 is complete in its currency-prime/loan-capture foundation scope. The next package is A8-06-01, unselected. Reading these prompts never authorizes execution.
 
 ## Sources and boundaries
 

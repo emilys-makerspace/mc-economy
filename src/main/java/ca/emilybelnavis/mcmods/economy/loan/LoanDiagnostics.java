@@ -137,8 +137,8 @@ public final class LoanDiagnostics {
         if(rows.isEmpty())throw new IllegalArgumentException("Loan event source unavailable");requireSnapshot(loan,rows.getFirst());
     }
     private static void requireSnapshot(Loans.Contract loan,Map<String,String> row){
-        if(!row.get("record_version").equals("1"))throw new IllegalArgumentException("Unsupported loan snapshot version");var source=Loans.decode(row.get("payload"));
-        if(!source.id().equals(loan.id())||!source.party().equals(loan.party())||!source.lender().equals(loan.lender())||source.currency()!=loan.currency()||!source.scheduleHash().equals(loan.scheduleHash()))throw new IllegalArgumentException("Loan event owner binding");
+        int version=Integer.parseInt(row.get("record_version"));if(version!=1&&version!=2)throw new IllegalArgumentException("Unsupported loan snapshot version");var source=Loans.decode(row.get("payload"),version);
+        if(!source.id().equals(loan.id())||!source.party().equals(loan.party())||!source.lender().equals(loan.lender())||source.currency()!=loan.currency()||!source.scheduleHash().equals(loan.scheduleHash())||!Objects.equals(source.primePolicyId(),loan.primePolicyId())||source.primePolicyRevision()!=loan.primePolicyRevision())throw new IllegalArgumentException("Loan event owner binding");
     }
     private static EventView event(JournalEngine.ReadView reads,Loans.Contract loan,Map<String,String> row){
         int version=Integer.parseInt(row.get("record_version"));if(version!=1)throw new IllegalArgumentException("Unsupported loan event version");

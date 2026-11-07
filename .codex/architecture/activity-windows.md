@@ -13,3 +13,8 @@ V41 delivers internal worker interfaces only. No production provider, rate publi
 V41 adds macro_window_opens, macro_window_closes and activity_model_plans plus indexed/immutable projections. Explicit v1 codecs are registered. Startup/recovery and offline clean-backup validation check declarations, fact/projection linkage, coverage, chronology/global seals, source counters and historical capacity; plan validation reconstructs frozen input and v1 output. Clean restore admits V41, retaining the stopped complete-world upgrade-backup requirement and frozen old migrations. Each call commits one open/close/plan; existing 16KiB facts, 64-record and 128KiB transaction limits remain authoritative and oversized compositions fail atomically.
 
 [Handoff](../A8-02-02.md) and [verification](../verification/A8-02-02.md) record actual checks. Next selectable package is A8-03-01. Production scheduling/publication remains later A8 scope.
+
+
+## A8-05 activation horizon
+
+[ActivationModelPlans and currency prime](currency-prime.md) add a distinct V46 input/output source that slices these immutable day summaries at future macro activation A, binds actual day indices and hashes, and preserves v1 opens/closes/plans. The full A8-06 provider must use that scoped source for prospective rate publication rather than counting pre-A days as warm-up. This addition registers no production provider.

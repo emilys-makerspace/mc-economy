@@ -102,7 +102,7 @@ public final class ActivityClassifier {
                         npcAdapter=true;
                     }
                     case Loans.FACT -> {
-                        version(fact, 1);
+                        version(fact, 1, 2);
                         var loan = Loans.decode(fact.payload());
                         if (loans.putIfAbsent(loan.id(), loan) != null) throw invalid("Repeated loan snapshot");
                     }

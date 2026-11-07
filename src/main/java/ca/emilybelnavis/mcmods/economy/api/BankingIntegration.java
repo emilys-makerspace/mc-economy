@@ -7,10 +7,17 @@ import ca.emilybelnavis.mcmods.economy.loan.Loans;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 
-/** Version-one server integration contract. Grants come from authenticated server context. */
+/** Version-two server integration contract. Grants come from authenticated server context. */
 public interface BankingIntegration {
-    int VERSION = 1;
+    int VERSION = 2;
+    /** Legacy global configured-policy access; does not infer a currency. */
     CompletionStage<Optional<PricingPolicy.Policy>> prime(PartyAuthorization.Grant grant);
+    /** Explicit currency policy; empty before activation or while publication is incomplete. */
+    CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.Policy>> prime(
+            PartyAuthorization.Grant grant, EconomyCurrency currency);
+    /** Historical explicit-currency policy at a past/current trusted UTC instant. */
+    CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.Policy>> primeAt(
+            PartyAuthorization.Grant grant, EconomyCurrency currency, long effectiveMillis);
     CompletionStage<Optional<WealthValuation.Snapshot>> valuation(PartyAuthorization.Grant grant);
     CompletionStage<Optional<ServicePricing.Quote>> feeQuote(PartyAuthorization.Grant grant,
             InstitutionCatalog.InstitutionId institution, ServicePricing.Service service, Money principal);
