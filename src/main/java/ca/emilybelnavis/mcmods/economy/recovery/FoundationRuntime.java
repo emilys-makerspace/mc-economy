@@ -59,6 +59,7 @@ public final class FoundationRuntime implements FoundationStore {
     private DeadlineDispatcher deadlines;
     private InstitutionCapital capital;
     private ca.emilybelnavis.mcmods.economy.interest.DepositYield depositYield;
+    private ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime activity;
     private boolean providersMigrated;
     private boolean debtMigrated;
     private boolean legacyDebtReconciled;
@@ -97,10 +98,19 @@ public final class FoundationRuntime implements FoundationStore {
                 capital = new InstitutionCapital(store, systemActor("institution-capital"), CapitalPosting.poster());
             if (configuration.deadlineProviders().stream().anyMatch(p->p.id().equals(ca.emilybelnavis.mcmods.economy.pricing.TierReevaluation.PROVIDER))) {
                 depositYield=ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.yield(store.snapshot().worldId(),configuration.valuation());
+            }
+            if (configuration.financialCalendar()) activity = new ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime(store, configuration.wall());
+            if (depositYield != null || activity != null) {
                 store.commitObserver((intent,reads,commit)->{
                     long effective=effectiveMillis(commit);
-                    var admission=ca.emilybelnavis.mcmods.economy.pricing.PricingAdmission.check(intent,reads,commit,store.snapshot().worldId(),java.time.Instant.ofEpochMilli(effective),configuration.valuation());
-                    return admission instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted?depositYield.observe(intent,reads,accepted,effective):admission;
+                    ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Decision decision = commit;
+                    if (depositYield != null) {
+                        decision=ca.emilybelnavis.mcmods.economy.pricing.PricingAdmission.check(intent,reads,commit,store.snapshot().worldId(),java.time.Instant.ofEpochMilli(effective),configuration.valuation());
+                        if (decision instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted)
+                            decision=depositYield.observe(intent,reads,accepted,effective);
+                    }
+                    return activity != null && decision instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted
+                            ? activity.observe(intent,reads,accepted,effective) : decision;
                 });
             }
             phase=1;
@@ -146,6 +156,7 @@ public final class FoundationRuntime implements FoundationStore {
                     FxService.prepareChfActivation(store, clock, configuration.wall());
                 if(before!=store.lastCommittedSequence())return new Progress("projection-final-validation",0,1,false);
                 if (!activatePricing()) return new Progress("pricing-activation",0,1,false);
+                if (activity != null && !activity.prepare()) return new Progress("activity-source-registration",0,1,false);
                 ready=true;store.cleanShutdownEligible(true);phase=4;return new Progress("ready",1,1,true);
             }
             clock.prepare(); if (deadlines != null) deadlines.prepare(); phase=2;

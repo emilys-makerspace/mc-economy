@@ -205,6 +205,45 @@ public final class CashIssuance {
         return commit(Action.ISSUE, List.copyOf(lots), financial);
     }
 
+    /** NPC input consumption: exclude only this witnessed original custody's exact locked quantity. */
+    public static Decision composeRedemption(WorldId world, List<Claim> claims, UUID ownCustody,
+                                              Commit financial, ReadView reads) {
+        Objects.requireNonNull(financial); Objects.requireNonNull(ownCustody);
+        if (claims.isEmpty() || claims.size() > MAX_STACKS) return reject("CASH_STACK_COUNT");
+        var custody = Custody.find(reads, null, ownCustody, true).orElse(null);
+        if (custody == null || custody.state() != Custody.State.WITNESSED) return reject("CASH_CUSTODY");
+        var quantities = new LinkedHashMap<UUID, Integer>();
+        var identities = new HashMap<UUID, String>();
+        for (var claim : claims) {
+            if (!world.equals(claim.world())) return reject("CASH_WORLD");
+            String previous = identities.putIfAbsent(claim.lot(), claim.item());
+            if (previous != null && !previous.equals(claim.item())) return reject("CASH_UNRECOGNIZED");
+            quantities.merge(claim.lot(), claim.count(), Math::addExact);
+        }
+        var own = reads.query("SELECT lot_id,count FROM custody_cash_reservations WHERE custody_id=? AND state='ACTIVE' ORDER BY lot_id LIMIT 25",
+                List.of(ownCustody.toString()), 25);
+        if (own.size() != quantities.size() || own.size() > 24) return reject("CASH_RESERVATION");
+        var changed = new ArrayList<Lot>();
+        for (var row : own) {
+            var id = UUID.fromString(row.get("lot_id"));
+            int quantity = Integer.parseInt(row.get("count"));
+            if (!Objects.equals(quantities.get(id), quantity)) return reject("CASH_RESERVATION");
+            var lot = find(reads, world, id).orElse(null);
+            if (lot == null || !lot.item().equals(identities.get(id))) return reject("CASH_UNRECOGNIZED");
+            if (lot.state() != State.ACTIVE) return decline("CASH_QUARANTINED");
+            long other = Math.subtractExact(reserved(reads, id, null), quantity);
+            if (quantity > lot.remaining() - other) return reject("CASH_QUANTITY");
+            changed.add(new Lot(world, id, lot.item(), lot.issued(), lot.remaining() - quantity,
+                    lot.state(), Math.addExact(lot.revision(), 1), "npc-custody:" + ownCustody));
+        }
+        var decision = commit(Action.REDEEM, changed, financial);
+        if (!(decision instanceof Commit accepted)) return decision;
+        return new Commit(accepted.records(), accepted.result(), tx -> {
+            accepted.projections().apply(tx);
+            tx.execute("UPDATE custody_cash_reservations SET state='RELEASED' WHERE custody_id=? AND state='ACTIVE'", List.of(ownCustody.toString()));
+        });
+    }
+
     /** Confirmed loss compensation retires the protected original quantity atomically. */
     static Decision retireClaim(ReadView reads, UUID custody, Commit compensation) {
         var rows = reads.query("""

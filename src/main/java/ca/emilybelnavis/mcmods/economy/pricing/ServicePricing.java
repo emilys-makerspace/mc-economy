@@ -12,7 +12,7 @@ import java.util.*;
 
 /** Worker-confined, institution-owned fee quotes. A4 remains responsible for transfer and durable consumption. */
 public final class ServicePricing {
-    public enum Service { FX, TRADING, PROTECTED_WITHDRAWAL_FX, PROTECTED_CLOSURE_FX }
+    public enum Service { FX, NPC_CASH_FX, TRADING, PROTECTED_WITHDRAWAL_FX, PROTECTED_CLOSURE_FX }
     public enum Tier { TIER1, TIER2 }
     public static final String FACT="economy:a6/service-pricing";
     public record Quote(UUID id,WorldId world,PlayerId owner,InstitutionCatalog.InstitutionId institution,
@@ -33,8 +33,8 @@ public final class ServicePricing {
         var snapshot=valuation.snapshot(reads,world,owner,now);
         boolean protectedService=service==Service.PROTECTED_WITHDRAWAL_FX||service==Service.PROTECTED_CLOSURE_FX;
         if(!snapshot.available()&&(!protectedService||snapshot.publication()==null))throw new IllegalArgumentException(snapshot.reason());
-        if(bank.customerBank()&&!bank.tier1()&&!snapshot.eligible()&&!protectedService)throw new IllegalArgumentException("TIER2_UNAVAILABLE");
-        var tier=bank.tier2()&&snapshot.eligible()?Tier.TIER2:Tier.TIER1;
+        if(bank.customerBank()&&!bank.tier1()&&!snapshot.eligible()&&!protectedService&&service!=Service.NPC_CASH_FX)throw new IllegalArgumentException("TIER2_UNAVAILABLE");
+        var tier=bank.tier2()&&snapshot.eligible()&&cashBanked(reads,owner,service)?Tier.TIER2:Tier.TIER1;
         var policy=PricingPolicy.current(reads,now.toEpochMilli());
         Instant expires=now.plusSeconds(60).isBefore(underlyingExpiry)?now.plusSeconds(60):underlyingExpiry;
         if(!expires.isAfter(now))throw new IllegalArgumentException("PRICING_QUOTE_EXPIRED");
@@ -51,11 +51,14 @@ public final class ServicePricing {
         var current=valuation.snapshot(reads,world,owner,now);
         var captured=valuation.snapshot(reads,world,owner,quote.valuation().valuedAt());
         var bank=pricingInstitution(quote.institution(),quote.principal().currency());
-        var currentTier=bank.tier2()&&current.eligible()?Tier.TIER2:Tier.TIER1;
+        var currentTier=bank.tier2()&&current.eligible()&&cashBanked(reads,owner,quote.service())?Tier.TIER2:Tier.TIER1;
         if(current.available()!=quote.valuation().available()||current.eligible()!=quote.valuation().eligible()||currentTier!=quote.tier()||!captured.fingerprint().equals(quote.valuation().fingerprint())||PricingPolicy.current(reads,now.toEpochMilli()).version()!=quote.policyVersion())throw new IllegalArgumentException("PRICING_QUOTE_STALE");
         return quote;
     }
     public Quote requireFresh(UUID quote,JournalEngine.ReadView reads,WorldId world,PlayerId owner,Instant now){return requireFresh(quotes.get(quote),reads,world,owner,now);}
+    private static boolean cashBanked(JournalEngine.ReadView reads,PlayerId owner,Service service) {
+        return service!=Service.NPC_CASH_FX || !reads.query("SELECT account_id FROM account_catalog WHERE owner_id=? AND purpose='BANK' AND status='OPEN' LIMIT 1",List.of(owner.value().toString()),1).isEmpty();
+    }
     private static InstitutionCatalog.Entry pricingInstitution(InstitutionCatalog.InstitutionId id,EconomyCurrency currency){
         return id.equals(InstitutionCatalog.IRONBRIDGE)?InstitutionCatalog.require(id,currency):InstitutionCatalog.require(id);
     }

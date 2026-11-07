@@ -24,7 +24,7 @@ public final class LedgerHistory {
             ) AS denomination
             FROM journal_records r
             JOIN journal_transactions t ON t.sequence=r.sequence
-            WHERE r.record_type='economy:posting' AND r.record_version IN (1,2,3) AND substr(r.payload,1,36)=?
+            WHERE r.record_type='economy:posting' AND r.record_version IN (1,2,3,4) AND substr(r.payload,1,36)=?
               AND (r.sequence,r.position)>(?,?) AND t.world_id=?
             ORDER BY r.sequence,r.position LIMIT ?
             """;

@@ -17,6 +17,8 @@ final class LedgerHistorySchema {
 
     static final String V3_INDEX = V2_INDEX.replace("IN (1,2)", "IN (1,2,3)");
 
+    static final String V4_INDEX = V3_INDEX.replace("IN (1,2,3)", "IN (1,2,3,4)");
+
     private LedgerHistorySchema() {}
 
     static void validate(Connection connection) throws SQLException {
@@ -27,7 +29,7 @@ final class LedgerHistorySchema {
             try (var statement = connection.createStatement(); var version = statement.executeQuery("PRAGMA user_version")) {
                 version.next(); schema = version.getInt(1);
             }
-            if (!rows.next() || !(schema >= 20 ? V3_INDEX : schema >= 19 ? V2_INDEX : INDEX).equals(rows.getString(1))) {
+            if (!rows.next() || !(schema >= 44 ? V4_INDEX : schema >= 20 ? V3_INDEX : schema >= 19 ? V2_INDEX : INDEX).equals(rows.getString(1))) {
                 throw new StorageException(StorageException.Kind.SCHEMA, "Missing or changed ledger history index");
             }
         }

@@ -11,7 +11,7 @@ import java.util.UUID;
 public final class PostingBatch {
     private PostingBatch() {}
 
-    public enum Role { ACCOUNT, ISSUANCE, CLEARING, FEE, INSTITUTION_CASH, INSTITUTION_CLAIM }
+    public enum Role { ACCOUNT, ISSUANCE, CLEARING, FEE, INSTITUTION_CASH, INSTITUTION_CLAIM, NPC_BRIDGE }
     public enum Authority { TRANSFER, ISSUE, REDEEM, FX, CAPITAL_ISSUE }
 
     public record Leg(UUID account, Role role, EconomyCurrency accountCurrency, Money amount) {}
@@ -36,6 +36,7 @@ public final class PostingBatch {
 
     private static JournalEngine.Decision prepare(List<Leg> legs, Authority authority, boolean institution, boolean minor) {
         if (legs.size() < 2 || legs.size() > 64) return reject("POSTING_COUNT");
+        if (legs.stream().anyMatch(l -> l.role() == Role.NPC_BRIDGE)) return reject("POSTING_AUTHORITY");
         if (!institution && (authority == Authority.CAPITAL_ISSUE || legs.stream().anyMatch(l -> l.role() == Role.INSTITUTION_CASH || l.role() == Role.INSTITUTION_CLAIM))) return reject("POSTING_AUTHORITY");
         if (authority == null) return reject("POSTING_AUTHORITY");
         var credits = new EnumMap<EconomyCurrency, Long>(EconomyCurrency.class);

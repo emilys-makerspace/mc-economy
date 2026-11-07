@@ -56,6 +56,22 @@ final class OfflineInspector {
             if (schema >= 37) ca.emilybelnavis.mcmods.economy.journal.KioskUpgrades.validate(c);
             if (schema >= 38) BranchPlacementSchema.validate(c);
             if (schema >= 39) BankStaffingSchema.validate(c);
+            if (schema >= 40) ca.emilybelnavis.mcmods.economy.simulation.activity.ActivitySchema.validate(c);
+            if (schema >= 43) ca.emilybelnavis.mcmods.economy.trade.stock.StockSchema.validate(c);
+            if (schema >= 44) {
+                ca.emilybelnavis.mcmods.economy.journal.NpcSettlement.validate(c);
+                ca.emilybelnavis.mcmods.economy.trade.settlement.NpcSchema.validate(c);
+                if(schema>=45) ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashSchema.validate(c);
+            }
+            if (schema >= 42) {
+                ca.emilybelnavis.mcmods.economy.trade.market.MarketSchema.validate(c);
+                ca.emilybelnavis.mcmods.economy.trade.catalog.CatalogStore.validate(c);
+                ca.emilybelnavis.mcmods.economy.trade.catalog.VillageMarketSource.validate(c);
+            }
+            if (schema >= 41) {
+                ca.emilybelnavis.mcmods.economy.simulation.window.WindowSchema.validate(c);
+                ca.emilybelnavis.mcmods.economy.simulation.plan.ModelPlanStore.validate(c);
+            }
             if (schema >= 33) {
                 ca.emilybelnavis.mcmods.economy.debt.DebtLegacySchema.validate(c);
                 ca.emilybelnavis.mcmods.economy.credit.CreditReportingSchema.validate(c);

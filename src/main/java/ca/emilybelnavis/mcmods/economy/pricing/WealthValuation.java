@@ -109,7 +109,7 @@ public final class WealthValuation {
     }
     /** Immutable posting sequence prevents a balance round trip from reviving a stale quote. */
     public static long ledgerRevision(JournalEngine.ReadView reads,UUID account) {
-        var rows=reads.query("SELECT sequence FROM journal_records WHERE record_type='economy:posting' AND record_version IN (1,2,3) AND substr(payload,1,36)=? ORDER BY sequence DESC,position DESC LIMIT 1",List.of(account.toString()),1);
+        var rows=reads.query("SELECT sequence FROM journal_records WHERE record_type='economy:posting' AND record_version IN (1,2,3,4) AND substr(payload,1,36)=? ORDER BY sequence DESC,position DESC LIMIT 1",List.of(account.toString()),1);
         return rows.isEmpty()?0:Long.parseLong(rows.getFirst().get("sequence"));
     }
 

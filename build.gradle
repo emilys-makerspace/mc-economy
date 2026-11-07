@@ -260,3 +260,29 @@ if (providers.gradleProperty('villageBankAcceptance').isPresent()) {
         }
     }
 }
+
+// Opt-in pinned trader hook witness in a new disposable integrated world.
+if (providers.gradleProperty('traderHookProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.traderHookProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'trader-hook-failed.txt').exists() || !new File(root, 'trader-hook-passed.txt').exists())
+                throw new GradleException('Pinned trader hook witness did not pass')
+        }
+    }
+}
+
+// Opt-in A8-04-02 physical custody witness in a fresh disposable client.
+if (providers.gradleProperty('traderCustodyProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.traderCustodyProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'trader-custody-failed.txt').exists() || !new File(root, 'trader-custody-passed.txt').exists())
+                throw new GradleException('Trader physical custody acceptance did not pass')
+        }
+    }
+}

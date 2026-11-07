@@ -53,7 +53,7 @@ and upstream license files, and explicitly in additionalRuntimeClasspath for dev
 Effective pragmas are verified: WAL, synchronous=2 (FULL), foreign_keys=1, busy_timeout=5000ms.
 No automatic busy retry is performed beyond SQLite's finite busy timeout.
 
-application_id=0x45434F4E identifies redesigned storage. Current schema=19; minimum=1. V3 adds the [journal](journal.md); V4 adds [recovery and clock metadata](recovery-clock.md). V5 adds the [FX journal indexes and activation-scoped observation](fx.md). V6 adds the [account catalog](accounts.md). V7 adds the [ledger balance projection](postings.md). V8 adds [holds](postings.md#holds). V9 adds [quote consumption and the denomination index](postings.md#fx-closure-and-rebase). V10 adds the [posting history index](postings.md#service-and-history).
+application_id=0x45434F4E identifies redesigned storage. Current schema=45; minimum=1. V45 adds [NPC cash and physical custody](npc-cash-custody.md). V44 adds [account/NPC/FX settlement and private zero-terminal bridges](npc-account-settlement.md). V43 adds [individual trader stock/tick/progression evidence](trader-entities.md). V42 adds [trade market/catalog/pricing state](trade-markets.md). V41 adds [immutable activity windows and deterministic model plans](activity-windows.md). V40 adds [atomic activity attribution and indexed capacity history](activity-attribution.md); intermediate subsystems retain their own migration contracts. The earlier foundation milestones below describe their original scopes. V3 adds the [journal](journal.md); V4 adds [recovery and clock metadata](recovery-clock.md). V5 adds the [FX journal indexes and activation-scoped observation](fx.md). V6 adds the [account catalog](accounts.md). V7 adds the [ledger balance projection](postings.md). V8 adds [holds](postings.md#holds). V9 adds [quote consumption and the denomination index](postings.md#fx-closure-and-rebase). V10 adds the [posting history index](postings.md#service-and-history).
 V11–V17 add merchant payments, custody, cash issuance, terminal policy, deposits/returns, withdrawals and register sales. V18 adds the [financial calendar](financial-calendar.md) and paged domain checkpoints, retaining prior IDs, balances and history.
 V1 creates only foundation_metadata (world UUID, product, schema version) and migration_history.
 V2 adds explicit identity_protocol=1. user_version must match metadata and contiguous
@@ -184,3 +184,13 @@ V38 appends `village_placement_attempts` and its phase/latest index. Version-one
 ## V39 banker assignments and replacement progress
 
 V39 adds `banker_slots`, `banker_employee_history` and `banker_slot_events`. Exact DDL, captured current desk identity/capacity, canonical bounded records, contiguous valid transitions, immutable staffing facts and employee-history consistency validate on open, recovery and offline inspection. Existing worlds 1–38 require the normal stopped-world complete backup gate; clean restore recognizes 4–39. Staffing creates no accounts or money. [Current staffing contract](banker-staffing.md) records loaded-only physical proofs, positive vacancy, 24,000-tick progress, atomic pause and conservative spawn recovery.
+
+
+## V44 account NPC settlement
+
+V44 appends npc_bridges, npc_trade_adapter, npc_trade_quotes and npc_trade_receipts with immutable evidence and a v4-inclusive ledger-history index. Posting4 is registered alongside unchanged prior versions; generic authorities and old versions reject NPC_BRIDGE. Online recovery and offline inspection validate exact quote-to-group/receipt linkage, canonical bridges and terminal zero, historical pricing/stock witnesses, custody, fee/FX consumption and immutable projection counts. Clean restore recognizes44; old worlds retain the stopped complete-world backup gate. See [account NPC settlement](npc-account-settlement.md).
+
+
+## V45 NPC cash and custody
+
+V45 appends npc_cash_adapter, npc_cash_quotes, npc_cash_receipts and npc_cash_returns with immutable evidence and source indexes. New cash/return facts preserve old account and activity manifests. Online/recovery/offline validators bind captured pricing/FX, exact posting groups, original cash quantities/protected outputs, custody and conclusively closed input returns. Clean restore recognizes45; old worlds retain the stopped complete-world backup gate. See [cash and physical custody](npc-cash-custody.md).

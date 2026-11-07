@@ -718,6 +718,13 @@ public final class ServerServices {
         return submit(storageWorker, config.storageQueueCapacity(), null, immutableWork);
     }
 
+    /** Trusted detached trader adapters only; no entity, packet or external SQL callbacks. */
+    public <T> CompletionStage<T> tradeStorage(java.util.function.Function<FoundationStore,T> work) {
+        checkOwner();
+        if(!(storage instanceof FoundationStore store))throw new IllegalStateException("Trade storage requires foundation");
+        return storage(()->work.apply(store));
+    }
+
     public <T> CompletionStage<T> storage(ActorId actor, Supplier<T> immutableRead) {
         return submit(storageWorker, config.storageQueueCapacity(), actor, immutableRead);
     }
