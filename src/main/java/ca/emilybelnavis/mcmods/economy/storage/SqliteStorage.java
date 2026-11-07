@@ -162,6 +162,7 @@ public final class SqliteStorage implements FoundationStore {
             ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.validate(connection);
             ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.validate(connection);
             ca.emilybelnavis.mcmods.economy.fx.EffectiveFxSchema.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.macro.MacroSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.validate(connection);
@@ -372,6 +373,7 @@ public final class SqliteStorage implements FoundationStore {
             ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.validate(connection);
             ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.validate(connection);
             ca.emilybelnavis.mcmods.economy.fx.EffectiveFxSchema.validate(connection);
+            ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.macro.MacroSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.validate(connection);

@@ -45,6 +45,9 @@ public final class InventoryPersistenceProbe {
             }
             return;
         }
+        if(Boolean.getBoolean("economy.simulationProductionProbe")) {
+            try{ran=SimulationProductionProbe.tick(event.getServer());}catch(Throwable e){e.printStackTrace();SimulationProductionProbe.failure=e.toString();ran=true;}return;
+        }
         if(Boolean.getBoolean("economy.traderCustodyProbe")) {
             var services=Economy.serverServices(event.getServer());if(services==null||services.state()!=ServerServices.State.READY)return;
             try{ran=TraderCustodyProbe.tick(event.getServer());}catch(Throwable e){e.printStackTrace();TraderCustodyProbe.failure=e.toString();ran=true;}

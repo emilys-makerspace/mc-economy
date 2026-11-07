@@ -59,6 +59,7 @@ public final class Economy {
         ca.emilybelnavis.mcmods.economy.banking.BankingCatalog.initialize(modBus);
         ca.emilybelnavis.mcmods.economy.collection.CollectionCatalog.initialize(modBus);
         ca.emilybelnavis.mcmods.economy.collection.CollectionMenuCatalog.initialize(modBus);
+        ca.emilybelnavis.mcmods.economy.trade.menu.TraderMenuCatalog.initialize(modBus);
         ca.emilybelnavis.mcmods.economy.trade.entity.TradeHooks.initialize();
         ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.initialize();
         NeoForge.EVENT_BUS.addListener(this::card);
@@ -102,6 +103,7 @@ public final class Economy {
         ca.emilybelnavis.mcmods.economy.foundation.DebtCommands.register(event.getDispatcher(), servers::get);
         ca.emilybelnavis.mcmods.economy.foundation.RegisterPriceCommands.register(event.getDispatcher(), servers::get);
         ca.emilybelnavis.mcmods.economy.foundation.AdminConfigCommands.register(event.getDispatcher());
+        ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.register(event.getDispatcher(),servers::get);
         EconomyCommands.register(event.getDispatcher(), (source, view) -> {
             var server = source.getServer();
             var services = servers.get(server);
@@ -125,9 +127,12 @@ public final class Economy {
     private void starting(ServerAboutToStartEvent event) {
         MinecraftServer server = event.getServer();
         if (servers.containsKey(server)) throw new IllegalStateException("Duplicate server lifecycle");
+        ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.configure(server,true);
         SchedulingConfig scheduling;
         ca.emilybelnavis.mcmods.economy.clock.FinancialCalendar.Config calendar;
+        ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulation;
         try {
+            simulation=ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig.load(FMLPaths.CONFIGDIR.get().resolve("economy-simulation.properties"));
             scheduling = SchedulingConfig.load(FMLPaths.CONFIGDIR.get().resolve("economy-scheduling.properties"));
             calendar = ca.emilybelnavis.mcmods.economy.clock.FinancialCalendar.Config.load(FMLPaths.CONFIGDIR.get().resolve("economy-calendar.properties"));
         } catch (SchedulingConfig.InvalidConfiguration e) {
@@ -137,10 +142,11 @@ public final class Economy {
         }
         catch (IllegalArgumentException e) {
             invalidConfiguration.add(server);
-            LOGGER.error("event=CONFIGURATION_INVALID reason=financial_calendar_settings");
+            LOGGER.error("event=CONFIGURATION_INVALID reason=calendar_or_simulation_settings detail={}",e.getMessage());
             return;
         }
-        var runtime = new FoundationRuntime(FoundationRuntime.Configuration.production(Clock.systemUTC(), calendar), scheduling.sqliteLockTimeoutMillis());
+        ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.configure(server,simulation.traders());
+        var runtime = new FoundationRuntime(FoundationRuntime.Configuration.production(Clock.systemUTC(), calendar), scheduling.sqliteLockTimeoutMillis(),simulation);
         servers.put(server, new ServerServices(server.getWorldPath(LevelResource.ROOT), runtime, scheduling));
         servers.get(server).onDenominationChange(()->ca.emilybelnavis.mcmods.economy.village.GenerationRuntime.denominationChanged(server));
         runtimes.put(server, runtime);
@@ -159,7 +165,9 @@ public final class Economy {
             ca.emilybelnavis.mcmods.economy.terminal.KioskUpgradeController.revalidate(event.getServer());
             ca.emilybelnavis.mcmods.economy.village.GenerationRuntime.revalidate(event.getServer());
             ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.revalidate(event.getServer());
+            ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.tick(event.getServer());
             services.tick();
+            ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.tick(event.getServer());
             ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.tick(event.getServer());
             ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.tick(event.getServer());
             ca.emilybelnavis.mcmods.economy.village.GenerationRuntime.tick(event.getServer());
@@ -178,6 +186,8 @@ public final class Economy {
         }
     }
     private void stopping(ServerStoppingEvent event) {
+        ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.stopping(event.getServer());
+        ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.collection.CollectionDialogue.stop(event.getServer());

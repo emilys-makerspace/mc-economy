@@ -286,3 +286,16 @@ if (providers.gradleProperty('traderCustodyProbe').isPresent()) {
         }
     }
 }
+
+// Opt-in A8-07 production lifecycle and offered checkout witness in a new disposable client.
+if (providers.gradleProperty('simulationProductionProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.simulationProductionProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'simulation-production-failed.txt').exists() || !new File(root, 'simulation-production-passed.txt').exists())
+                throw new GradleException('Simulation production acceptance did not pass')
+        }
+    }
+}

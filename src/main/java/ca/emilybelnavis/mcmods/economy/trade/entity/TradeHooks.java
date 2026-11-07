@@ -21,7 +21,7 @@ public final class TradeHooks {
     private static final Map<ServerPlayer,Click> CLICKS=new WeakHashMap<>();
     public static boolean owned(Object target) {
         return !(target instanceof BankerEntity) && (target instanceof Villager||target instanceof WanderingTrader)
-                && ((AbstractVillager)target).getPersistentData().getBoolean(OWNED);
+                && (((AbstractVillager)target).getPersistentData().getBoolean(OWNED)||TradeRuntime.enabled(((AbstractVillager)target).getServer()));
     }
     public static boolean blocksProgression(Object target){return owned(target)&&PROGRESSION.get()!=target;}
     /** Only the original-receipt adapter may enter this scope; it grants no money authority. */

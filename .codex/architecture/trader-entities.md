@@ -31,3 +31,6 @@ The adapter validates a caller-supplied independently read persisted entity NBT 
 V43 adds trade_stock_events/traders/markets/progressions with explicit strict v1 facts, indexed history, source/catalog chronology, original-operation identities, transitions and latest projections. Startup/recovery/offline clean inspection and restore admit V43; old migrations/facts and stopped-world pre-upgrade backup requirements remain. Existing fact/transaction payload budgets reject oversized compositions atomically.
 
 A8-04-01 must compose money, market price, stock and semantic observations in one transaction and resolve original financial outcomes first. A8-04-02 owns physical custody/save integration. A8-07 owns explicit production activation and complete menus. See [handoff](../A8-03-02.md) and [evidence](../verification/A8-03-02.md) for actual checks and limits.
+
+
+A8-07 delivers [V49 production lifecycle and offered trader checkout](simulation-production.md), including future rate activation, immutable initial configuration/source manifests, operator controls, cached/history API, currentness-gated money work and independent entity-save progression. This supersedes the earlier dormant-production notes for the new delivered scope; historical package evidence remains unchanged. A8-08 acceptance is still unselected.

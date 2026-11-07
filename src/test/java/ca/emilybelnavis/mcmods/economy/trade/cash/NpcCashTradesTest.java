@@ -64,6 +64,21 @@ class NpcCashTradesTest {
         }
         var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());try{var receipt=reopened.transaction(tx->NpcCashTrades.receipt(tx::query,original));assertEquals(principal,receipt.fxSourcePrincipal());assertEquals(goods,receipt.goodsPrincipal());assertEquals(fee,receipt.feeMinor());assertEquals(500,receipt.operatorCashMinor());}finally{reopened.close();}
     }
+    @Test void cancelledUntouchedMarkedQuoteReleasesItsLocksWithoutReturningOrSpendingItems()throws Exception {
+        try(var f=new Fixture(path)){
+            var terms=f.terms(false);var quoted=f.trades.quote(terms);
+            assertThrows(IllegalArgumentException.class,()->ca.emilybelnavis.mcmods.economy.trade.settlement.NpcInputReturns.abandon(f.store,f.actor,quoted.id(),true,()->false));
+            ca.emilybelnavis.mcmods.economy.trade.settlement.NpcInputReturns.abandon(f.store,f.actor,quoted.id(),true,()->true);
+            ca.emilybelnavis.mcmods.economy.trade.settlement.NpcInputReturns.abandon(f.store,f.actor,quoted.id(),true,()->true);
+            assertEquals(2,f.store.transaction(tx->CashIssuance.find(tx::query,f.world(),f.lot).orElseThrow()).remaining());
+            assertEquals(Journal.Status.DURABLY_REJECTED,f.trades.settle(NpcCashTrades.intent(f.world(),terms.operation(),f.actor)).status());
+            assertEquals(0,f.store.transaction(tx->tx.query("SELECT lot_id FROM custody_cash_reservations WHERE custody_id=? AND state='ACTIVE'",List.of(terms.inputCustody().toString()),24)).size());
+            assertTrue(f.store.transaction(tx->tx.query("SELECT operation_id FROM npc_cash_returns",List.of(),16)).isEmpty());
+            assertNotNull(f.trades.quote(f.terms(false)),"Original marked cash can be quoted again after untouched cancellation");
+            assertEquals(0,f.total(ActivityFacts.Kind.NPC_RETIRE));
+        }
+        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());reopened.close();
+    }
     private static final class Fixture implements AutoCloseable {
         final SqliteStorage store=new SqliteStorage();final PlayerId actor=new PlayerId(UUID.randomUUID());final UUID trader=UUID.randomUUID(),lot=UUID.randomUUID(),source=UUID.randomUUID(),epoch=UUID.randomUUID();long now=Instant.parse("2026-11-07T12:00:00Z").toEpochMilli();boolean allowed=true;
         final Clock wall=new Clock(){public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId z){return this;}public Instant instant(){return Instant.ofEpochMilli(now);}};

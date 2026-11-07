@@ -8,10 +8,10 @@ Banking, physical cash and player shops for Minecraft, with credit, loans and a 
 
 ## What's included
 
-- Eleven currencies, daily exchange rates and collectible notes and coins.
+- Eleven currencies, activity-driven exchange rates and currency-specific loan prime every 20 real minutes, plus collectible notes and coins.
 - Accounts at 23 fictional banks, deposit interest and issued debit cards.
 - ATMs, tellers, branch kiosks, banker desks and registers with original artwork.
-- Cash deposits and withdrawals, account transfers and player shops.
+- Cash deposits and withdrawals, account transfers, player shops and monetary villager/wandering-trader commerce.
 - Credit cards, fixed unsecured loans, credit reports and Collection Agents.
 - Optional automatic payments, transaction history and recovery of interrupted payments and item deliveries.
 
@@ -35,6 +35,14 @@ Securities trading, variable-rate loans and collateral-backed loans are future w
 4. Use an ATM or teller to deposit, withdraw or exchange funds. An active issued card provides remote banking access.
 
 Accounts are limited to four per player, with one per currency. Creative cards are collectibles and do not grant banking access. Financial time continues while the server is offline: one financial day lasts 20 real minutes, and a month lasts 28 financial days.
+
+## Villager trading and economic rates
+
+Right-click a villager or wandering trader to choose an offer, quantity and payment rail. Select a specific account, or select the currency of the cash you want to present. Review the quote and confirm it; foreign trades show conversion costs and fees. Goods, secondary ingredients, stock and inventory capacity are checked again before checkout. Retained outputs appear under **Claims**. Interrupted or uncertain deliveries remain protected for reconciliation rather than being paid or delivered again.
+
+Villagers share their local market prices while keeping individual sale stock. Their stock replenishes after 10,000 eligible loaded work ticks; wandering traders do not restock. Banker guides remain separate from traders.
+
+After currency selection and source preparation, prime and exchange rates start with a future full observation day, then update every 20 real minutes. Empty observed windows hold rates. Existing fixed-loan terms remain unchanged. Operators can inspect `/economy macro status` and schedule future pause/manual/resume policies; see the [simulation server guide](docs/SERVER_GUIDE.md#economic-simulation-and-trading).
 
 ## Creative Collection Agents
 
@@ -62,4 +70,4 @@ With Java 21 selected:
 ./gradlew runServer
 ```
 
-The jar is written to `build/libs/economy-0.3.0-alpha.jar`. Development client and server data are separate in `run/client` and `run/server`; use disposable development worlds.
+The jar is written to `build/libs/` using the configured project version. Development client and server data are separate in `run/client` and `run/server`; use disposable development worlds.

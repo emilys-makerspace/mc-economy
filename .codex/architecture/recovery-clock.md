@@ -201,3 +201,6 @@ A6-03-01 adds an optional historical InitialVersion reader to DeferredSystem, re
 
 
 A8-06-02 now delivers the dormant [financial-day macro provider](macro-rates.md) under V48: atomic A/F/H handover, actual child-linked v2 window/publication facts, immutable selected baskets, chronological paused/manual/resume policies, and readiness through the separate dispatcher completion. Historical facts and fixed loan terms remain unchanged; A8-07 lifecycle activation is still unselected.
+
+
+A8-07 delivers [V49 production lifecycle and offered trader checkout](simulation-production.md), including future rate activation, immutable initial configuration/source manifests, operator controls, cached/history API, currentness-gated money work and independent entity-save progression. This supersedes the earlier dormant-production notes for the new delivered scope; historical package evidence remains unchanged. A8-08 acceptance is still unselected.

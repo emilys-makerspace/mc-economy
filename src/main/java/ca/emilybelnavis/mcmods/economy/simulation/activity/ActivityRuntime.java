@@ -74,10 +74,10 @@ public final class ActivityRuntime {
                 requireVersion(fact, 1);
                 var p = fact.payload().split("\\|", -1);
                 if (p.length != 5 || !p[1].equals(world.value().toString())) throw new IllegalArgumentException("Activity institution identity");
-                if (p[3].equals("CASH") && lendingProvider(p[2])) {
+                if (p[3].equals("CASH")) {
                     var cash = new Cash(UUID.fromString(p[0]), p[2], EconomyCurrency.valueOf(p[4]));
                     planned.put(cash.id(), cash);
-                    banks.add(cash.bank());
+                    if(lendingProvider(cash.bank()))banks.add(cash.bank());
                 }
             } else if (fact.type().equals(InstitutionCapital.ALLOCATION)) {
                 requireVersion(fact, 1);

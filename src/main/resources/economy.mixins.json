@@ -5,7 +5,8 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AbstractVillagerMixin", "VillagerMixin", "MerchantMenuMixin",
-    "MerchantContainerMixin", "MerchantResultSlotMixin", "SlotMixin"
+    "MerchantContainerMixin", "MerchantResultSlotMixin", "SlotMixin",
+    "ServerLevelEntityAccess", "EntityManagerSaveAccess", "EntityStorageSaveMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

@@ -79,6 +79,8 @@ public final class ServerServices {
     private final Map<Thread, Long> activeStorage = new ConcurrentHashMap<>();
     private final Map<Thread, Long> activeCalculations = new ConcurrentHashMap<>();
     private volatile DiagnosticsReport.StorageDetails storageDetails;
+    private volatile ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.Snapshot simulationSample;
+    private volatile String simulationFailure="NOT_SAMPLED";
     private record FxSample(FxDiagnostics snapshot, String readFailure) {}
     private volatile FxSample fxSample = new FxSample(null, null);
     private record CalendarSample(ca.emilybelnavis.mcmods.economy.clock.CalendarDiagnostics snapshot, String readFailure) {}
@@ -196,6 +198,14 @@ public final class ServerServices {
 
     private final ca.emilybelnavis.mcmods.economy.pricing.ServicePricing servicePricing;
     public ca.emilybelnavis.mcmods.economy.pricing.ServicePricing servicePricing() { checkOwner(); return servicePricing; }
+    public ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulationConfig(){checkOwner();return storage instanceof FoundationRuntime r?r.simulationConfig():ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig.defaults();}
+    public ca.emilybelnavis.mcmods.economy.api.EconomicSimulationIntegration simulation(){checkOwner();return new ca.emilybelnavis.mcmods.economy.api.EconomicSimulationIntegration(){
+        public Optional<ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.Snapshot> snapshot(PartyAuthorization.Grant grant){checkOwner();return allowsAccountRead(grant,partyWorld(),false)&&simulationFailure.isEmpty()?Optional.ofNullable(simulationSample):Optional.empty();}
+        public CompletionStage<List<ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.Outcome>> history(PartyAuthorization.Grant grant,long before,int limit){checkOwner();if(before<0||limit<1||limit>16)throw new IllegalArgumentException("Simulation history bounds");if(!allowsAccountRead(grant,partyWorld(),false)||!(storage instanceof FoundationStore store))return CompletableFuture.completedStage(List.of());return storage(grant.actor(),()->allowsAccountRead(grant,store.snapshot().worldId(),false)?ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.history(store,before,limit):List.of());}
+    };}
+    public List<String> macroDiagnostics(){checkOwner();if(state==State.UNAVAILABLE){String reason=failure instanceof IllegalArgumentException&&failure.getMessage()!=null?failure.getMessage():failureCode(failure);return List.of("Simulation unavailable: "+reason.substring(0,Math.min(240,reason.length())));}var s=simulationSample;if(s==null||!simulationFailure.isEmpty())return List.of("Simulation unavailable: "+simulationFailure);return List.of("Simulation "+s.reason()+" mode="+s.mode()+" coverage="+s.coverageDays()+"/7 baseline="+s.baselineDays()+"/7 ageMs="+s.fxAgeMillis(),"Activation A="+s.activationMillis()+" F="+s.firstEffectiveMillis()+" H="+s.handoverMillis(),"Config="+s.config()+" policyRevision="+s.policyRevision()+" source="+s.sources(),String.join("; ",s.limits()));}
+    /** Operator capability and revocable server proof are issued before this trusted worker call. */
+    public CompletionStage<ca.emilybelnavis.mcmods.economy.simulation.macro.MacroControls.Policy> scheduleMacro(PartyAuthorization.Grant grant,java.util.concurrent.atomic.AtomicBoolean live,ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.Request request){checkOwner();if(!allowsAccountRead(grant,partyWorld(),true)||!live.get())return CompletableFuture.failedStage(new IllegalStateException("Operator permission required"));return tradeMonetaryStorage(grant.actor(),store->{if(!live.get()||!allowsAccountRead(grant,store.snapshot().worldId(),true))throw new IllegalStateException("Operator session ended");return ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.schedule(store,request,java.time.Instant.now(),grant.actor());});}
     public WorldId worldId() { return partyWorld(); }
 
     WorldId partyWorld() {
@@ -621,6 +631,7 @@ public final class ServerServices {
 
     private void sampleDiagnosticsOnWorker() {
         sampleStorage();
+        if(storage instanceof FoundationStore store){try{simulationSample=ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.read(store,System.currentTimeMillis(),storage instanceof FoundationRuntime r?r.simulationStatus().reason():"NOT_CONFIGURED");simulationFailure="";}catch(RuntimeException e){simulationFailure=failureCode(e);}}
         if (storage instanceof FoundationRuntime runtime) {
             try {
                 fxSample = new FxSample(runtime.readFxDiagnostics(), null);
@@ -725,6 +736,12 @@ public final class ServerServices {
         return storage(()->work.apply(store));
     }
 
+    /** Live commerce must pass both cached admission and authoritative worker-time catch-up gates. */
+    public <T> CompletionStage<T> tradeMonetaryStorage(ActorId actor,java.util.function.Function<FoundationStore,T> work){
+        checkOwner();if(!(storage instanceof FoundationStore store))throw new IllegalStateException("Trade storage requires foundation");
+        return economicWrite(actor,()->work.apply(store));
+    }
+    public <T> CompletionStage<T> tradeMonetaryStorage(java.util.function.Function<FoundationStore,T> work){return tradeMonetaryStorage(null,work);}
     public <T> CompletionStage<T> storage(ActorId actor, Supplier<T> immutableRead) {
         return submit(storageWorker, config.storageQueueCapacity(), actor, immutableRead);
     }

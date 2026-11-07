@@ -77,6 +77,12 @@ public final class FoundationRuntime implements FoundationStore {
         this.configuration = configuration;
         this.store = new SqliteStorage(configuration.records(), sqliteLockTimeoutMillis);
     }
+    private ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulationConfig;
+    private ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.Status simulationStatus=new ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.Status(false,"NOT_CONFIGURED");
+    public FoundationRuntime(Configuration configuration,int timeout,ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulation){this(configuration,timeout);this.simulationConfig=java.util.Objects.requireNonNull(simulation);}
+    public ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulationConfig(){return simulationConfig==null?ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig.defaults():simulationConfig;}
+    public ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.Status simulationStatus(){return simulationStatus;}
+    private void prepareSimulation(){if(simulationConfig!=null&&deadlines!=null)simulationStatus=ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.prepare(store,clock,deadlines,simulationConfig,configuration.wall().instant());}
     public FoundationRuntime() { this(Configuration.core()); }
     public void initialize(Path world) {
         this.world=world.toAbsolutePath().normalize();store.beginInitialization(world);
@@ -157,6 +163,7 @@ public final class FoundationRuntime implements FoundationStore {
                 if(before!=store.lastCommittedSequence())return new Progress("projection-final-validation",0,1,false);
                 if (!activatePricing()) return new Progress("pricing-activation",0,1,false);
                 if (activity != null && !activity.prepare()) return new Progress("activity-source-registration",0,1,false);
+                prepareSimulation();
                 ready=true;store.cleanShutdownEligible(true);phase=4;return new Progress("ready",1,1,true);
             }
             clock.prepare(); if (deadlines != null) deadlines.prepare(); phase=2;
@@ -182,6 +189,7 @@ public final class FoundationRuntime implements FoundationStore {
 
     @Override
     public EconomicStep<EconomicClock.Output> prepareEconomicStep() {
+        if(baseScheduledProgress(true).ready())prepareSimulation();
         // Domain planning and effects are bounded worker-only work; one journal child per turn.
         // Existing fixed simulations retain their detached calculation pipeline.
         if (baseScheduledProgress(true).ready() && capitalPending()) {

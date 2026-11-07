@@ -35,6 +35,9 @@ public final class TradeRuntime {
         final LinkedHashMap<UUID,Market> markets=new LinkedHashMap<>();boolean stopping;
     }
     public record Snapshot(StockFacts.Trader stock,MarketFacts.Binding binding,StockFacts.MarketTicks market) {}
+    private static final Map<MinecraftServer,Boolean> ENABLED=new IdentityHashMap<>();
+    public static void configure(MinecraftServer server,boolean enabled){ENABLED.put(server,enabled);}
+    public static boolean enabled(MinecraftServer server){return server!=null&&Boolean.TRUE.equals(ENABLED.get(server));}
     private static final Map<MinecraftServer,Session> SESSIONS=new IdentityHashMap<>();
     public static void initialize(){NeoForge.EVENT_BUS.addListener(TradeRuntime::joined);NeoForge.EVENT_BUS.addListener(TradeRuntime::entityTick);}
     private static ServerServices services(MinecraftServer server){var svc=Economy.serverServices(server);return svc!=null&&svc.state()==ServerServices.State.READY?svc:null;}
@@ -57,8 +60,43 @@ public final class TradeRuntime {
     }
     public static void interact(ServerPlayer player,AbstractVillager trader) {
         if(!TradeHooks.owned(trader)||!trader.isAlive()||player.distanceToSqr(trader)>36)return;
-        watch(player.server,trader.getUUID());
-        player.displayClientMessage(Component.literal("Monetary trading is not active yet."),true);
+        if(!enabled(player.server)){player.displayClientMessage(Component.literal("Monetary trading is disabled."),true);return;}
+        trader.getPersistentData().putBoolean(TradeHooks.OWNED,true);
+        var t=watch(player.server,trader.getUUID());var svc=services(player.server);
+        if(t==null||svc==null){player.displayClientMessage(Component.literal("Trading is waiting for the economy to become ready."),true);return;}
+        if(t.busy){player.displayClientMessage(Component.literal("Preparing this trader. Try again shortly."),true);return;}
+        bootstrap(player,trader,t,svc);
+
+    }
+    /** Capture native/entity evidence only here; each worker continuation is bounded and detached. */
+    private static void bootstrap(ServerPlayer player,AbstractVillager entity,Trader t,ServerServices svc) {
+        var capture=NativeCatalog.capture(entity,1);if(!capture.available()){player.displayClientMessage(Component.literal("This trader's offers are unavailable: "+capture.reason()),true);return;}
+        var current=new MarketFacts.Position(entity.level().dimension().location().toString(),entity.blockPosition().getX(),entity.blockPosition().getY(),entity.blockPosition().getZ());
+        var job=workstation(entity).map(p->new MarketFacts.Position(p.dimension().location().toString(),p.pos().getX(),p.pos().getY(),p.pos().getZ())).orElse(null);
+        UUID id=entity.getUUID();boolean wandering=entity instanceof WanderingTrader;long seed=player.server.overworld().getSeed();var server=player.server;t.busy=true;
+        svc.tradeStorage(store->{
+            var denomination=store.transaction(tx->ca.emilybelnavis.mcmods.economy.journal.RebaseSettlement.denomination(tx::query));if(denomination.isEmpty())throw new IllegalStateException("World currency is not selected");
+            if(!ca.emilybelnavis.mcmods.economy.trade.catalog.VillageMarketSource.step(store,denomination.get().currency()))return null;
+            MarketFacts.Binding binding;
+            if(wandering)binding=MarketStore.bindWandering(store,id,seed,current,ca.emilybelnavis.mcmods.economy.api.EconomyCurrency.all());
+            else {var resolution=MarketStore.resolve(store,id,job,current,denomination.get().currency(),true);if(resolution.pending())return null;binding=resolution.binding();}
+            var saved=store.transaction(tx->StockStore.trader(tx::query,id));long revision=saved==null?1:saved.catalogRevision();
+            var prior=store.transaction(tx->ca.emilybelnavis.mcmods.economy.trade.catalog.CatalogStore.read(tx::query,id,revision));
+            var incoming=capture.capture();
+            if(prior==null||!prior.offers().equals(incoming.offers())){
+                long next=prior==null?1:Math.addExact(revision,1);
+                ca.emilybelnavis.mcmods.economy.trade.catalog.CatalogStore.capture(store,new ca.emilybelnavis.mcmods.economy.trade.catalog.TradeCatalog.Capture(id,next,incoming.offers()));
+                saved=StockStore.install(store,id,next,wandering);
+            }
+            var stock=saved;return store.transaction(tx->new Snapshot(stock,binding,StockStore.market(tx::query,binding.market())));
+        }).whenComplete((snapshot,error)->server.execute(()->{
+            t.busy=false;
+            if(server.getPlayerList().getPlayer(player.getUUID())!=player||!entity.isAlive()||player.distanceToSqr(entity)>36)return;
+            if(error!=null){t.reason="TRADER_ADMISSION_UNAVAILABLE";player.displayClientMessage(Component.literal("Trading is unavailable. Try again shortly."),true);return;}
+            if(snapshot==null){server.execute(()->{if(player.isAlive()&&entity.isAlive()&&player.distanceToSqr(entity)<=36&&!t.busy)bootstrap(player,entity,t,svc);});return;}
+            t.saved=snapshot.stock();t.binding=snapshot.binding();var m=session(server).markets.computeIfAbsent(t.binding.market(),Market::new);m.saved=snapshot.market();t.reason="";
+            ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.open(player,entity);
+        }));
     }
     private static void entityTick(EntityTickEvent.Post event) {
         if(!(event.getEntity() instanceof AbstractVillager entity)||!(entity.level() instanceof ServerLevel level)||!TradeHooks.owned(entity)||!entity.isAlive())return;
@@ -172,7 +210,7 @@ public final class TradeRuntime {
     private static void fail(Trader t,String reason){var pending=List.copyOf(t.waiters);t.waiters.clear();pending.forEach(f->f.completeExceptionally(new IllegalStateException(reason)));}
     private static AbstractVillager entity(MinecraftServer server,UUID id){for(var level:server.getAllLevels()){var entity=level.getEntity(id);if(entity instanceof AbstractVillager trader&&trader.isAlive()&&TradeHooks.owned(trader))return trader;}return null;}
     public static void stopping(MinecraftServer server) {
-        var s=SESSIONS.remove(server);var svc=services(server);if(s==null)return;s.stopping=true;
+        ENABLED.remove(server);var s=SESSIONS.remove(server);var svc=services(server);if(s==null)return;s.stopping=true;
         for(var t:s.traders.values()){if(svc!=null&&!t.busy&&t.observed>0)checkpointTrader(server,s,svc,t);fail(t,"SERVER_STOPPING");}
         if(svc!=null)for(var m:s.markets.values())if(!m.busy&&m.observed>0)checkpointMarket(server,s,svc,m);
     }

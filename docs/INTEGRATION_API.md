@@ -62,3 +62,12 @@ Reference item valuation belongs to A9. A future reference cost is distinct from
 A10 can extend the player experience and multiplayer coverage using the existing offered-action, authorization, quote and original-outcome rules. Securities, trading and expanded lending retain their separate B-series prerequisites.
 
 [Server guide](SERVER_GUIDE.md), [A7 downstream handoff](../.codex/architecture/a7-downstream.md).
+
+
+## Economic simulation reads (version1)
+
+On the authenticated server thread, obtain `Economy.serverServices(server).simulation()`, returning `EconomicSimulationIntegration`. Its `snapshot(grant)` returns an immutable cached optional snapshot (sample time, availability/reason, mode, W/B coverage, FX age, A/F/H, revisions, currency policies and source/limit manifest). `history(grant, beforeFinancialDay, limit)` asynchronously returns up to16 immutable saved selected outcomes using an exclusive financial-day cursor. Obtain a fresh ownership grant through `PartyAuthorization.player`; stale sessions, inspection grants and mismatched worlds do not gain ownership reads. These reads neither observe/advance financial time nor authorize money, items or a trade. A missing cache/sample is unavailable rather than zero coverage.
+
+Public operators use the authenticated future-policy commands described in the server guide; clients never send policies, prices, bank authority or SQL callbacks. Trader transport accepts only the currently offered action/value with matching menu/session/revision. Backend `tradeStorage` is trusted maintenance, not public monetary admission. Live monetary work uses the separate economic-current gate and captured revocable server proofs.
+
+`TradePriceSource` remains the detached A9 replacement seam. The installed source is immutable `EmeraldV1`, using captured original emerald quantities, pinned standard quantities and exact effective FX. Future adapters must introduce prospective source epochs/provenance without rewriting saved quotes, carry state or trade history. No A9 valuation adapter is executed here.
