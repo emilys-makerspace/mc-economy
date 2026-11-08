@@ -1,6 +1,6 @@
 # A9 vanilla item catalog — pricing revision 2
 
-Prepared 2026-11-07 under the instruction to start drafting. This is a planning catalog, not runtime configuration or an implemented valuation service. **The user approved all drafts on 2026-11-07, including the full catalog and applied log, meat and disc revisions.** Technical adapter feasibility remains planning work. No implementation package is selected by this document.
+Prepared 2026-11-07 under the instruction to start drafting. This is a planning catalog, not runtime configuration or an implemented valuation service. **The user approved all drafts on 2026-11-07, including the full catalog and applied log, meat and disc revisions.** [A9-01 source feasibility](a9-source-contracts.md) is now accepted with [static audit evidence](../verification/A9-01.md); runtime adapters remain unimplemented. This catalog selects no dependent package.
 
 Read [settled gameplay decisions](a9-planning.md#final-decisions-before-drafting), [technical contracts](a9-shared-contracts.md), [approved enchantment premiums](a9-enchantment-premiums.md) and the [complete per-item CSV](a9-item-catalog.csv).
 
@@ -23,7 +23,7 @@ Local source evidence:
 - Client artifact SHA-256: `499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99`.
 - Cached NeoForge source `Items.java` SHA-256: `1c0dd4593b6b60f6b20a6389fd0c364aab0c0c2dc1260765d9c898f4ffa19353`.
 - Read 1,290 official `data/minecraft/recipe/*.json` files and their item-tag definitions. Standard shaped/shapeless, stonecutting and ordinary cooking forms supplied witnesses. Recipes involving known crafting remainders were excluded; special/dynamic/smithing recipes were not executed or treated as standard witnesses.
-- Static source inventory and witness closure are document checks only. No Gradle, tests, game, world or runtime migration was run. A9-01 confirms implementation APIs and actual runtime coverage under the pinned build.
+- Static source inventory and witness closure are document checks only. No Gradle, tests, game, world or runtime migration was run. A9-01 confirms source APIs and static coverage under the pinned build; actual runtime coverage belongs to implementation acceptance.
 
 ## Calibration rules
 

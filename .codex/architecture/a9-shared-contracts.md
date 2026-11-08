@@ -1,6 +1,6 @@
 # A9 shared technical contracts — approved revision 1
 
-Prepared 2026-11-07 under the user's instruction to start drafting after settling policy. Gameplay choices in [planning](a9-planning.md) are approved; catalog prices are approved with the latest log/meat/disc revisions; the user approved all technical/package drafts on 2026-11-07, subject to prerequisites. No implementation package has been selected or executed. Minecraft 1.21.1, NeoForge 21.1.252, Java 21 remain pinned.
+Prepared 2026-11-07 under the user's instruction to start drafting after settling policy. Gameplay choices in [planning](a9-planning.md) are approved; catalog prices are approved with the latest log/meat/disc revisions; the user approved all technical/package drafts on 2026-11-07, subject to prerequisites. A9-01 was selected and is complete in source/document scope; no runtime implementation or activation has been executed. [A9-01 source/interface freeze](a9-source-contracts.md) finalizes the signatures, source map and engineering details below; [evidence](../verification/A9-01.md) records its limits. Minecraft 1.21.1, NeoForge 21.1.252, Java 21 remain pinned.
 
 ## Scope and sources
 
@@ -10,7 +10,7 @@ Read [catalog](a9-item-catalog.md) and its [per-item inventory](a9-item-catalog.
 
 Source seams already inspected: `TradePriceSource.Basis` is detached; durable account/cash `Terms` and controller views still capture `EmeraldV1`. `Pricing.quote` combines progressive demand integrals, bounded reputation, complete cohort comparisons, conservative directional rounding and carry. A9 therefore needs a new pricing/fact implementation version, not a silent edit of old algorithms. `TradeCatalog.Goods` currently rejects emerald merchandise and standard quantities are a pinned 308-family manifest; broader API coverage does not authorize additional native listings.
 
-Read-only source review used the cached NeoForge 21.1.252 source archive `sourcesWithNeoForge_cc7c60e94efba2ed86f41906afc13210f16b17a8_output.zip`, SHA-256 `c46df93e0d3228bf52dddc5edf79dd2c338ee097e866af551bee2ac8dc734825`. Its companion metadata identifies the pinned dependency. `Items.java` has 1,333 declared item entries including AIR; recipe JSONs come from the official 1.21.1 client artifact. This review supports the approved contracts, not A9-01 execution or acceptance.
+Read-only source review used the cached NeoForge 21.1.252 source archive `sourcesWithNeoForge_cc7c60e94efba2ed86f41906afc13210f16b17a8_output.zip`, SHA-256 `c46df93e0d3228bf52dddc5edf79dd2c338ee097e866af551bee2ac8dc734825`. Its companion metadata identifies the pinned dependency. `Items.java` has 1,333 declared item entries including AIR; recipe JSONs come from the official 1.21.1 client artifact. The original planning review supported these contracts; A9-01 now records independent scoped source acceptance in the linked evidence.
 
 ## Value model and rounding
 
@@ -62,7 +62,7 @@ Persist each accepted immutable manifest and original operation outcomes. Initia
 
 ## API/SPI contract
 
-Expose a versioned server `ItemValuationIntegration` through the existing current-session service boundary. Public shapes (names finalized in A9-01):
+Expose a versioned server `ItemValuationIntegration` through the existing current-session service boundary. Public shape outline (exact signatures and field presence finalized in the [A9-01 freeze](a9-source-contracts.md#detached-apispi-freeze)):
 
 - `Identity(itemId, canonicalComponents, adapterVersion)`; immutable detached canonical data, not live mutable `ItemStack`.
 - `Request(identity, quantity, currency, snapshotSelector)` where selector is CURRENT or an explicit retained snapshot UUID. Current captures at admission; historical requests specify a retained FX publication or the saved result's publication. No fake past timestamp applied to current data.

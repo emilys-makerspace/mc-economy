@@ -70,9 +70,9 @@ For a supported ordinary equipment item, the approved formula is:
 
 Non-damageable items use factor 1. The approved durability discount applies to the combined base value and premiums. Unbreaking and Mending receive their listed premium without changing the actual durability fraction or projecting future repairs. Renaming adds zero.
 
-An enchanted book uses the approved ordinary book reference value plus the stored enchantment premiums, without a durability discount. Its stored enchantments are not also counted as applied equipment enchantments. Freeze book-specific applicability/compatibility rules in source review before implementation. The pricing formula is approved; exact identity/applicability validation remains source-review work.
+An enchanted book uses the approved ordinary book reference value plus the stored enchantment premiums, without a durability discount. Its stored enchantments are not also counted as applied equipment enchantments. [A9-01](a9-source-contracts.md#variant-applicability-and-nesting) freezes book-specific applicability/compatibility before implementation. The pricing formula and applicability contract are approved; runtime identity validation remains implementation work.
 
-A supported filled container remains its empty-container value plus recursively valued contents under the approved formula. Apply durability/enchantments to the relevant individual object; container damage does not discount its contents. Use one captured configuration/recipe/FX snapshot and bounded nesting/work; round only the final display total under the eventual rounding policy.
+A supported filled container remains its empty-container value plus recursively valued contents under the approved formula. Apply durability/enchantments to the relevant individual object; container damage does not discount its contents. Use one captured configuration/recipe/FX snapshot and bounded nesting/work; use each individually published shell/content unit amount, then checked sums and quantities under the [frozen rounding contract](a9-source-contracts.md#variant-applicability-and-nesting).
 
 | Example | Approved calculation | CAD value |
 | --- | --- | ---: |
@@ -83,8 +83,8 @@ A supported filled container remains its empty-container value plus recursively 
 | Renamed version of that pickaxe | Name adds zero | 2,100.50 |
 | Mending book | Ordinary book reference value + 300 | Depends on book inputs |
 
-The stick examples follow the canonical CAD 2 oak-log reference: four oak planks per log, four sticks per two oak planks. Sticks remain CAD 0.25 even if crafted from more expensive species or bamboo. Actual recipe/variant feasibility still belongs to A9-01. These premiums do not create new trader offers, grant collateral/wealth eligibility or authorize enchanting/repair recipe execution.
+The stick examples follow the canonical CAD 2 oak-log reference: four oak planks per log, four sticks per two oak planks. Sticks remain CAD 0.25 even if crafted from more expensive species or bamboo. Source recipe/variant feasibility is recorded by A9-01; runtime validation remains downstream work. These premiums do not create new trader offers, grant collateral/wealth eligibility or authorize enchanting/repair recipe execution.
 
-Premium amounts, additive compatible stacking, discounting premiums with damage, stored-book pricing and the 25%-per-curse discount are approved. Review next: technical identity/applicability limits. This table does not select or execute an implementation package.
+Premium amounts, additive compatible stacking, discounting premiums with damage, stored-book pricing and the 25%-per-curse discount are approved. Technical identity/applicability limits are frozen by A9-01; runtime implementation remains unselected. This table does not select or execute an implementation package.
 
 [A9 planning](a9-planning.md) · [shared contract](../../prompts/A9-item-valuation/CONTRACT.md) · [verification policy](../VERIFICATION.md)
