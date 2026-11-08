@@ -2,11 +2,13 @@ package ca.emilybelnavis.mcmods.economy.valuation;
 
 import com.google.gson.*;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.DyeColor;
@@ -22,6 +24,9 @@ public final class VariantCapture {
     private VariantCapture() {}
     public static VariantGraph.Graph capture(MinecraftServer server) {
         if(!server.isSameThread())throw new IllegalStateException("Variant capture requires server thread");
+        return capture(server.registryAccess());
+    }
+    static VariantGraph.Graph capture(HolderLookup.Provider registries) {
         var catalog=ValuationData.catalog().entries();
         var items=new TreeMap<String,VariantGraph.Item>();
         for(String id:catalog.keySet()) {
@@ -39,11 +44,11 @@ public final class VariantCapture {
             int stack=defaults.getOrDefault(DataComponents.MAX_STACK_SIZE,64);
             items.put(id,new VariantGraph.Item(id,damage,stack,slots(id),keys));
         }
-        var registry=server.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
+        var registry=registries.lookupOrThrow(Registries.ENCHANTMENT);
         var enchants=new TreeMap<String,VariantGraph.Enchant>();
         for(JsonElement row:premiums()) {
             var object=row.getAsJsonObject();String id=object.get("id").getAsString();
-            Enchantment enchantment=registry.get(ResourceLocation.parse(id));
+            Enchantment enchantment=registry.get(ResourceKey.create(Registries.ENCHANTMENT,ResourceLocation.parse(id))).map(Holder::value).orElse(null);
             if(enchantment==null||enchantment.getClass()!=Enchantment.class)throw new IllegalArgumentException("Missing pinned enchantment "+id);
             if(!plainSet(enchantment.definition().supportedItems())||!plainSet(enchantment.exclusiveSet()))continue;
             var members=new TreeSet<String>();

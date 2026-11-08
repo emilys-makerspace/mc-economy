@@ -11,6 +11,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.alchemy.PotionBrewing;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.flag.FeatureFlagSet;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -34,11 +35,14 @@ final class VanillaBrewingCapture {
 
     static BrewingGraph.Graph capture(MinecraftServer server) {
         if (!server.isSameThread()) throw new IllegalStateException("Brewing capture requires server thread");
+        return capture(server.potionBrewing(), server.getWorldData().enabledFeatures());
+    }
+
+    static BrewingGraph.Graph capture(PotionBrewing actual, FeatureFlagSet features) {
         // addVanillaMixes is reviewed static registration data. Unlike bootstrap, it posts no mod event.
-        var builder = new PotionBrewing.Builder(server.getWorldData().enabledFeatures());
+        var builder = new PotionBrewing.Builder(features);
         PotionBrewing.addVanillaMixes(builder);
         var expected = builder.build();
-        var actual = server.potionBrewing();
         var exclusions = new TreeMap<String, String>();
         Lists baseline = lists(expected);
         Lists captured = lists(actual);

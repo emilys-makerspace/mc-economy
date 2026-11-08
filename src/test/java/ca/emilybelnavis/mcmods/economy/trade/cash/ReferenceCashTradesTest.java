@@ -15,6 +15,7 @@ import ca.emilybelnavis.mcmods.economy.trade.custody.NpcDeliveries;
 import ca.emilybelnavis.mcmods.economy.trade.market.*;
 import ca.emilybelnavis.mcmods.economy.trade.pricing.*;
 import ca.emilybelnavis.mcmods.economy.trade.stock.StockStore;
+import ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceInputReturns;
 import java.nio.file.Path;
 import java.time.*;
 import java.util.*;
@@ -28,6 +29,39 @@ import ca.emilybelnavis.mcmods.economy.valuation.*;
 /** Real cash/custody source-epoch acceptance; no native inventory or game-save claim. */
 class ReferenceCashTradesTest {
     @TempDir Path path;
+    @Test void untouchedCashCancellationReleasesQuantityLocksAndCannotCancelSavedOrCommittedCash()throws Exception {
+        PlayerId owner;UUID quoteId,input,lot;
+        try(var f=new Fixture(path)) {
+            var terms=f.terms(false);var quote=f.trades.quote(terms);owner=f.actor;quoteId=quote.id();input=terms.inputCustody();lot=f.lot;
+            var original=f.store.transaction(tx->CashIssuance.find(tx::query,f.world(),f.lot).orElseThrow());
+            assertEquals("ACTIVE",f.store.transaction(tx->tx.query("SELECT state FROM custody_cash_reservations WHERE custody_id=?",List.of(input.toString()),1)).getFirst().get("state"));
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.abandon(f.store,new PlayerId(UUID.randomUUID()),quote.id(),true,()->true));
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.abandon(f.store,f.actor,quote.id(),true,()->false));
+            ReferenceInputReturns.abandon(f.store,f.actor,quote.id(),true,()->true);
+            long sequence=f.store.lastCommittedSequence();
+            ReferenceInputReturns.abandon(f.store,f.actor,quote.id(),true,()->true);
+            assertEquals(sequence,f.store.lastCommittedSequence());
+            assertEquals("RELEASED",f.store.transaction(tx->tx.query("SELECT state FROM custody_cash_reservations WHERE custody_id=?",List.of(input.toString()),1)).getFirst().get("state"));
+            assertEquals(Custody.State.QUARANTINED,f.store.transaction(tx->Custody.find(tx::query,f.actor,input,false).orElseThrow()).state());
+            assertEquals(original,f.store.transaction(tx->CashIssuance.find(tx::query,f.world(),f.lot).orElseThrow()));
+            assertTrue(f.store.transaction(tx->NpcDeliveries.page(tx::query,f.actor,null,16)).isEmpty());
+            assertEquals("NPC_CANCELLED",f.trades.settle(ReferenceCashTrades.intent(f.world(),terms.operation(),f.actor)).result().code());
+
+            var saved=f.terms(false);var savedQuote=f.trades.quote(saved);f.saved(saved);
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.abandon(f.store,f.actor,savedQuote.id(),true,()->true));
+            assertEquals(Journal.Status.COMMITTED,f.trades.settle(ReferenceCashTrades.intent(f.world(),saved.operation(),f.actor)).status());
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.abandon(f.store,f.actor,savedQuote.id(),true,()->true));
+            assertEquals(1,f.store.transaction(tx->CashIssuance.find(tx::query,f.world(),f.lot).orElseThrow()).remaining());
+        }
+        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());
+        try {
+            long sequence=reopened.lastCommittedSequence();
+            ReferenceInputReturns.abandon(reopened,owner,quoteId,true,()->true);
+            assertEquals(sequence,reopened.lastCommittedSequence());
+            assertEquals(Custody.State.QUARANTINED,reopened.transaction(tx->Custody.find(tx::query,owner,input,false).orElseThrow()).state());
+            assertEquals(1,reopened.transaction(tx->CashIssuance.find(tx::query,reopened.snapshot().worldId(),lot).orElseThrow()).remaining());
+        } finally {reopened.close();}
+    }
     @Test void sourceChangeRefusesUncommittedCashQuoteBeforeCashStockOrCustodyConsumption()throws Exception {
         try(var f=new Fixture(path)){
             var terms=f.terms(false);var quote=f.trades.quote(terms);f.saved(terms);

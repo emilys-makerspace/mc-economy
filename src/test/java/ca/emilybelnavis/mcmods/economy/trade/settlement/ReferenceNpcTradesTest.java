@@ -34,6 +34,67 @@ import ca.emilybelnavis.mcmods.economy.valuation.*;
 /** Real SQLite proof of the new source-neutral account boundary; native custody evidence is reused upstream. */
 class ReferenceNpcTradesTest {
     @TempDir Path path;
+    @Test void untouchedAccountInputCancellationClosesOriginalWithoutCreatingReturnGoods() throws Exception {
+        PlayerId owner;UUID input,quoteId,operation;
+        try(var f=new Fixture(path)) {
+            var quote=f.quote(1,f.cad,1,false);owner=f.actor;input=quote.terms().inputCustody();quoteId=quote.id();operation=quote.terms().operation();
+            long balance=f.balance(f.cad);
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.abandon(f.store,new PlayerId(UUID.randomUUID()),quote.id(),false,()->true));
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.abandon(f.store,f.actor,quote.id(),false,()->false));
+            assertEquals(Custody.State.RESERVED,f.store.transaction(tx->Custody.find(tx::query,f.actor,input,false).orElseThrow()).state());
+            ReferenceInputReturns.abandon(f.store,f.actor,quote.id(),false,()->true);
+            long sequence=f.store.lastCommittedSequence();
+            ReferenceInputReturns.abandon(f.store,f.actor,quote.id(),false,()->true);
+            assertEquals(sequence,f.store.lastCommittedSequence());
+            assertEquals("NPC_CANCELLED",f.trades.settle(ReferenceNpcTrades.intent(f.world(),operation,f.actor)).result().code());
+            assertEquals(Custody.State.QUARANTINED,f.store.transaction(tx->Custody.find(tx::query,f.actor,input,false).orElseThrow()).state());
+            assertTrue(f.store.transaction(tx->NpcDeliveries.page(tx::query,f.actor,null,16)).isEmpty(),"Untouched goods never left inventory and must not create a claim");
+            assertEquals(balance,f.balance(f.cad));
+        }
+        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());
+        try {
+            assertEquals(Custody.State.QUARANTINED,reopened.transaction(tx->Custody.find(tx::query,owner,input,false).orElseThrow()).state());
+            assertEquals(quoteId,reopened.transaction(tx->ReferenceNpcTrades.read(tx::query,quoteId)).id());
+            ReferenceInputReturns.abandon(reopened,owner,quoteId,false,()->true);
+            assertTrue(reopened.transaction(tx->NpcDeliveries.page(tx::query,owner,null,16)).isEmpty());
+        } finally {reopened.close();}
+    }
+
+    @Test void witnessedAccountReturnRequiresProofAndReplaysOneProtectedClaimAfterReopen() throws Exception {
+        PlayerId owner;UUID returned,input,quoteId;
+        Custody.Evidence proof;Custody.Case claim;
+        try(var f=new Fixture(path)) {
+            var quote=f.quote(1,f.cad);owner=f.actor;input=quote.terms().inputCustody();quoteId=quote.id();
+            long balance=f.balance(f.cad);
+            proof=new Custody.Evidence(Custody.EvidenceKind.UNDELIVERED,"independent-held-input-save",ReferenceNpcTrades.inputSource(quote.terms()),"held-save-token");
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.accountReturn(f.store,f.actor,quote.id(),proof,(c,e,r)->false,()->true));
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.accountReturn(f.store,f.actor,quote.id(),proof,(c,e,r)->true,()->false));
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.abandon(f.store,f.actor,quote.id(),false,()->true),"Saved goods cannot use untouched cancellation");
+            claim=ReferenceInputReturns.accountReturn(f.store,f.actor,quote.id(),proof,(c,e,r)->c.id().equals(input)&&e.equals(proof),()->true);
+            returned=claim.id();
+            assertEquals(Custody.State.CLAIM,claim.state());
+            assertEquals(input,claim.reservationOperation());
+            assertEquals(quote.terms().exactInputItems(),claim.terms().items());
+            assertEquals(Custody.State.QUARANTINED,f.store.transaction(tx->Custody.find(tx::query,f.actor,input,false).orElseThrow()).state());
+            long sequence=f.store.lastCommittedSequence();
+            assertEquals(claim,ReferenceInputReturns.accountReturn(f.store,f.actor,quote.id(),proof,(c,e,r)->false,()->false));
+            assertEquals(sequence,f.store.lastCommittedSequence());
+            assertEquals(Journal.Status.DURABLY_REJECTED,f.trades.settle(ReferenceNpcTrades.intent(f.world(),quote.terms().operation(),f.actor)).status());
+            assertEquals(List.of(returned),f.store.transaction(tx->NpcDeliveries.page(tx::query,f.actor,null,16)));
+            assertEquals(balance,f.balance(f.cad));
+
+            var committed=f.quote(1,f.cad);
+            assertEquals(Journal.Status.COMMITTED,f.trades.settle(ReferenceNpcTrades.intent(f.world(),committed.terms().operation(),f.actor)).status());
+            var committedProof=new Custody.Evidence(Custody.EvidenceKind.UNDELIVERED,"cannot-undo-committed-goods",ReferenceNpcTrades.inputSource(committed.terms()),"wrong-return-save");
+            assertThrows(IllegalArgumentException.class,()->ReferenceInputReturns.accountReturn(f.store,f.actor,committed.id(),committedProof,(c,e,r)->true,()->true));
+        }
+        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());
+        try {
+            assertEquals(claim,ReferenceInputReturns.accountReturn(reopened,owner,quoteId,proof,(c,e,r)->false,()->false));
+            assertEquals(List.of(returned),reopened.transaction(tx->NpcDeliveries.page(tx::query,owner,null,16)));
+        } finally {reopened.close();}
+    }
+
     @Test void staleSourceRefusesWithoutEffectsAndCommittedOriginalReplaysAfterSwitchAndReopen() throws Exception {
         Journal.Outcome committed;UUID operation;PlayerId owner;long finalBalance,sequence;
         try(var f=new Fixture(path)) {
@@ -90,13 +151,14 @@ class ReferenceNpcTradesTest {
         }
         WorldId world(){return store.snapshot().worldId();}
         Quote quote(int ordinal,AccountId account){return quote(ordinal,account,1);}
-        Quote quote(int ordinal,AccountId account,int executions){var offer=offers.get(ordinal);UUID operation=UUID.randomUUID(),input=offer.side()==Pricing.Side.SELL?UUID.randomUUID():null,output=offer.side()==Pricing.Side.BUY?UUID.randomUUID():null;
+        Quote quote(int ordinal,AccountId account,int executions){return quote(ordinal,account,executions,true);}
+        Quote quote(int ordinal,AccountId account,int executions,boolean saved){var offer=offers.get(ordinal);UUID operation=UUID.randomUUID(),input=offer.side()==Pricing.Side.SELL?UUID.randomUUID():null,output=offer.side()==Pricing.Side.BUY?UUID.randomUUID():null;
             var publication=store.transaction(tx->FxService.at(tx::query,now));
             var priceSource=ReferenceSource.capture(active,valuation,offer.goods().item(),offer.goods().components(),CAD,publication);
             var compared=store.transaction(tx->priceSource.comparisons(tx::query,CatalogStore.read(tx::query,trader,1),offer));
             var terms=new Terms(operation,actor,UUID.randomUUID(),trader,1,ordinal,executions,account,active.epoch(),priceSource,Rational.ZERO,1,"trusted-reputation",compared,input,input==null?"":ReferenceNpcTrades.inputItems(new TradeCatalog.Offer(offer.ordinal(),offer.side(),new TradeCatalog.Goods(offer.goods().item(),TradeCatalog.Match.EXACT_COMPONENTS,offer.goods().components()),offer.goodsCount(),offer.emeraldCount(),offer.secondary(),offer.originalMaxUses(),offer.villagerXp()),executions),output,"capacity-reservation:"+operation,1);
             if(input!=null){var custodyTerms=new Custody.Terms(actor,terms.exactInputItems(),ReferenceNpcTrades.inputSource(terms),ReferenceNpcTrades.inputDestination(terms),ReferenceNpcTrades.financialIntent(world(),operation,actor));var reserve=new Journal.Intent(new OperationId(input),new RequestId(input),actor,Custody.Action.RESERVE.kind(),Custody.reserveRequest(custodyTerms),null,null);submit(Custody.Action.RESERVE.kind(),Custody.registration(Custody.Action.RESERVE,(a,i,c,r)->true,(c,e,r)->true,null),reserve);
-                var evidence=new Custody.Evidence(Custody.EvidenceKind.RESERVATION_SAVED,"independent-fixture-save",ReferenceNpcTrades.inputSource(terms),"saved-token");submit(Custody.Action.RESERVATION_SAVED.kind(),Custody.registration(Custody.Action.RESERVATION_SAVED,(a,i,c,r)->true,(c,e,r)->true,null),Custody.request(input,null,evidence,"fixture witnessed goods"));}
+                if(saved){var evidence=new Custody.Evidence(Custody.EvidenceKind.RESERVATION_SAVED,"independent-fixture-save",ReferenceNpcTrades.inputSource(terms),"saved-token");submit(Custody.Action.RESERVATION_SAVED.kind(),Custody.registration(Custody.Action.RESERVATION_SAVED,(a,i,c,r)->true,(c,e,r)->true,null),Custody.request(input,null,evidence,"fixture witnessed goods"));}}
             return trades.quote(terms);
         }
         ValuationStore.Snapshot publishValuation() {

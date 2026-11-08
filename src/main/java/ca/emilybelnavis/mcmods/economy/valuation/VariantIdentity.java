@@ -31,6 +31,9 @@ public final class VariantIdentity {
 
     public static String components(ItemStack stack,MinecraftServer server) {
         if(!server.isSameThread())throw new IllegalStateException("Stack capture requires server thread");
+        return components(stack);
+    }
+    static String components(ItemStack stack) {
         var value=project(stack,new Work(),0);
         String text=canonical(value,0).toString();if(ValuationConfig.bytes(text)>65_536)throw bad("IDENTITY_BYTE_LIMIT");return text;
     }

@@ -39,6 +39,8 @@ configurations {
 dependencies { processProbeRuntime 'com.google.code.gson:gson:2.10.1' }
 test {
     useJUnitPlatform()
+    // Measure the mod; instrumenting Minecraft's large static initializers can exceed JVM limits.
+    jacoco { includes = ['ca.emilybelnavis.mcmods.economy.*'] }
     finalizedBy jacocoTestReport
     // Standalone storage probes use stdout as a protocol and do not load Minecraft.
     systemProperty 'economy.test.classpath',

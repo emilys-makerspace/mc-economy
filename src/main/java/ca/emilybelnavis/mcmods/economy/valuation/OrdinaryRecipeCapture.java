@@ -3,6 +3,7 @@ package ca.emilybelnavis.mcmods.economy.valuation;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.*;
@@ -32,7 +33,11 @@ final class OrdinaryRecipeCapture {
     static RecipeGraph.Graph capture(MinecraftServer server, Map<String, List<String>> expandedTags) {return capture(server,expandedTags,Set.of());}
     static RecipeGraph.Graph capture(MinecraftServer server, Map<String, List<String>> expandedTags,Set<String> trustedInputs) {
         if (!server.isSameThread()) throw new IllegalStateException("Recipe capture requires server thread");
-        var installed = server.getRecipeManager().getRecipes();
+        return capture(server.getRecipeManager().getRecipes(), server.registryAccess(), expandedTags, trustedInputs);
+    }
+
+    static RecipeGraph.Graph capture(Collection<RecipeHolder<?>> installed, HolderLookup.Provider registries,
+                                     Map<String, List<String>> expandedTags, Set<String> trustedInputs) {
         if (installed.size() > RecipeGraph.MAX_RECIPES) throw new IllegalArgumentException("RECIPE_COUNT_LIMIT");
         var nodes = new ArrayList<RecipeGraph.Node>();
         var rejected = new TreeMap<String, String>();
@@ -40,7 +45,7 @@ final class OrdinaryRecipeCapture {
         for (var holder : installed.stream().sorted(Comparator.comparing(h -> h.id().toString())).toList()) {
             String id = holder.id().toString();
             try {
-                RecipeGraph.Node node = capture(id, holder.value(), server, expandedTags,trustedInputs);
+                RecipeGraph.Node node = capture(id, holder.value(), registries, expandedTags,trustedInputs);
                 bytes = addBytes(bytes, JSON.toJson(node));
                 nodes.add(node);
             } catch (UnsupportedRecipe unsupported) {
@@ -55,7 +60,7 @@ final class OrdinaryRecipeCapture {
         return graph;
     }
 
-    private static RecipeGraph.Node capture(String id, Recipe<?> recipe, MinecraftServer server,
+    private static RecipeGraph.Node capture(String id, Recipe<?> recipe, HolderLookup.Provider registries,
                                              Map<String, List<String>> tags,Set<String> trustedInputs) {
         RecipeSerializer<?> serializer = TRUSTED.get(recipe.getClass());
         if (serializer == null) throw unsupported("UNSUPPORTED_RECIPE_CLASS");
@@ -64,7 +69,7 @@ final class OrdinaryRecipeCapture {
         var serializerKey = BuiltInRegistries.RECIPE_SERIALIZER.getKey(serializer);
         if (serializerKey == null || !RecipeGraph.SERIALIZERS.contains(serializerKey.toString()))
             throw unsupported("UNREGISTERED_RECIPE_SERIALIZER");
-        ItemStack output = recipe.getResultItem(server.registryAccess());
+        ItemStack output = recipe.getResultItem(registries);
         if (output.isEmpty() || !output.isComponentsPatchEmpty()) throw unsupported("UNSUPPORTED_OUTPUT_COMPONENTS");
         String outputId = itemId(output);
         if (outputId.equals("minecraft:air") || output.getCount() < 1 || output.getCount() > 1_000_000)

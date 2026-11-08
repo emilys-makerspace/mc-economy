@@ -2,7 +2,7 @@
 
 2026-11-08: addressed [the review finding](https://github.com/emilys-makerspace/mc-economy/pull/6#discussion_r4507254635).
 
-`TradeSources.prepareRefresh` now allows its SQLite read to return all64 rows selected by SQL:63 supported active scopes plus one overflow sentinel. The existing atomic scope limit remains63. Updated the [source contract](../architecture/trade-source-transition.md) and root changelog.
+`TradeSources.prepareRefresh` now allows its SQLite read to return all64 rows selected by SQL:63 supported active scopes plus one overflow sentinel. The existing atomic scope limit remains 63. Updated the [source contract](../architecture/trade-source-transition.md) and root changelog.
 
 Checks passed once each:
 
