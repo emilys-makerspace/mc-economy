@@ -136,7 +136,7 @@ class ValuationSnapshotTest {
         UpgradeBackup.prepare(world);
         var store = new SqliteStorage(); store.initialize(world);
         try {
-            assertEquals(identity,store.snapshot().worldId().value()); assertEquals(50,store.snapshot().schemaVersion());
+            assertEquals(identity,store.snapshot().worldId().value()); assertEquals(SchemaMigrations.CURRENT,store.snapshot().schemaVersion());
             assertEquals(0,store.lastCommittedSequence()); assertNull(ValuationStore.active(store));
         } finally { store.close(); }
     }
