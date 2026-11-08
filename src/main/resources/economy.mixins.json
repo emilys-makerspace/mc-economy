@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8.7",
+  "package": "ca.emilybelnavis.mcmods.economy.trade.entity.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AbstractVillagerMixin", "VillagerMixin", "MerchantMenuMixin",
+    "MerchantContainerMixin", "MerchantResultSlotMixin", "SlotMixin",
+    "ServerLevelEntityAccess", "EntityManagerSaveAccess", "EntityStorageSaveMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

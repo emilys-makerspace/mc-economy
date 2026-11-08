@@ -15,6 +15,7 @@ public final class EconomyClient {
         CollectionScreen.initialize(modBus);
         BankerRenderer.initialize(modBus);
         BankerScreen.initialize(modBus);
+        TraderScreen.initialize(modBus);
         LogUtils.getLogger().info("Economy client entry point loaded");
     }
 }

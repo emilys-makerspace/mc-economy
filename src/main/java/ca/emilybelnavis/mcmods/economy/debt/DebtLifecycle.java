@@ -75,7 +75,7 @@ public final class DebtLifecycle {
         for (var record : base.records()) {
             if(record.type().equals(CASE_FACT)) {var c=decodeCase(record.payload());cases.put(c.kind()+"/"+c.facility(),c);}
             if (record.type().equals(CreditFacilities.FACT) && record.version() == 1) snapshots.add(snapshot(CreditFacilities.decodeSnapshot(record.payload())));
-            if (record.type().equals(Loans.FACT) && record.version() == 1) snapshots.add(snapshot(Loans.decode(record.payload())));
+            if (record.type().equals(Loans.FACT) && (record.version() == 1 || record.version() == 2)) snapshots.add(snapshot(Loans.decode(record.payload())));
         }
         if (snapshots.isEmpty() && cases.isEmpty()) return base;
         var records = new ArrayList<>(base.records());

@@ -22,26 +22,36 @@ class BrandedHardwareResourcesTest {
         verifyStates("atm", "atm", 4);
         verifyStates("teller", "teller", 4);
         for (String dye : DYES) verifyStates(dye + "_atm", "atm", 4);
-        verifyStates("branch_kiosk", "kiosk", 2);
+        verifyStates("branch_kiosk", "kiosk", 4);
     }
 
     private static void verifyStates(String id, String kind, int cells) throws IOException {
         assertTrue(Files.isRegularFile(ASSETS.resolve("models/item/" + id + ".json")), id);
         var variants = json(ASSETS.resolve("blockstates/" + id + ".json")).getAsJsonObject("variants");
-        assertEquals(24 * cells * 4, variants.size(), id);
+        boolean kiosk = kind.equals("kiosk");
+        var widths = kiosk ? List.of(false, true) : List.of(false);
+        assertEquals(24 * cells * FACING.size() * widths.size(), variants.size(), id);
         for (int bank = 0; bank <= 23; bank++) {
             for (int cell = 0; cell < cells; cell++) {
                 for (int facing = 0; facing < FACING.size(); facing++) {
-                    String key = "bank=" + bank + ",cell=" + cell + ",facing=" + FACING.get(facing);
-                    assertTrue(variants.has(key), id + " " + key);
-                    var value = variants.getAsJsonObject(key);
-                    assertEquals(facing * 90, value.get("y").getAsInt(), id + " " + key);
-                    String model = value.get("model").getAsString();
-                    if (bank > 0) {
-                        String issuer = InstitutionCatalog.banks().get(bank - 1).id().key().substring("economy:bank/".length());
-                        assertEquals("economy:block/banking/" + issuer + "_" + kind + "_" + cell, model);
+                    for (boolean wide : widths) {
+                        String key = "bank=" + bank + ",cell=" + cell + ",facing=" + FACING.get(facing);
+                        if (kiosk) key += ",wide=" + wide;
+                        assertTrue(variants.has(key), id + " " + key);
+                        var value = variants.getAsJsonObject(key);
+                        assertEquals(facing * 90, value.get("y").getAsInt(), id + " " + key);
+                        String model = value.get("model").getAsString();
+                        // Narrow kiosks only place cells 0 and 1. The other legal states use cell 1 as a fallback.
+                        int modelCell = kiosk && !wide ? Math.min(cell, 1) : cell;
+                        String suffix = kind + (wide ? "_wide_" : "_") + modelCell;
+                        if (bank > 0) {
+                            String issuer = InstitutionCatalog.banks().get(bank - 1).id().key().substring("economy:bank/".length());
+                            assertEquals("economy:block/banking/" + issuer + "_" + suffix, model, key);
+                        } else if (kiosk) {
+                            assertEquals("economy:block/branch_" + suffix, model, key);
+                        }
+                        verifyModel(model);
                     }
-                    verifyModel(model);
                 }
             }
         }

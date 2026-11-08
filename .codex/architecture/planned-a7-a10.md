@@ -99,7 +99,11 @@ Prepare exact prerequisites when selecting a package. Generation and staffing co
 
 ## A8 — Economic simulation
 
-Retain the existing downstream prime contract: bounded registered scheduling, versioned future financial-day rates, retained history and captured fixed-loan terms. Initial configured prime and existing FX remain authoritative until approved adapters replace them. Phase renumbering does not authorize commodity-, trade- or money-supply-driven FX.
+Planning began on 2026-11-07. The user selected a broader macroeconomy driving prime and FX from player/server economic activity only, with a separate prime rate for each currency. [A8 planning](a8-planning.md) records the source constraints, proposed package split and unresolved activity/formula policies. This explicitly expands the previous prime-only planning boundary; it does not approve an implementation or any particular FX driver/formula.
+
+Retain bounded registered scheduling, versioned financial-day rates, historical FX implementations and captured fixed-loan terms. Initial configured prime and existing FX remain authoritative until explicitly selected adapters replace them prospectively. Synthetic cycles, random macro shocks, commodity backing and unrequested downstream integrations are outside the selected scope.
+
+The user approved merchant sales, borrowing/repayment, FX exchanges and monetary issuance/retirement (operator and NPC origins separately recorded), and added monetary villager commerce. [Technical revision 1](a8-shared-contracts.md) and [12 package prompts](../../prompts/A8-economic-simulation/EXECUTION.md) are now prepared, including split attribution/model, markets/hooks, account/cash settlement and FX foundation/provider packages. The user approved technical revision 1 and all 12 packages on 2026-11-07, subject to prerequisites. A8-01 is complete as a source/document checkpoint ([handoff](../A8-01.md)); [A8-02-01](../A8-02-01.md) now delivers source/counter attribution. Other packages remain unselected; A8-02-02 is next. A7 bankers retain their guide role; B4 financial markets remain separate.
 
 ## A9 — Basic item valuation
 

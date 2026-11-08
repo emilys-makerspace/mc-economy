@@ -137,8 +137,8 @@ public final class LoanDiagnostics {
         if(rows.isEmpty())throw new IllegalArgumentException("Loan event source unavailable");requireSnapshot(loan,rows.getFirst());
     }
     private static void requireSnapshot(Loans.Contract loan,Map<String,String> row){
-        if(!row.get("record_version").equals("1"))throw new IllegalArgumentException("Unsupported loan snapshot version");var source=Loans.decode(row.get("payload"));
-        if(!source.id().equals(loan.id())||!source.party().equals(loan.party())||!source.lender().equals(loan.lender())||source.currency()!=loan.currency()||!source.scheduleHash().equals(loan.scheduleHash()))throw new IllegalArgumentException("Loan event owner binding");
+        int version=Integer.parseInt(row.get("record_version"));if(version!=1&&version!=2)throw new IllegalArgumentException("Unsupported loan snapshot version");var source=Loans.decode(row.get("payload"),version);
+        if(!source.id().equals(loan.id())||!source.party().equals(loan.party())||!source.lender().equals(loan.lender())||source.currency()!=loan.currency()||!source.scheduleHash().equals(loan.scheduleHash())||!Objects.equals(source.primePolicyId(),loan.primePolicyId())||source.primePolicyRevision()!=loan.primePolicyRevision())throw new IllegalArgumentException("Loan event owner binding");
     }
     private static EventView event(JournalEngine.ReadView reads,Loans.Contract loan,Map<String,String> row){
         int version=Integer.parseInt(row.get("record_version"));if(version!=1)throw new IllegalArgumentException("Unsupported loan event version");
@@ -186,8 +186,14 @@ public final class LoanDiagnostics {
         return new Total(n,rows.size()<=budget,Math.min(budget,rows.size()));
     }
     private record JournalTotal(BigInteger amount,boolean complete) {}
+    static final String JOURNAL_TOTAL_QUERY = """
+            SELECT payload FROM journal_records
+            WHERE record_type='economy:posting' AND record_version IN (1,2,3,4)
+              AND substr(payload,1,36)=? AND sequence<=?
+            ORDER BY sequence,position LIMIT 129
+            """;
     private static JournalTotal journalTotal(JournalEngine.ReadView reads,UUID account,EconomyCurrency currency,long frontier){
-        var rows=reads.query("SELECT payload FROM journal_records WHERE record_type='economy:posting' AND record_version IN (1,2,3) AND substr(payload,1,36)=? AND sequence<=? ORDER BY sequence,position LIMIT 129",List.of(account.toString(),Long.toString(frontier)),129);
+        var rows=reads.query(JOURNAL_TOTAL_QUERY,List.of(account.toString(),Long.toString(frontier)),129);
         BigInteger amount=BigInteger.ZERO;for(var row:rows.stream().limit(128).toList()){var p=row.get("payload").split("\\|",-1);if(p.length!=5||!p[0].equals(account.toString())||!p[2].equals(currency.name()))throw new IllegalArgumentException("Loan journal binding");amount=amount.add(BigInteger.valueOf(number(p[3])));}
         return new JournalTotal(amount,rows.size()<=128);
     }

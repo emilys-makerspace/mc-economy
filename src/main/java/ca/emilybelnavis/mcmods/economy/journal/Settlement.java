@@ -158,7 +158,7 @@ public final class Settlement {
         var id = account.id();
         var currency = account.currency();
         return switch (account.role()) {
-            case INSTITUTION_CASH, INSTITUTION_CLAIM -> false;
+            case INSTITUTION_CASH, INSTITUTION_CLAIM, NPC_BRIDGE -> false;
             case ISSUANCE -> id.equals(issuanceAccount(currency));
             case CLEARING -> id.equals(clearingAccount(currency));
             case FEE -> id.equals(feeAccount(currency));

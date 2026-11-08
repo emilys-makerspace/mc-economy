@@ -48,7 +48,7 @@ public final class FoundationRuntime implements FoundationStore {
         public static Configuration production(Clock wall,FinancialCalendar.Config config,List<ca.emilybelnavis.mcmods.economy.pricing.WealthValuation.Source> sources) {
             var valuation=ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.wealth(sources);
             return new Configuration(RecordCatalog.core(),List.of(),List.of(FxService.definition()),wall,
-                    Map.of(FxService.SYSTEM,FxService.deferred()),true,java.util.stream.Stream.of(ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.providers(valuation),ca.emilybelnavis.mcmods.economy.credit.CreditRuntime.providers(),java.util.List.of(ca.emilybelnavis.mcmods.economy.loan.LoanRuntime.provider(),ca.emilybelnavis.mcmods.economy.autopay.AutopayRuntime.provider()),ca.emilybelnavis.mcmods.economy.debt.DebtRuntime.providers(),ca.emilybelnavis.mcmods.economy.credit.CreditScoreRuntime.providers()).flatMap(java.util.Collection::stream).toList(),config,valuation);
+                    Map.of(FxService.SYSTEM,FxService.deferred()),true,java.util.stream.Stream.of(ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.providers(valuation),ca.emilybelnavis.mcmods.economy.credit.CreditRuntime.providers(),java.util.List.of(ca.emilybelnavis.mcmods.economy.loan.LoanRuntime.provider(),ca.emilybelnavis.mcmods.economy.autopay.AutopayRuntime.provider()),ca.emilybelnavis.mcmods.economy.debt.DebtRuntime.providers(),ca.emilybelnavis.mcmods.economy.credit.CreditScoreRuntime.providers(),java.util.List.<DeadlineDispatcher.Provider>of(new ca.emilybelnavis.mcmods.economy.simulation.macro.MacroProvider())).flatMap(java.util.Collection::stream).toList(),config,valuation);
         }
         public static Configuration core() { return new Configuration(RecordCatalog.core(),List.of(),List.of(),Clock.systemUTC()); }
     }
@@ -59,6 +59,7 @@ public final class FoundationRuntime implements FoundationStore {
     private DeadlineDispatcher deadlines;
     private InstitutionCapital capital;
     private ca.emilybelnavis.mcmods.economy.interest.DepositYield depositYield;
+    private ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime activity;
     private boolean providersMigrated;
     private boolean debtMigrated;
     private boolean legacyDebtReconciled;
@@ -76,6 +77,12 @@ public final class FoundationRuntime implements FoundationStore {
         this.configuration = configuration;
         this.store = new SqliteStorage(configuration.records(), sqliteLockTimeoutMillis);
     }
+    private ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulationConfig;
+    private ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.Status simulationStatus=new ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.Status(false,"NOT_CONFIGURED");
+    public FoundationRuntime(Configuration configuration,int timeout,ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulation){this(configuration,timeout);this.simulationConfig=java.util.Objects.requireNonNull(simulation);}
+    public ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulationConfig(){return simulationConfig==null?ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig.defaults():simulationConfig;}
+    public ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.Status simulationStatus(){return simulationStatus;}
+    private void prepareSimulation(){if(simulationConfig!=null&&deadlines!=null)simulationStatus=ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.prepare(store,clock,deadlines,simulationConfig,configuration.wall().instant());}
     public FoundationRuntime() { this(Configuration.core()); }
     public void initialize(Path world) {
         this.world=world.toAbsolutePath().normalize();store.beginInitialization(world);
@@ -87,7 +94,7 @@ public final class FoundationRuntime implements FoundationStore {
             if(!progress.ready()) return progress;
             store.cleanShutdownEligible(false);
             projections=new ProjectionManager(store,configuration.projections());
-            clock=new EconomicClock(store,configuration.wall(),configuration.systems(),configuration.deferredSystems());
+            clock=new EconomicClock(store,configuration.wall(),configuration.systems(),configuration.deferredSystems(),DeadlineDispatcher.implementations(configuration.deadlineProviders()));
             if (!configuration.financialCalendar() && !store.transaction(tx -> tx.query(
                     "SELECT singleton FROM financial_calendar", List.of(), 1)).isEmpty())
                 throw new StorageException(StorageException.Kind.SCHEMA, "Installed financial calendar requires its scheduler");
@@ -97,10 +104,19 @@ public final class FoundationRuntime implements FoundationStore {
                 capital = new InstitutionCapital(store, systemActor("institution-capital"), CapitalPosting.poster());
             if (configuration.deadlineProviders().stream().anyMatch(p->p.id().equals(ca.emilybelnavis.mcmods.economy.pricing.TierReevaluation.PROVIDER))) {
                 depositYield=ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.yield(store.snapshot().worldId(),configuration.valuation());
+            }
+            if (configuration.financialCalendar()) activity = new ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime(store, configuration.wall());
+            if (depositYield != null || activity != null) {
                 store.commitObserver((intent,reads,commit)->{
                     long effective=effectiveMillis(commit);
-                    var admission=ca.emilybelnavis.mcmods.economy.pricing.PricingAdmission.check(intent,reads,commit,store.snapshot().worldId(),java.time.Instant.ofEpochMilli(effective),configuration.valuation());
-                    return admission instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted?depositYield.observe(intent,reads,accepted,effective):admission;
+                    ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Decision decision = commit;
+                    if (depositYield != null) {
+                        decision=ca.emilybelnavis.mcmods.economy.pricing.PricingAdmission.check(intent,reads,commit,store.snapshot().worldId(),java.time.Instant.ofEpochMilli(effective),configuration.valuation());
+                        if (decision instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted)
+                            decision=depositYield.observe(intent,reads,accepted,effective);
+                    }
+                    return activity != null && decision instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted
+                            ? activity.observe(intent,reads,accepted,effective) : decision;
                 });
             }
             phase=1;
@@ -146,6 +162,8 @@ public final class FoundationRuntime implements FoundationStore {
                     FxService.prepareChfActivation(store, clock, configuration.wall());
                 if(before!=store.lastCommittedSequence())return new Progress("projection-final-validation",0,1,false);
                 if (!activatePricing()) return new Progress("pricing-activation",0,1,false);
+                if (activity != null && !activity.prepare()) return new Progress("activity-source-registration",0,1,false);
+                prepareSimulation();
                 ready=true;store.cleanShutdownEligible(true);phase=4;return new Progress("ready",1,1,true);
             }
             clock.prepare(); if (deadlines != null) deadlines.prepare(); phase=2;
@@ -171,6 +189,7 @@ public final class FoundationRuntime implements FoundationStore {
 
     @Override
     public EconomicStep<EconomicClock.Output> prepareEconomicStep() {
+        if(baseScheduledProgress(true).ready())prepareSimulation();
         // Domain planning and effects are bounded worker-only work; one journal child per turn.
         // Existing fixed simulations retain their detached calculation pipeline.
         if (baseScheduledProgress(true).ready() && capitalPending()) {

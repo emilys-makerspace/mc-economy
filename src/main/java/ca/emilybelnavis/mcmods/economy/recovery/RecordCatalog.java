@@ -29,6 +29,25 @@ public final class RecordCatalog {
     public RecordCatalog(Map<Key, Consumer<String>> validators) { this.validators = Map.copyOf(validators); }
     public static RecordCatalog core() {
         var catalog = new RecordCatalog(Map.of(new Key(EconomicRecord.TYPE, 1), EconomicRecord::decode));
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.window.WindowFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.model.ModelFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.market.MarketFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.stock.StockFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.journal.NpcSettlement.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.settlement.NpcFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.fx.EffectiveFxFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.settlement.NpcInputReturns.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.macro.MacroFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.catalog.CatalogFacts.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.catalog.VillageMarketSource.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.clock.DeadlineDispatcher.register(InspectionAudit.register(FxFacts.register(catalog)));
         catalog = ca.emilybelnavis.mcmods.economy.pricing.ValuationSources.register(ca.emilybelnavis.mcmods.economy.pricing.ServicePricing.register(ca.emilybelnavis.mcmods.economy.interest.DepositYield.register(catalog)));
         catalog=ca.emilybelnavis.mcmods.economy.autopay.Autopay.register(catalog);
@@ -52,6 +71,7 @@ public final class RecordCatalog {
                 .with(new Key("economy:posting", 1), LedgerProjection::validatePosting)
                 .with(new Key("economy:posting", 2), LedgerProjection::validatePostingV2)
                 .with(new Key("economy:posting", 3), LedgerProjection::validatePostingV3)
+                .with(new Key("economy:posting", 4), LedgerProjection::validatePostingV4)
                 .with(new Key(Holds.FACT, 1), Holds::validateFact)
                 .with(new Key(Holds.FACT, 2), Holds::validateFactV2)
                 .with(new Key(Custody.FACT, 1), Custody::validateFact)

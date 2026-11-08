@@ -193,3 +193,14 @@ Production activates the version-one [financial calendar](financial-calendar.md)
 ## CHF historical first version
 
 A6-03-01 adds an optional historical InitialVersion reader to DeferredSystem, retaining its prior two-argument constructor. FX reads the earliest immutable publication to retain v1 for legacy openings and start v2 for fresh CHF-capable openings. After legacy catch-up, production schedules the CHF implementation only at a strictly future UTC boundary. Existing origins/cadences/v1 fingerprints and past completions remain unchanged; see [CHF compatibility](chf.md).
+
+
+## A8-06-01 prospective fixed retirement
+
+[FixedRetirements](fx-effective-time.md) adds a distinct immutable V47 receipt, binding original fixed signatures/versions and an installed stage0 successor at F. Fixed scheduling/debt/commit/startup/offline use the same first-excluded aligned H, preserve last actual frontier and require the exact reserved successor event. No excluded completion is fabricated, and legacy FX completion↔publication validation remains unchanged. Production retirement is not scheduled by this package.
+
+
+A8-06-02 now delivers the dormant [financial-day macro provider](macro-rates.md) under V48: atomic A/F/H handover, actual child-linked v2 window/publication facts, immutable selected baskets, chronological paused/manual/resume policies, and readiness through the separate dispatcher completion. Historical facts and fixed loan terms remain unchanged; A8-07 lifecycle activation is still unselected.
+
+
+A8-07 delivers [V49 production lifecycle and offered trader checkout](simulation-production.md), including future rate activation, immutable initial configuration/source manifests, operator controls, cached/history API, currentness-gated money work and independent entity-save progression. This supersedes the earlier dormant-production notes for the new delivered scope; historical package evidence remains unchanged. A8-08 acceptance is still unselected.

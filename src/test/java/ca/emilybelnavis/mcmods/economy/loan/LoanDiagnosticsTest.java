@@ -97,7 +97,7 @@ class LoanDiagnosticsTest {
             assertPlan(f,"SELECT debt_minor FROM loans WHERE world_id=? AND owner_id=? AND currency=? AND status<>'SETTLED' ORDER BY loan_id LIMIT 129",List.of(loan.world().value().toString(),loan.owner().value().toString(),"CAD"),"loan_outstanding_owner");
             assertPlan(f,"SELECT debt_minor FROM loans WHERE world_id=? AND lender=? AND currency=? AND debt_minor>0 ORDER BY loan_id LIMIT 129",List.of(loan.world().value().toString(),loan.lender().key(),"CAD"),"loan_outstanding_lender");
             var account=FinancialAccounts.id(loan.world(),Loans.borrower(loan.owner()),FinancialAccounts.Role.LIABILITY,loan.currency());
-            assertPlan(f,"SELECT payload FROM journal_records WHERE record_type='economy:posting' AND record_version IN (1,2,3) AND substr(payload,1,36)=? AND sequence<=? ORDER BY sequence,position LIMIT 129",List.of(account.toString(),Long.toString(f.store.lastCommittedSequence())),"ledger_posting_account");
+            assertPlan(f,LoanDiagnostics.JOURNAL_TOTAL_QUERY,List.of(account.toString(),Long.toString(f.store.lastCommittedSequence())),"ledger_posting_account");
         }
     }
     @Test void guessedLoanIdsNeverExposeAnotherApplicantsDenialAndFilteredPagesStillAdvance()throws Exception{

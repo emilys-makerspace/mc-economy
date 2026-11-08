@@ -144,3 +144,48 @@ Player-backed operators can use `/economy loan inspect <owner-uuid> <loan-uuid>`
 Player-backed operators can use `/economy debt inspect <card|loan> <owner-uuid> <facility-uuid>` for audited original obligations, precise clock reasons, reconciliation and provider progress. Operators can inspect report revisions with `/economy debt inspect_reports <owner-uuid>` and collection receipts with `/economy debt inspect_history <owner-uuid> <case-uuid>`. Each page is audited. The view shows installed scoring or catch-up status and the owner’s next score boundary.
 
 Player operators with permission level 2 can run `/economy ledger reconcile <owner-uuid> <account-uuid>` to compare the current-currency balance with up to 63 journal postings. Larger histories return a limit message.
+
+## Economic simulation and trading
+
+A financial day is 1,200,000 real milliseconds. On a ready world with a selected currency, the installed source manifest schedules activation A strictly beyond observed/processed time. The first shared prime/FX event is F=A+one day; it uses only the complete observations since A. Old daily FX retires prospectively, preserving its history. Missing input blocks new work with an unavailable reason. `/economy macro status` reports cached mode, coverage/baseline counts, rate age, A/F/H, revisions and limits; it never advances rates.
+
+Optional `config/economy-simulation.properties` is read once per lifecycle. Unknown keys, invalid booleans, invalid weight sums and out-of-range values reject configuration. Defaults:
+
+```properties
+rates=true
+traders=true
+cadPerEmerald=1
+dailyFloor=1000
+capacityFactor=0.01
+primeWeights=1/3,1/3,1/3
+fxWeights=1/2,1/2
+```
+
+These initial settings are captured immutably with the production manifest. After installation, use future policy controls for model/rate changes; changing the captured initial file produces an explicit configuration conflict. Turning off initial rate activation does not erase an already saved activation or its obligations. Model configuration uses bounded rational values; the positive daily floor is at most1,000,000,000, capacity factor is0..1, and CAD/emerald is positive and at most1,000,000. Currency membership, financial-day length and rate caps stay fixed.
+
+Connected operator players can use:
+
+- `/economy macro status`
+- `/economy macro history <beforeFinancialDay>` — up to16 saved outcomes, exclusive day-index cursor; use9223372036854775807 for the newest page.
+- `/economy macro pause <effectiveEpochMillis>`
+- `/economy macro resume <effectiveEpochMillis>`
+- `/economy macro manual <effectiveEpochMillis> <json>` — JSON contains exactly `primeDeltas` and `fxMultipliers`, each with all 11 uppercase currency keys. APR deltas are fractions (0.001 is0.10 percentage points); FX multipliers are normalized to the permanent reference. Requests must meet all absolute, per-step and rounded ordered-pair bounds. Invalid requests reject without clamping.
+- `/economy macro config <effectiveEpochMillis> <json>` — schedules a PAUSED configuration; JSON must contain all four string fields `dailyFloor`, `capacityFactor`, `primeWeights`, `fxWeights`. Resume separately at a later boundary.
+
+All writes append at strictly future financial boundaries beyond every wall/high-water/processed frontier. At most16 policies may be pending. Manual scheduling requires an actually completed paused/manual rate event, not just a future pause row. It validates the immediately preceding pending sequence, executes once and then holds. Resume appends after pending changes and uses current observations without deferred automatic moves. Operator UUIDs are retained in journal outcomes. Legacy global-prime/daily-FX editors do not override an installed takeover.
+
+Trading replaces native checkout for ordinary villagers and wandering traders when enabled. Banker guides are excluded. Choose rail, account/cash currency and quantity explicitly, then request and confirm a quote. Foreign quotes show principal, conversion and issuer fee. No account fallback, implicit credit or ground-drop fallback is used. Unsupported catalogs, incomplete comparison cohorts, unavailable amounts, insufficient stock or capacity show a controlled refusal. A market comparison is bounded to32 saved traders and1,024 detached entries; equivalent comparisons must fit the catalog's32-entry cohort limit. Accounts remain limited by the existing per-player catalog.
+
+Claims retain committed goods/cash and independently witnessed original-input returns. A failed or cancelled untouched quote closes the original financial intent before releasing its marked cash locks. A saved held-input rejection uses an explicit return claim. Uncertain HELD/delivery/progression after disconnect or restart requires the existing custody/operator reconciliation process; do not manually duplicate items or repeat the payment. Village restock earns only loaded eligible work ticks, and wandering traders never restock. No offline/sleep tick credit is invented.
+
+Storage schema 49 captures the production manifest; upgrades retain the stopped complete-world backup requirement. Keep world and economy files together.
+
+### A8 acceptance and operational limits
+
+The delivered A8 scope connects completed merchant/NPC activity to immutable observation days and a coherent currency-prime/FX basket. Prices and rates are gameplay policies, not a calibrated economic forecast. A financial day is 20 real minutes: a seven-day window is seven financial days, not a real week. Missing coverage stops the affected new work; it does not become zero activity. Last captured fixed-loan terms are preserved.
+
+Acceptance combines a real merchant-to-rate SQLite witness with the earlier real client foreign-cash checkout, native guard and independent save evidence. It does not establish every seed, third-party catalog, multiplayer load, operating system, abrupt process-termination or XP-orb persistence case. Bounded caches/queues can refuse admission; the suite is not a benchmark or an exactly-once guarantee across Minecraft files and SQLite. Account/foreign backend cases and normal reopen/replay evidence are separate from the physical client witness.
+
+Clear output capacity before quoting. If exact cash change or a rounded positive payout cannot be represented, choose a supported larger quantity or another explicit rail/currency; no rounding shortcut or account fallback is used. Keep saved worlds and economy data together. Ambiguous interrupted item/progression attempts remain for reconciliation instead of obtaining another execution capability. Source replacement/recipe valuation belongs to a separately selected A9 adapter; the current temporary emerald source is retained.
+
+[Acceptance evidence](../.codex/verification/A8-08.md) and [A9 downstream boundary](../.codex/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.

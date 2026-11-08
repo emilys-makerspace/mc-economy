@@ -8,7 +8,7 @@ import java.util.UUID;
 /** Ordered trusted SQL; the complete pending chain shares one transaction. */
 final class SchemaMigrations {
     static final int MINIMUM_SUPPORTED = 1;
-    static final int CURRENT = 39;
+    static final int CURRENT = 49;
     static final int APPLICATION_ID = 0x45434F4E;
     record Migration(int version, String name, List<String> statements) {
         Migration { statements = List.copyOf(statements); }
@@ -64,7 +64,62 @@ final class SchemaMigrations {
             new Migration(36,"durable village branches and trusted hardware activation",VillageBranchSchema.statements()),
             new Migration(37,"recoverable legacy kiosk geometry upgrades",ca.emilybelnavis.mcmods.economy.journal.KioskUpgrades.statements()),
             new Migration(38,"versioned branch placement attempts and safe terrain retry",BranchPlacementSchema.statements()),
-            new Migration(39,"durable bank employee assignments and loaded respawn progress",BankStaffingSchema.statements()));
+            new Migration(39,"durable bank employee assignments and loaded respawn progress",BankStaffingSchema.statements()),
+            new Migration(40,"atomic semantic activity attribution and capacity summaries",ca.emilybelnavis.mcmods.economy.simulation.activity.ActivitySchema.statements()),
+            new Migration(41,"immutable activity windows and deterministic model plans",simulationStatements()),
+            new Migration(42,"durable trade markets catalogs and detached price state",tradeStatements()),
+            new Migration(43,"trader stock loaded ticks and original progression",ca.emilybelnavis.mcmods.economy.trade.stock.StockSchema.statements()),
+            new Migration(44,"atomic account NPC settlement and private bridge postings",npcStatements()),
+            new Migration(45,"NPC cash settlement and physical custody",ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashSchema.statements()),
+            new Migration(46,"currency prime history and loan policy provenance",currencyPrimeStatements()),
+            new Migration(47,"prospective fixed retirement and exact-time FX",effectiveFxStatements()),
+            new Migration(48,"financial-day macro provider and atomic handover",macroStatements()),
+            new Migration(49,"production simulation manifest",ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.statements()));
+
+    private static List<String> macroStatements() {
+        var statements=new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroSchema.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.statements());
+        return List.copyOf(statements);
+    }
+    private static List<String> effectiveFxStatements() {
+        var statements=new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.fx.EffectiveFxSchema.statements());
+        return List.copyOf(statements);
+    }
+
+    private static List<String> currencyPrimeStatements() {
+        var statements=new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeSchema.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.plan.ActivationModelPlans.statements());
+        return List.copyOf(statements);
+    }
+
+    private static List<String> npcStatements() {
+        var statements = new java.util.ArrayList<String>();
+        statements.add("DROP INDEX ledger_posting_account");
+        statements.add(LedgerHistorySchema.V4_INDEX);
+        statements.addAll(ca.emilybelnavis.mcmods.economy.journal.NpcSettlement.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.trade.settlement.NpcSchema.statements());
+        return List.copyOf(statements);
+    }
+
+    private static List<String> tradeStatements() {
+        var statements = new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.trade.market.MarketSchema.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.trade.catalog.CatalogStore.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.trade.catalog.VillageMarketSource.statements());
+        return List.copyOf(statements);
+    }
+
+    private static List<String> simulationStatements() {
+        var statements = new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.window.WindowSchema.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.plan.ModelPlanStore.statements());
+        return List.copyOf(statements);
+    }
 
     private static List<String> debtAcceptanceStatements() {
         var statements=new java.util.ArrayList<String>();

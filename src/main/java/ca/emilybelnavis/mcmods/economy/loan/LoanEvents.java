@@ -15,6 +15,14 @@ import java.util.UUID;
 public final class LoanEvents {
     private static final String TYPES = "record_type IN('economy:a6/loan','economy:a6/loan-installment')";
     public static final String INDEX = "CREATE INDEX loan_event_feed ON journal_records(sequence,position) WHERE " + TYPES;
+    static final String QUERY = """
+            SELECT r.sequence,r.position,r.record_type,r.record_version,r.payload,t.world_id,t.transaction_id,
+                   t.operation_id,t.audit_utc,t.economic_update_id,t.correction_of
+            FROM journal_records r INDEXED BY loan_event_feed
+            JOIN journal_transactions t ON t.sequence=r.sequence
+            WHERE r.%s AND r.sequence<=? AND (r.sequence,r.position)>(?,?)
+            ORDER BY r.sequence,r.position LIMIT ?
+            """.formatted(TYPES);
 
     private LoanEvents() {}
 
@@ -57,9 +65,7 @@ public final class LoanEvents {
         if (!cursor.world().equals(world(reads)) || cursor.frontier() > LoanDiagnostics.frontier(reads)) {
             throw new IllegalArgumentException("Loan event world/frontier");
         }
-        var rows = reads.query(
-            "SELECT r.sequence,r.position,r.record_type,r.record_version,r.payload,t.world_id,t.transaction_id,t.operation_id,t.audit_utc,t.economic_update_id,t.correction_of FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE r."
-                + TYPES + " AND r.sequence<=? AND (r.sequence,r.position)>(?,?) ORDER BY r.sequence,r.position LIMIT ?",
+        var rows = reads.query(QUERY,
             List.of(Long.toString(cursor.frontier()), Long.toString(cursor.sequence()),
                 Integer.toString(cursor.position()), Integer.toString(limit + 1)), limit + 1);
         var events = rows.stream().limit(limit).map(LoanEvents::event).toList();
@@ -76,15 +82,15 @@ public final class LoanEvents {
 
     private static Event event(Map<String, String> row) {
         int version = Integer.parseInt(row.get("record_version"));
-        if (version != 1) throw new IllegalArgumentException("Unsupported loan source version");
+        if (version != 1 && !(version == 2 && row.get("record_type").equals(Loans.FACT))) throw new IllegalArgumentException("Unsupported loan source version");
         var world = new WorldId(UUID.fromString(row.get("world_id")));
         String body = row.get("payload");
         Payload payload;
         WorldId sourceWorld;
         switch (row.get("record_type")) {
             case Loans.FACT -> {
-                Loans.validateFact(body);
-                var snapshot = Loans.decode(body);
+                Loans.validateFact(body,version);
+                var snapshot = Loans.decode(body,version);
                 payload = new ContractChanged(snapshot);
                 sourceWorld = snapshot.world();
             }

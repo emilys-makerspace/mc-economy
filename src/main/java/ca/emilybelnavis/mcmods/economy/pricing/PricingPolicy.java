@@ -33,6 +33,8 @@ public final class PricingPolicy {
     public static JournalEngine.Registration change(Change change,Clock clock) {
         return new JournalEngine.Registration(1,(intent,reads)->{
             if(!change.request().equals(intent.request()) || !CHANGE.equals(intent.kind()))throw new IllegalArgumentException("Pricing canonical request");
+            var worldRows=reads.query("SELECT world_id FROM foundation_metadata WHERE singleton=1",List.of(),1);
+            if(!worldRows.isEmpty() && ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.activation(reads,new ca.emilybelnavis.mcmods.economy.api.Identifiers.WorldId(UUID.fromString(worldRows.getFirst().get("world_id")))).isPresent())return reject("PRICING_CURRENCY_TAKEOVER_RESERVED");
             var rows=reads.query("SELECT origin_ms,observed_wall_ms,last_effective_ms FROM financial_calendar WHERE singleton=1",List.of(),1);
             if(rows.isEmpty())return reject("PRICING_CALENDAR_UNAVAILABLE");
             var row=rows.getFirst();long origin=Long.parseLong(row.get("origin_ms"));

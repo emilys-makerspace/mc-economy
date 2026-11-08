@@ -47,7 +47,7 @@ public final class FxRequests {
         PlayerId actor = authenticate(context);
         return services.storage(actor, () -> store.transaction(tx -> {
             if (quotes == null) quotes = new FxQuotes(store.snapshot().worldId());
-            var quote=quotes.issue(actor, pair, side, amount, FxService.latest(tx::query), wall.instant(), Duration.ofSeconds(60));
+            var quote=quotes.issue(actor, pair, side, amount, FxService.snapshot(tx::query), wall.instant(), Duration.ofSeconds(60));
             var owner=new ca.emilybelnavis.mcmods.economy.api.PartyRef(store.snapshot().worldId(),new ca.emilybelnavis.mcmods.economy.api.PartyRef.Player(actor));
             var account=ca.emilybelnavis.mcmods.economy.account.AccountCatalog.openBanks(tx::query,owner).stream()
                     .filter(a->a.currency()==pair.source()).findFirst().orElse(null);
@@ -60,7 +60,7 @@ public final class FxRequests {
             if(drain) {
                 var principal=ca.emilybelnavis.mcmods.economy.pricing.CashPricing.principalForBudget(amount,fee.tier());
                 if(!principal.equals(quote.debit())) {
-                    quote=quotes.issue(actor,pair,side,principal,FxService.latest(tx::query),wall.instant(),Duration.ofSeconds(60));
+                    quote=quotes.issue(actor,pair,side,principal,FxService.snapshot(tx::query),wall.instant(),Duration.ofSeconds(60));
                     sources.put(quote.id(),new Source(account,quote.expires()));
                     fee=pricing.quote(tx::query,owner.world(),actor,bank,service,quote.debit(),wall.instant(),quote.expires());
                 }
@@ -77,10 +77,16 @@ public final class FxRequests {
                 FxPairHistory.page(tx::query, store.snapshot().worldId(), pair, cursor, limit)));
     }
 
+    /** Separate exact-time intraday history; the existing history() remains explicitly daily. */
+    public CompletionStage<FxPairHistory.ExactPage> intradayHistory(RequestContext context,FxQuotes.Pair pair,FxPairHistory.ExactCursor cursor,int limit){
+        PlayerId actor=authenticate(context);if(limit<1||limit>16)throw new IllegalArgumentException("FX intraday history page size");
+        return services.storage(actor,()->store.transaction(tx->FxPairHistory.intradayPage(tx::query,store.snapshot().worldId(),pair,cursor,limit)));
+    }
+
     /** Worker-side quote lookup after journal retry resolution. */
     public FxQuotes.Quote requireFresh(UUID id, PlayerId actor, WorldId world, JournalEngine.ReadView reads) {
         if (quotes == null) throw new IllegalArgumentException("FX_QUOTE_UNAVAILABLE");
-        var quote=quotes.requireFresh(id, actor, world, FxService.latest(reads), FxQuotes.PRICING_VERSION, wall.instant());
+        var quote=quotes.requireFresh(id, actor, world, FxService.snapshot(reads), FxQuotes.PRICING_VERSION, wall.instant());
         var witness=sources.get(id);
         var owner=new ca.emilybelnavis.mcmods.economy.api.PartyRef(world,new ca.emilybelnavis.mcmods.economy.api.PartyRef.Player(actor));
         var account=witness==null?null:ca.emilybelnavis.mcmods.economy.account.AccountCatalog.find(reads,owner,witness.account().id()).orElse(null);

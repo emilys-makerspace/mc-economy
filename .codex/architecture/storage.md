@@ -53,7 +53,7 @@ and upstream license files, and explicitly in additionalRuntimeClasspath for dev
 Effective pragmas are verified: WAL, synchronous=2 (FULL), foreign_keys=1, busy_timeout=5000ms.
 No automatic busy retry is performed beyond SQLite's finite busy timeout.
 
-application_id=0x45434F4E identifies redesigned storage. Current schema=19; minimum=1. V3 adds the [journal](journal.md); V4 adds [recovery and clock metadata](recovery-clock.md). V5 adds the [FX journal indexes and activation-scoped observation](fx.md). V6 adds the [account catalog](accounts.md). V7 adds the [ledger balance projection](postings.md). V8 adds [holds](postings.md#holds). V9 adds [quote consumption and the denomination index](postings.md#fx-closure-and-rebase). V10 adds the [posting history index](postings.md#service-and-history).
+application_id=0x45434F4E identifies redesigned storage. Current schema=49; minimum=1. V49 adds the [immutable production simulation manifest](simulation-production.md). V48 adds [financial-day activation, controls, frozen rate plans and basket completion](macro-rates.md). V47 adds [fixed retirement and exact-time FX snapshots](fx-effective-time.md). V46 adds [currency-prime policies and activation-scoped plans](currency-prime.md). V45 adds [NPC cash and physical custody](npc-cash-custody.md). V44 adds [account/NPC/FX settlement and private zero-terminal bridges](npc-account-settlement.md). V43 adds [individual trader stock/tick/progression evidence](trader-entities.md). V42 adds [trade market/catalog/pricing state](trade-markets.md). V41 adds [immutable activity windows and deterministic model plans](activity-windows.md). V40 adds [atomic activity attribution and indexed capacity history](activity-attribution.md); intermediate subsystems retain their own migration contracts. The earlier foundation milestones below describe their original scopes. V3 adds the [journal](journal.md); V4 adds [recovery and clock metadata](recovery-clock.md). V5 adds the [FX journal indexes and activation-scoped observation](fx.md). V6 adds the [account catalog](accounts.md). V7 adds the [ledger balance projection](postings.md). V8 adds [holds](postings.md#holds). V9 adds [quote consumption and the denomination index](postings.md#fx-closure-and-rebase). V10 adds the [posting history index](postings.md#service-and-history).
 V11–V17 add merchant payments, custody, cash issuance, terminal policy, deposits/returns, withdrawals and register sales. V18 adds the [financial calendar](financial-calendar.md) and paged domain checkpoints, retaining prior IDs, balances and history.
 V1 creates only foundation_metadata (world UUID, product, schema version) and migration_history.
 V2 adds explicit identity_protocol=1. user_version must match metadata and contiguous
@@ -184,3 +184,33 @@ V38 appends `village_placement_attempts` and its phase/latest index. Version-one
 ## V39 banker assignments and replacement progress
 
 V39 adds `banker_slots`, `banker_employee_history` and `banker_slot_events`. Exact DDL, captured current desk identity/capacity, canonical bounded records, contiguous valid transitions, immutable staffing facts and employee-history consistency validate on open, recovery and offline inspection. Existing worlds 1–38 require the normal stopped-world complete backup gate; clean restore recognizes 4–39. Staffing creates no accounts or money. [Current staffing contract](banker-staffing.md) records loaded-only physical proofs, positive vacancy, 24,000-tick progress, atomic pause and conservative spawn recovery.
+
+
+## V44 account NPC settlement
+
+V44 appends npc_bridges, npc_trade_adapter, npc_trade_quotes and npc_trade_receipts with immutable evidence and a v4-inclusive ledger-history index. Posting4 is registered alongside unchanged prior versions; generic authorities and old versions reject NPC_BRIDGE. Online recovery and offline inspection validate exact quote-to-group/receipt linkage, canonical bridges and terminal zero, historical pricing/stock witnesses, custody, fee/FX consumption and immutable projection counts. Clean restore recognizes44; old worlds retain the stopped complete-world backup gate. See [account NPC settlement](npc-account-settlement.md).
+
+
+## V45 NPC cash and custody
+
+V45 appends npc_cash_adapter, npc_cash_quotes, npc_cash_receipts and npc_cash_returns with immutable evidence and source indexes. New cash/return facts preserve old account and activity manifests. Online/recovery/offline validators bind captured pricing/FX, exact posting groups, original cash quantities/protected outputs, custody and conclusively closed input returns. Clean restore recognizes45; old worlds retain the stopped complete-world backup gate. See [cash and physical custody](npc-cash-custody.md).
+
+
+## V46 currency-prime provenance
+
+V46 appends currency_prime_activation, currency_prime_policies, currency_prime_completions and activation_model_plans, indexed immutable source facts and exact startup/recovery/offline validation. Currency loan/application fact v2 appends policy UUID/revision without changing old v1 meanings or existing fixed terms. Validators enforce future activation inheritance, actual source/child chronology, scoped day indices/model outputs, per-currency bounds and basket completion. Clean restore recognizes46; old worlds retain the stopped complete-world upgrade-backup gate. See [currency prime](currency-prime.md).
+
+
+## V47 prospective retirement and effective FX
+
+V47 appends fixed_system_retirements and effective_fx_snapshots, immutable source triggers and exact-time/original-ID indexes. Existing daily FX facts/publication-day index and economic completion correspondence are unchanged. Startup/recovery/offline validators bind original fixed signatures, excluded-boundary/successor evidence, exact model/provider-child snapshots and source chronology. Clean restore recognizes47; old worlds retain the stopped complete-world upgrade-backup requirement. See [retirement and effective FX](fx-effective-time.md).
+
+
+## V48 financial-day provider
+
+V48 appends macro_activations, macro_control_policies, macro_rate_plans and macro_rate_completions with immutable source guards/indexes. Atomic activation binds future A/F/H, original fixed retirement, bootstrap primes and configuration. Version-two source linkage preserves old activation/window/prime/FX fact meanings while binding exact dispatcher operations. Startup/recovery/offline validators and clean restore recognize48. Existing worlds retain the stopped complete-world upgrade-backup requirement. See [macro rates](macro-rates.md).
+
+
+## V49 production simulation
+
+V49 adds simulation_production with immutable guards and a registered initial configuration/activity/catalog/cash/provider manifest. Untouched NPC quote-abandon source evidence binds permanently rejected originals, quarantined untouched reservations and cash-lock release. Startup/recovery/offline validation and restore support49. Historical facts retain their meanings and the complete-world pre-upgrade backup gate stays in place. See [production simulation](simulation-production.md).

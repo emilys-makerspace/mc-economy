@@ -25,10 +25,13 @@ public final class TerminalPreviewClient {
         if (Boolean.getBoolean("economy.bankLocateProbe")) new BankLocateClient();
         if (Boolean.getBoolean("economy.bankStructureProbe")) new BankStructureClient();
         if (Boolean.getBoolean("economy.bankerProbe")) new BankerClient();
+        if (Boolean.getBoolean("economy.traderCustodyProbe")) new TraderCustodyClient();
+        if (Boolean.getBoolean("economy.simulationProductionProbe")) new SimulationProductionClient();
+        if (Boolean.getBoolean("economy.traderHookProbe")) new TraderHookClient();
         if (Boolean.getBoolean("economy.villageBankAcceptance")) new VillageBankAcceptanceClient();
     }
     private void tick(ClientTickEvent.Post event) {
-        if (Boolean.getBoolean("economy.villageBankAcceptance") || Boolean.getBoolean("economy.bankerProbe") || Boolean.getBoolean("economy.bankingProbe") || Boolean.getBoolean("economy.kioskUpgradeProbe") || Boolean.getBoolean("economy.villageGenerationProbe") || Boolean.getBoolean("economy.bankLocateProbe") || Boolean.getBoolean("economy.bankStructureProbe")) return;
+        if (Boolean.getBoolean("economy.simulationProductionProbe") || Boolean.getBoolean("economy.traderCustodyProbe") || Boolean.getBoolean("economy.traderHookProbe") || Boolean.getBoolean("economy.villageBankAcceptance") || Boolean.getBoolean("economy.bankerProbe") || Boolean.getBoolean("economy.bankingProbe") || Boolean.getBoolean("economy.kioskUpgradeProbe") || Boolean.getBoolean("economy.villageGenerationProbe") || Boolean.getBoolean("economy.bankLocateProbe") || Boolean.getBoolean("economy.bankStructureProbe")) return;
         var minecraft = Minecraft.getInstance();
         if (!opened && minecraft.getOverlay() == null && minecraft.screen != null && minecraft.level == null) {
             opened = true;

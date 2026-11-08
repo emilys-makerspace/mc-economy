@@ -4,6 +4,13 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-07
 
+### A8 — Monetary trading and economic rates
+
+- Added explicit villager/wandering-trader checkout with cash or a selected account, quantity selection, foreign conversion confirmation, protected delivery/claims and original secondary ingredients.
+- Enabled local market pricing, individual loaded-work restock and single original-receipt native trade progression while blocking native checkout bypasses. Banker guides remain separate.
+- Added prospective activity-driven currency prime and coherent FX every20 real minutes after full-day warm-up, retaining old FX history and fixed-loan terms.
+- Added validated initial simulation settings, authenticated future pause/manual/configuration/resume controls, cached diagnostics and bounded immutable history API. Storage advances to schema49 with the existing complete-world upgrade-backup requirement.
+
 - Fixed generated kiosks spanning chunk boundaries being permanently disabled when their neighboring chunk was unloaded.
 
 ## 2026-11-06

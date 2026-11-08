@@ -15,7 +15,7 @@ public final class PricingAdmission {
             if(reads.query("SELECT world_id FROM institution_capital_manifest WHERE world_id=? AND state='ACTIVE'",List.of(world.value().toString()),1).isEmpty())
                 return new JournalEngine.Decline(new Journal.Result(1,"INSTITUTIONS_UNAVAILABLE",""));
         }
-        if (!Set.of(SameCurrency.PAY,SameCurrency.TRANSFER,SameCurrency.CREDIT,FxSettlement.EXCHANGE).contains(intent.kind())) return commit;
+        if (!Set.of(SameCurrency.PAY,SameCurrency.TRANSFER,SameCurrency.CREDIT,FxSettlement.EXCHANGE,ca.emilybelnavis.mcmods.economy.trade.settlement.NpcTrades.SETTLE).contains(intent.kind())) return commit;
         var checked=new HashSet<String>();
         for(var record:commit.records())if(record.type().equals("economy:posting")) {
             var p=record.payload().split("\\|",-1);

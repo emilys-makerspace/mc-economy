@@ -72,7 +72,7 @@ public final class InstitutionCapital {
         var denomination = RebaseSettlement.denomination(reads).orElse(null);
         if (denomination == null) return new Status(State.WAITING_DENOMINATION, 0, null, null);
         var publication = FxService.latest(reads);
-        if (!fresh(publication, now)) return new Status(State.WAITING_FX, 0, denomination.currency(), publication == null ? null : publication.updateId());
+        if (!fresh(reads, publication, now)) return new Status(State.WAITING_FX, 0, denomination.currency(), publication == null ? null : publication.updateId());
         return new Status(State.READY, 0, denomination.currency(), publication.updateId());
     }
     /** Stable step identities survive restart and A1 resolves uncertain commits before any retry. */
@@ -103,7 +103,7 @@ public final class InstitutionCapital {
             var denomination = RebaseSettlement.denomination(reads).orElse(null);
             if (denomination == null) return retry("CAPITAL_DENOMINATION_MISSING");
             var publication = FxService.latest(reads);
-            if (!fresh(publication, now)) return retry("CAPITAL_FX_UNAVAILABLE");
+            if (!fresh(reads, publication, now)) return retry("CAPITAL_FX_UNAVAILABLE");
             var opening = opening(world, denomination.currency(), publication);
             var financial = poster.issue(reads, opening);
             var records = new ArrayList<>(financial.records());
@@ -175,9 +175,9 @@ public final class InstitutionCapital {
     private static FinancialAccounts.Account account(WorldId world, InstitutionCatalog.InstitutionId owner, FinancialAccounts.Role role, EconomyCurrency currency) {
         return FinancialAccounts.account(world, owner, role, currency);
     }
-    private static boolean fresh(FxFacts.Publication publication, Instant now) {
+    private static boolean fresh(JournalEngine.ReadView reads,FxFacts.Publication publication, Instant now) {
         if (publication == null || !publication.rates().containsKey(EconomyCurrency.CHF)) return false;
-        var start = publication.day().atStartOfDay(ZoneOffset.UTC).toInstant();
+        var start = Instant.ofEpochMilli(FxService.effectiveMillis(reads,publication.updateId()));
         return !now.isBefore(start) && now.isBefore(start.plus(Duration.ofHours(48)));
     }
     private static JournalEngine.Retry retry(String code) { return new JournalEngine.Retry(new Journal.Result(1, code, "")); }
@@ -198,7 +198,11 @@ public final class InstitutionCapital {
         var rows = reads.query("SELECT * FROM institution_capital_manifest WHERE world_id=?", List.of(world.value().toString()), 1);
         if (rows.isEmpty()) return null;
         var row = rows.getFirst();
-        return new Manifest(EconomyCurrency.valueOf(row.get("server_currency")), Long.parseLong(row.get("denomination_revision")), publication(row), Integer.parseInt(row.get("next_allocation")), row.get("state").equals("ACTIVE"));
+        var frozen=publication(row);
+        var source=FxService.snapshot(reads,frozen.updateId());
+        if(source==null||!source.world().equals(world)||!source.publication().equals(frozen))
+            throw new IllegalArgumentException("Capital original FX snapshot unavailable or changed");
+        return new Manifest(EconomyCurrency.valueOf(row.get("server_currency")), Long.parseLong(row.get("denomination_revision")), frozen, Integer.parseInt(row.get("next_allocation")), row.get("state").equals("ACTIVE"));
     }
     private static void registerParty(FoundationStore.Transaction tx, WorldId world, InstitutionCatalog.Entry entry) {
         tx.execute("INSERT INTO institution_parties(world_id,institution_key,actor_id,display_name,base_currency,tier,enabled) VALUES(?,?,?,?,?,?,1)",

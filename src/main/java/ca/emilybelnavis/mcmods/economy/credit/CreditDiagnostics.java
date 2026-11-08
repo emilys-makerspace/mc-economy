@@ -163,7 +163,7 @@ public final class CreditDiagnostics {
     }
     private record JournalTotal(BigInteger minor,boolean complete) {}
     private static JournalTotal journalTotal(JournalEngine.ReadView reads,UUID account,EconomyCurrency currency,long frontier){
-        var rows=reads.query("SELECT payload FROM journal_records WHERE record_type='economy:posting' AND record_version IN (1,2,3) AND substr(payload,1,36)=? AND sequence<=? ORDER BY sequence,position LIMIT 129",List.of(account.toString(),Long.toString(frontier)),129);
+        var rows=reads.query("SELECT payload FROM journal_records WHERE record_type='economy:posting' AND record_version IN (1,2,3,4) AND substr(payload,1,36)=? AND sequence<=? ORDER BY sequence,position LIMIT 129",List.of(account.toString(),Long.toString(frontier)),129);
         BigInteger total=BigInteger.ZERO;
         for(var row:rows.stream().limit(128).toList()){
             var p=row.get("payload").split("\\|",-1);if(p.length!=5||!p[0].equals(account.toString())||!p[2].equals(currency.name()))throw new IllegalArgumentException("Credit posting identity");

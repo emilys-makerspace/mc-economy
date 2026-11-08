@@ -108,13 +108,19 @@ class JournalServiceTest {
                 return live.menu().equals(currentMenu.get()) ? outcome -> fail("Stale menu received outcome") : null;
             }).completion().toCompletableFuture();
             currentMenu.set(UUID.randomUUID());
-            var firstLookup = journal.lookup(request);
-            assertSame(firstLookup, journal.lookup(request));
-            var result = firstLookup.toCompletableFuture();
-            pump(services, () -> completion.isDone() && result.isDone());
+            var lookupChecks = new AtomicInteger();
+            var reader = new JournalService(services, new JournalEngine(store, (actor, kind) -> {
+                lookupChecks.incrementAndGet();
+                return true;
+            }, Map.of()), publisher());
+            var result = reader.lookup(request).toCompletableFuture();
+            var sharedResult = reader.lookup(request).toCompletableFuture();
+            pump(services, () -> completion.isDone() && result.isDone() && sharedResult.isDone());
             assertEquals(1, resolution.get());
+            assertEquals(1, lookupChecks.get());
             assertEquals(JournalService.DeliveryStatus.SKIPPED, completion.join().publication());
             assertEquals(completion.join().outcome(), result.join().orElseThrow());
+            assertEquals(result.join(), sharedResult.join());
         } finally { services.stop(Duration.ofSeconds(3)); }
     }
 

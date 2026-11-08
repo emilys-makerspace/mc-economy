@@ -1,9 +1,10 @@
 plugins {
     id 'java-library'
+    id 'jacoco'
     id 'net.neoforged.moddev' version '2.0.148'
 }
 group = 'ca.emilybelnavis.mcmods.economy'
-version = '0.3.0-alpha'
+version = '0.4.0-alpha'
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) }; withSourcesJar() }
 repositories { mavenCentral() }
 neoForge {
@@ -38,11 +39,20 @@ configurations {
 dependencies { processProbeRuntime 'com.google.code.gson:gson:2.10.1' }
 test {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
     // Standalone storage probes use stdout as a protocol and do not load Minecraft.
     systemProperty 'economy.test.classpath',
             files(sourceSets.test.output, sourceSets.main.output, configurations.processProbeRuntime).asPath
 }
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 21 }
+jacoco { toolVersion = '0.8.14' }
 // Forward the development console so the server can be stopped with its `stop` command.
 tasks.named('runServer', JavaExec) { standardInput = System.in }
 
@@ -257,6 +267,45 @@ if (providers.gradleProperty('villageBankAcceptance').isPresent()) {
             def marker = restarting ? 'village-bank-acceptance-passed.txt' : 'village-bank-acceptance-phase1-passed.txt'
             if (new File(root, 'village-bank-acceptance-failed.txt').exists() || !new File(root, marker).exists())
                 throw new GradleException('Integrated village banking acceptance did not pass')
+        }
+    }
+}
+
+// Opt-in pinned trader hook witness in a new disposable integrated world.
+if (providers.gradleProperty('traderHookProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.traderHookProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'trader-hook-failed.txt').exists() || !new File(root, 'trader-hook-passed.txt').exists())
+                throw new GradleException('Pinned trader hook witness did not pass')
+        }
+    }
+}
+
+// Opt-in A8-04-02 physical custody witness in a fresh disposable client.
+if (providers.gradleProperty('traderCustodyProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.traderCustodyProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'trader-custody-failed.txt').exists() || !new File(root, 'trader-custody-passed.txt').exists())
+                throw new GradleException('Trader physical custody acceptance did not pass')
+        }
+    }
+}
+
+// Opt-in A8-07 production lifecycle and offered checkout witness in a new disposable client.
+if (providers.gradleProperty('simulationProductionProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.simulationProductionProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'simulation-production-failed.txt').exists() || !new File(root, 'simulation-production-passed.txt').exists())
+                throw new GradleException('Simulation production acceptance did not pass')
         }
     }
 }
