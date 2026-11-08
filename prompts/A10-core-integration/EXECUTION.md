@@ -1,10 +1,10 @@
 # A10 approved package queue
 
-The user approved all eleven selectable A10 prompts and their shared technical/runtime contracts on 2026-11-08, subject to prerequisites. A10-02 remains a nonselectable overview of three children. **No implementation package is selected, executed or verified.** Approval does not itself select a package.
+The user approved all eleven selectable A10 prompts and their shared technical/runtime contracts on 2026-11-08, subject to prerequisites. A10-02 remains a nonselectable overview of three children. **A10-01 is complete in source/document scope. No runtime implementation package is selected or executed.** Approval does not itself select a package.
 
 | Package | Outcome | Prerequisite | Status |
 | --- | --- | --- | --- |
-| [A10-01](A10-01.md) | Source contracts and implementation readiness | Accepted A9-06 and recorded A6-13/A7-06/A8-08 scopes | Approved; unselected |
+| [A10-01](A10-01.md) | Source contracts and implementation readiness | Accepted A9-06 and recorded A6-13/A7-06/A8-08 scopes | Complete: source/document checkpoint |
 | [A10-02-01](A10-02-01.md) | Dashboard, navigation and structured operation status | A10-01 | Approved; unselected |
 | [A10-02-02](A10-02-02.md) | Filtered history and captured transaction details | A10-02-01 | Approved; unselected |
 | [A10-02-03](A10-02-03.md) | Core localization and contextual explanations | A10-02-02 | Approved; unselected |
@@ -18,7 +18,7 @@ The user approved all eleven selectable A10 prompts and their shared technical/r
 
 [Shared contract](CONTRACT.md) · [Technical revision1](TECHNICAL.md) · [Current source map](SOURCE_MAP.md) · [Runtime/workload plan](RUNTIME_PLAN.md)
 
-Next explicit selection: A10-01. Revalidate source feasibility and refine a concrete technical incompatibility before implementing; do not reopen settled preferences routinely. Each package finishes its scoped handoff before dependents. Main owns shared interfaces and sequential Gradle/game checks, with disjoint assignments for substantial independent work.
+Next eligible explicit selection: A10-02-01. Follow [A10-01 frozen contracts](../../.codex/architecture/a10-source-contracts.md) and [resource/evidence limits](../../.codex/verification/A10-01.md). Recheck affected source/version allocation before implementing; do not reopen settled preferences routinely. Each package finishes its scoped handoff before dependents. Main owns shared interfaces and sequential Gradle/game checks, with disjoint assignments for substantial independent work.
 
 The partial-acceptance exception is unavailable actual external-player evidence only, with selected implementation and available required checks passing. Unaccelerated debt gameplay is optional later evidence. Actual20-client capacity is not proved by20synthetic actors; publish measured scope.
 

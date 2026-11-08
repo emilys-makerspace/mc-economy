@@ -1,6 +1,6 @@
 # A10 technical contract — revision 1
 
-Status: technical revision1 approved 2026-11-08 with all A10 prompts, subject to prerequisites. No implementation package is selected/executed by this document. [Source map](SOURCE_MAP.md) distinguishes existing behavior from additions below; [runtime plan](RUNTIME_PLAN.md) defines engineering workloads/budgets and resource caveats. Exact source feasibility is revalidated when A10-01 is selected.
+Status: technical revision1 approved 2026-11-08 with all A10 prompts, subject to prerequisites. No implementation package is selected/executed by this document. [Source map](SOURCE_MAP.md) distinguishes existing behavior from additions below; [runtime plan](RUNTIME_PLAN.md) defines engineering workloads/budgets and resource caveats. A10-01 revalidated source feasibility and froze [implementation contracts](../../.codex/architecture/a10-source-contracts.md); these refine proposed symbols/bounds and record resource gaps without implementing them.
 
 ## Scope, ownership and compatibility
 

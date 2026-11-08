@@ -1,6 +1,6 @@
 # A10 shared package contract — revision 1
 
-Status: approved 2026-11-08 with all eleven selectable A10 prompts, subject to prerequisites; no implementation selected. [Planning](../../.codex/architecture/a10-planning.md) records inherited scope, evidence and open acceptance decisions. [Queue](EXECUTION.md) defines package boundaries.
+Status: approved 2026-11-08 with all eleven selectable A10 prompts, subject to prerequisites; A10-01 source/document checkpoint is complete, with no runtime implementation selected. See [frozen contracts](../../.codex/architecture/a10-source-contracts.md). [Planning](../../.codex/architecture/a10-planning.md) records inherited scope, evidence and open acceptance decisions. [Queue](EXECUTION.md) defines package boundaries.
 
 ## Authority and compatibility
 

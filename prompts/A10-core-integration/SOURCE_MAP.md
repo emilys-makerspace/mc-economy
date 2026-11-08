@@ -1,6 +1,6 @@
 # A10 source map — current behavior and implementation gaps
 
-Source/document review, 2026-11-08. This preparation neither executes A10-01 nor verifies new runtime behavior. The [shared contract](CONTRACT.md) and [technical plan](TECHNICAL.md) define proposed additions; the entries below describe current source. Third-party compatibility remains outside A10.
+Revalidated by A10-01 source/document review, 2026-11-08. [Frozen implementation contracts](../../.codex/architecture/a10-source-contracts.md) and [evidence](../../.codex/verification/A10-01.md) refine the [shared contract](CONTRACT.md) and [technical plan](TECHNICAL.md). Entries below describe current source; new DTOs, wire9 and history projection are future additions, not runtime results. Third-party compatibility remains outside A10.
 
 ## Entry points and transport
 
@@ -48,5 +48,7 @@ Proposed structured `OperationState`, reason/translation keys, receipt reference
 - [ItemValuationIntegration v1](../../src/main/java/ca/emilybelnavis/mcmods/economy/api/ItemValuationIntegration.java#L11): `currentCached(Grant,Request)`, `evaluate(Grant,Request)`, `history(Grant,Optional<UUID>,int)`, provider register/remove; immutable records and typed availability. `Request.quantity` is 1–1,000,000; explanation max256 steps; identity adapter version1. It imports foundation grants and valuation validation helpers. Stabilization is a core API task; new mod adapters/catalogs are outside A10.
 
 ## Review scope
+
+A10-01 confirms the next unused banking wire is9, with another bump required if a later delivered codec changes; other families remain1. The checkpoint freezes a distinct owner-history projection/bootstrap/validator contract while preserving legacy cursors and original facts. Scheduler clock injection exists in `FoundationRuntime.Configuration.production(Clock,...)`, but LedgerService and collection/menu paths still use system UTC directly: the later accelerated native composite needs consistent fixture-only time. Current client availability/display/storage/JVM limits and package ownership/check candidates are recorded in the frozen contracts.
 
 Source reads only; no Gradle, tests, game, dependency or world changes. All implementation packages/subtasks inherit [VERIFICATION.md](../../.codex/VERIFICATION.md): focused checks only when useful for changed behavior, no automatic full-suite or completion-test gate, and ordinary runnable delivery checks once. Recheck affected source signatures when implementing because this map records the preparation baseline rather than freezing future line numbers.

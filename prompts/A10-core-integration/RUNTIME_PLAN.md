@@ -1,5 +1,7 @@
 # A10 runtime and performance plan
 
+A10-01 resource update,2026-11-08: [source contracts](../../.codex/architecture/a10-source-contracts.md) and [inventory evidence](../../.codex/verification/A10-01.md) confirm installed Java21 (host default25),713GiB reported available local volume space and unchanged run/mod/runtime wiring. Display inventory returned no entries; process inventory was denied and diskutil could not establish medium/filesystem. Two current authenticated sessions, actual viewport/scales and reference game JVM/quiescence remain unconfirmed. No native launch or performance measurement ran. Scheduler clock injection alone does not cover native debt menus/services: A10-05 must consistently bind fixture time while leaving production system UTC unchanged. These findings refine setup needs, not approved workloads/budgets.
+
 Approved 2026-11-08 with all A10 prompts, subject to prerequisites. This is a finite implementation acceptance plan, not runtime evidence or a guarantee of universal capacity. A10 contains core Economy only; no third-party compatibility modules, item catalogs, wallet or external inventory/network adapters are part of these workloads. All packages inherit [VERIFICATION.md](../../.codex/VERIFICATION.md), including its limits on tests, native launches and full suites. Preparation itself runs no Gradle/tests/game.
 
 ## Available reference environment
