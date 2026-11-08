@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.collection;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.api.*;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
@@ -70,19 +71,19 @@ public final class CollectionDialogue {
             if(!current.hasUUID("operation")||!current.getUUID("operation").equals(operation.value()))return;
             var book=PENDING.get(server);if(book!=null)book.remove(player.getUUID(),pending);
             clearMarker(player,operation);
-            player.displayClientMessage(Component.literal(found.isPresent()&&found.orElseThrow().status()==Journal.Status.COMMITTED
-                ?"Saved collection payment receipt recovered.":"Saved payment resolved. Review current balances before another payment."),false);
+            player.displayClientMessage(UiText.component(player, found.isPresent()&&found.orElseThrow().status()==Journal.Status.COMMITTED
+                ?UiText.t("ui.dialogue.saved_collection_payment_receipt_recovered.ef5286"):UiText.t("ui.dialogue.saved_payment_resolved_review_current_balanc.1b5668")),false);
         }));
     }
     public static void open(ServerPlayer player,CollectionAgent entity){
         if(!CollectionAgents.canInteract(player,entity))return;
         var services=Economy.serverServices(player.server);if(services==null||services.state()!=ServerServices.State.READY)return;
         var holder=new CollectionMenu[1];UUID session=UUID.randomUUID();
-        player.openMenu(new SimpleMenuProvider((id,inventory,p)->holder[0]=new CollectionMenu(id,inventory,entity.getUUID(),entity.presentation(),session),Component.literal("Waystone Collections")),b->holder[0].writeOpening(b));
+        player.openMenu(new SimpleMenuProvider((id,inventory,p)->holder[0]=new CollectionMenu(id,inventory,entity.getUUID(),entity.presentation(),session),UiText.component(player, UiText.t("ui.dialogue.waystone_collections.2b442b"))),b->holder[0].writeOpening(b));
         if(holder[0]==null)return;
         var state=new State(services);STATES.put(holder[0],state);
         var pending=pending(player);
-        if(pending!=null&&pending.serverSession.equals(state.serverSession))pendingPage(holder[0],pending,"Recover the original payment before starting another.");
+        if(pending!=null&&pending.serverSession.equals(state.serverSession))pendingPage(holder[0],pending,UiText.t("ui.dialogue.recover_the_original_payment_before_starting.5e108c"));
         else if(player.getPersistentData().contains(RECOVERY))recoverMarker(player,holder[0],state);
         else cases(player,holder[0],state,null);
     }
@@ -110,55 +111,55 @@ public final class CollectionDialogue {
                 case "cases_next"->cases(player,menu,state,state.nextCase);
                 case "funding"->funding(player,menu,state,null);
                 case "funding_next"->funding(player,menu,state,state.nextFunding);
-                case "select_case"->{state.selected=state.offeredCases.get(UUID.fromString(value));state.clearQuote();payment(menu,state,"Choose payment amount or full balance.");}
-                case "select_funding"->{state.funding=state.offeredFunding.get(UUID.fromString(value));state.clearQuote();payment(menu,state,"Funding selected. Preview before confirming.");}
+                case "select_case"->{state.selected=state.offeredCases.get(UUID.fromString(value));state.clearQuote();payment(menu,state,UiText.t("ui.dialogue.choose_payment_amount_or_full_balance.b95684"));}
+                case "select_funding"->{state.funding=state.offeredFunding.get(UUID.fromString(value));state.clearQuote();payment(menu,state,UiText.t("ui.dialogue.funding_selected_preview_before_confirming.1866b9"));}
                 case "preview_partial"->preview(player,menu,state,parseAmount(value,state.selected.currency()));
                 case "preview_full"->preview(player,menu,state,state.selected.debtMinor());
                 case "confirm"->confirm(player,menu,state);
                 default->{}
             }
-        }catch(RuntimeException unavailable){failure(menu,"Selection unavailable. Refresh cases and funding, then try again.");}
+        }catch(RuntimeException unavailable){failure(menu,UiText.t("ui.dialogue.selection_unavailable_refresh_cases_and_fund.d9fe71"));}
     }
     private static void cases(ServerPlayer player,CollectionMenu menu,State state,UUID after){
-        state.clearQuote();menu.publish("cases",List.of(),"Loading eligible cases",true,List.of());
+        state.clearQuote();menu.publish("cases",List.of(),UiText.t("ui.dialogue.loading_eligible_cases.756d2d"),true,List.of());
         state.services.ledger().collectionAgentState(grant(player,state),after,4).whenComplete((found,error)->player.server.execute(()->{
             if(!live(player,menu,state))return;
-            if(error!=null||found.isEmpty()){failure(menu,"Cases unavailable while financial work is pending.");return;}
+            if(error!=null||found.isEmpty()){failure(menu,UiText.t("ui.dialogue.cases_unavailable_while_financial_work_is_pe.7067cd"));return;}
             if(menu.managed()&&(found.orElseThrow().state().phase()!=CollectionPresence.Phase.LIVE||!found.orElseThrow().state().lease().equals(menu.presentation()))){player.closeContainer();return;}
             state.nextCase=found.orElseThrow().nextCursor();state.offeredCases.clear();
             var lines=new ArrayList<String>();var choices=new ArrayList<CollectionNetwork.Choice>();long now=System.currentTimeMillis();
             for(var entry:found.orElseThrow().cases()){
                 var debt=entry;if(!DebtLifecycle.demands(debt,now))continue;state.offeredCases.put(debt.id(),debt);
-                lines.add(debt.kind()+" / "+creditor(debt.creditor()));lines.add("Remaining "+money(debt.currency(),debt.debtMinor()));
-                choices.add(choice("select_case",debt.id().toString(),debt.kind()+" · "+money(debt.currency(),debt.debtMinor()),state.selected!=null&&state.selected.id().equals(debt.id())));
+                lines.add(kind(debt.kind())+" / "+creditor(debt.creditor()));lines.add(UiText.t("ui.dialogue.remaining.cd8e27")+money(debt.currency(),debt.debtMinor()));
+                choices.add(choice("select_case",debt.id().toString(),kind(debt.kind())+" · "+money(debt.currency(),debt.debtMinor()),state.selected!=null&&state.selected.id().equals(debt.id())));
             }
-            if(lines.isEmpty())lines.add("No eligible cases on this page.");
-            if(state.nextCase!=null)choices.add(choice("cases_next","","Next cases",false));
-            choices.add(choice("funding","","Funding accounts",false));
-            menu.publish("cases",lines,"Select the balance to discuss.",false,choices);
+            if(lines.isEmpty())lines.add(UiText.t("ui.dialogue.no_eligible_cases_on_this_page.29dec2"));
+            if(state.nextCase!=null)choices.add(choice("cases_next","",UiText.t("ui.dialogue.next_cases.0d3676"),false));
+            choices.add(choice("funding","",UiText.t("ui.dialogue.funding_accounts.3ed457"),false));
+            menu.publish("cases",lines,UiText.t("ui.dialogue.select_the_balance_to_discuss.88a401"),false,choices);
         }));
     }
     private static void funding(ServerPlayer player,CollectionMenu menu,State state,String cursor){
-        state.clearQuote();menu.publish("funding",List.of(),"Loading owned BANK funding",true,List.of());
+        state.clearQuote();menu.publish("funding",List.of(),UiText.t("ui.dialogue.loading_owned_bank_funding.48bbc5"),true,List.of());
         state.services.listOwnedAccounts(grant(player,state),cursor,4).whenComplete((found,error)->player.server.execute(()->{
             if(!live(player,menu,state))return;
-            if(error!=null||found.isEmpty()){failure(menu,"Funding unavailable while financial work is pending.");return;}
+            if(error!=null||found.isEmpty()){failure(menu,UiText.t("ui.dialogue.funding_unavailable_while_financial_work_is_.170025"));return;}
             state.nextFunding=found.orElseThrow().nextCursor();state.offeredFunding.clear();var choices=new ArrayList<CollectionNetwork.Choice>();
             for(var account:found.orElseThrow().accounts())if(account.status()==AccountIdentity.Status.OPEN&&account.purpose()==AccountIdentity.Purpose.BANK){
                 state.offeredFunding.put(account.id().value(),account);
-                choices.add(choice("select_funding",account.id().value().toString(),account.currency().code()+" · "+(account.primary()?"Primary":"BANK")+" · "+account.id().value().toString().substring(0,8),state.funding!=null&&state.funding.id().equals(account.id())));
+                choices.add(choice("select_funding",account.id().value().toString(),account.currency().code()+" · "+(account.primary()?UiText.t("ui.dialogue.primary.a9a96e"):UiText.t("ui.dialogue.bank.00f57e"))+" · "+account.id().value().toString().substring(0,8),state.funding!=null&&state.funding.id().equals(account.id())));
             }
-            if(state.nextFunding!=null)choices.add(choice("funding_next","","Next funding accounts",false));
-            choices.add(choice("cases","","Collection cases",false));
-            menu.publish("funding",List.of("Choose an owned open BANK account.","A different currency requires an explicit FX review."),"No debit occurs when choosing funding.",false,choices);
+            if(state.nextFunding!=null)choices.add(choice("funding_next","",UiText.t("ui.dialogue.next_funding_accounts.326a4f"),false));
+            choices.add(choice("cases","",UiText.t("ui.dialogue.collection_cases.6d2afa"),false));
+            menu.publish("funding",List.of(UiText.t("ui.dialogue.choose_an_owned_open_bank_account.6117af"),UiText.t("ui.dialogue.a_different_currency_requires_an_explicit_fx.3d5d1f")),UiText.t("ui.dialogue.no_debit_occurs_when_choosing_funding.425b9d"),false,choices);
         }));
     }
     private static void payment(CollectionMenu menu,State state,String status){
-        var lines=new ArrayList<String>();var choices=new ArrayList<CollectionNetwork.Choice>();
-        if(state.selected!=null){lines.add(state.selected.kind()+" / "+creditor(state.selected.creditor()));lines.add("Debt "+money(state.selected.currency(),state.selected.debtMinor()));}
-        if(state.funding!=null)lines.add("Funding "+state.funding.currency().code()+" / "+state.funding.id().value().toString().substring(0,8));
-        choices.add(choice("cases","","Choose case",false));choices.add(choice("funding","","Choose funding",false));
-        if(state.selected!=null&&state.funding!=null){choices.add(choice("preview_partial","","Preview partial payment",false));choices.add(choice("preview_full","","Preview full balance",false));}
+        var lines=new ArrayList<String>();lines.add(UiText.t("ui.dialogue.amount_input_help"));var choices=new ArrayList<CollectionNetwork.Choice>();
+        if(state.selected!=null){lines.add(kind(state.selected.kind())+" / "+creditor(state.selected.creditor()));lines.add(UiText.t("ui.dialogue.debt.0e6f7a")+money(state.selected.currency(),state.selected.debtMinor()));}
+        if(state.funding!=null)lines.add(UiText.t("ui.dialogue.funding.a2a66d")+state.funding.currency().code()+" / "+state.funding.id().value().toString().substring(0,8));
+        choices.add(choice("cases","",UiText.t("ui.dialogue.choose_case.f81e0b"),false));choices.add(choice("funding","",UiText.t("ui.dialogue.choose_funding.1eb047"),false));
+        if(state.selected!=null&&state.funding!=null){choices.add(choice("preview_partial","",UiText.t("ui.dialogue.preview_partial_payment.dd83b4"),false));choices.add(choice("preview_full","",UiText.t("ui.dialogue.preview_full_balance.533159"),false));}
         menu.publish("payment",lines,status,false,choices);
     }
     public static long parseAmount(String text,EconomyCurrency currency){
@@ -168,11 +169,11 @@ public final class CollectionDialogue {
     }
     private static void preview(ServerPlayer player,CollectionMenu menu,State state,long amount){
         if(state.selected==null||state.funding==null||amount>state.selected.debtMinor()||!DebtLifecycle.demands(state.selected,System.currentTimeMillis()))throw new IllegalArgumentException("Collection selection stale");
-        state.clearQuote();menu.publish("payment",List.of(),"Preparing payment review",true,List.of());
+        state.clearQuote();menu.publish("payment",List.of(),UiText.t("ui.dialogue.preparing_payment_review.3c259b"),true,List.of());
         if(state.funding.currency()==state.selected.currency()) {
             state.services.ledger().quoteCollectionPayment(grant(player,state),state.selected.id(),state.funding.id(),amount).whenComplete((found,error)->player.server.execute(()->{
                 if(!live(player,menu,state))return;
-                if(error!=null||found.isEmpty()){payment(menu,state,"Quote unavailable. Refresh case and funding.");return;}
+                if(error!=null||found.isEmpty()){payment(menu,state,UiText.t("ui.dialogue.quote_unavailable_refresh_case_and_funding.17d381"));return;}
                 var quote=found.orElseThrow();
                 if(quote.caseRevision()!=state.selected.revision()||quote.fundingRevision()!=state.funding.revision()){
                     state.selected=null;state.funding=null;cases(player,menu,state,null);return;
@@ -182,7 +183,7 @@ public final class CollectionDialogue {
         }else {
             state.services.ledger().quoteCollectionPaymentFx(grant(player,state),state.selected.id(),state.funding.id(),amount).whenComplete((found,error)->player.server.execute(()->{
                 if(!live(player,menu,state))return;
-                if(error!=null){payment(menu,state,"FX quote unavailable. Refresh case and funding.");return;}
+                if(error!=null){payment(menu,state,UiText.t("ui.dialogue.fx_quote_unavailable_refresh_case_and_fundin.0f8123"));return;}
                 if(found.payment().caseRevision()!=state.selected.revision()||found.payment().fundingRevision()!=state.funding.revision()){
                     state.selected=null;state.funding=null;cases(player,menu,state,null);return;
                 }
@@ -192,31 +193,31 @@ public final class CollectionDialogue {
     }
     private static long expires(State state){return state.nativeQuote!=null?state.nativeQuote.expiresAt():Math.min(state.fxQuote.payment().expiresAt(),state.fxQuote.fx().expires().toEpochMilli());}
     private static void review(CollectionMenu menu,State state){
-        var lines=new ArrayList<String>();lines.add("Current creditor · "+creditor(state.selected.creditor()));
-        if(state.nativeQuote!=null){lines.add("Pay "+money(state.selected.currency(),state.nativeQuote.amountMinor()));lines.add("Fee 0 "+state.selected.currency().code());}
+        var lines=new ArrayList<String>();lines.add(UiText.t("ui.dialogue.current_creditor.f20a66")+creditor(state.selected.creditor()));
+        if(state.nativeQuote!=null){lines.add(UiText.t("ui.dialogue.pay.f5b9f7")+money(state.selected.currency(),state.nativeQuote.amountMinor()));lines.add(UiText.t("ui.dialogue.fee_0.78779a")+state.selected.currency().code());}
         else {
-            var fx=state.fxQuote.fx();lines.add("Debt receives "+money(state.selected.currency(),state.fxQuote.payment().amountMinor()));
-            lines.add("Converted debit "+money(fx.debit().currency(),fx.debit().minorUnits()));lines.add("Separate FX fee "+money(fx.fee().currency(),fx.fee().minorUnits()));
-            lines.add("Total funding debit "+money(fx.debit().currency(),Math.addExact(fx.debit().minorUnits(),fx.fee().minorUnits())));
+            var fx=state.fxQuote.fx();lines.add(UiText.t("ui.dialogue.debt_receives.6cc82c")+money(state.selected.currency(),state.fxQuote.payment().amountMinor()));
+            lines.add(UiText.t("ui.dialogue.converted_debit.d89cfc")+money(fx.debit().currency(),fx.debit().minorUnits()));lines.add(UiText.t("ui.dialogue.separate_fx_fee.cc4240")+money(fx.fee().currency(),fx.fee().minorUnits()));
+            lines.add(UiText.t("ui.dialogue.total_funding_debit.110f3a")+money(fx.debit().currency(),Math.addExact(fx.debit().minorUnits(),fx.fee().minorUnits())));
         }
-        lines.add("Quote expires "+java.time.Instant.ofEpochMilli(expires(state)));lines.add("Positive partial payment renews the collection clock.");
-        lines.add("Full payment settles the selected case.");
-        menu.publish("review",lines,"Review the exact debit, then confirm.",false,List.of(choice("confirm","","Confirm payment",false),choice("cases","","Choose case",false),choice("funding","","Choose funding",false)));
+        lines.add(UiText.t("ui.dialogue.quote_expires.9a6460")+java.time.Instant.ofEpochMilli(expires(state)));lines.add(UiText.t("ui.dialogue.positive_partial_payment_renews_the_collecti.1b71be"));
+        lines.add(UiText.t("ui.dialogue.full_payment_settles_the_selected_case.bde6e0"));
+        menu.publish("review",lines,UiText.t("ui.dialogue.review_the_exact_debit_then_confirm.69f8f6"),false,List.of(choice("confirm","",UiText.t("ui.dialogue.confirm_payment.5febc1"),false),choice("cases","",UiText.t("ui.dialogue.choose_case.f81e0b"),false),choice("funding","",UiText.t("ui.dialogue.choose_funding.1eb047"),false)));
     }
     private static void confirm(ServerPlayer player,CollectionMenu menu,State state){
         if(state.nativeQuote==null&&state.fxQuote==null)throw new IllegalArgumentException("No reviewed quote");
-        if(System.currentTimeMillis()>=expires(state)){state.clearQuote();payment(menu,state,"Quote expired. Preview again.");return;}
+        if(System.currentTimeMillis()>=expires(state)){state.clearQuote();payment(menu,state,UiText.t("ui.dialogue.quote_expired_preview_again.86dab6"));return;}
         var pendingByPlayer=PENDING.computeIfAbsent(player.server,server->new HashMap<>());
-        if(pendingByPlayer.size()>=256&&!pendingByPlayer.containsKey(player.getUUID())){failure(menu,"Payment recovery is busy. Try again later.");return;}
+        if(pendingByPlayer.size()>=256&&!pendingByPlayer.containsKey(player.getUUID())){failure(menu,UiText.t("ui.dialogue.payment_recovery_is_busy_try_again_later.9f9496"));return;}
         var pending=new Pending(state);pendingByPlayer.put(player.getUUID(),pending);state.clearQuote();submit(player,menu,state,pending);
     }
     private static void pendingPage(CollectionMenu menu,Pending pending,String status){
-        menu.publish("pending",List.of("Original payment "+money(pending.currency,pending.amount()),"Closing this dialogue does not cancel a committed payment."),status,pending.inFlight,List.of(choice("retry","","Recover original payment",false)));
+        menu.publish("pending",List.of(UiText.t("ui.dialogue.original_payment.213584")+money(pending.currency,pending.amount()),UiText.t("ui.dialogue.closing_this_dialogue_does_not_cancel_a_comm.c11773")),status,pending.inFlight,List.of(choice("retry","",UiText.t("ui.dialogue.recover_original_payment.dd5898"),false)));
     }
     private static void submit(ServerPlayer player,CollectionMenu menu,State state,Pending pending){
-        if(!pending.serverSession.equals(state.serverSession)){failure(menu,"Payment belongs to an earlier server session. Refresh current debt.");return;}
-        if(pending.inFlight){pendingPage(menu,pending,"Original payment is still processing.");return;}
-        pending.inFlight=true;pendingPage(menu,pending,"Submitting the original payment.");
+        if(!pending.serverSession.equals(state.serverSession)){failure(menu,UiText.t("ui.dialogue.payment_belongs_to_an_earlier_server_session.8ba582"));return;}
+        if(pending.inFlight){pendingPage(menu,pending,UiText.t("ui.dialogue.original_payment_is_still_processing.5c2c49"));return;}
+        pending.inFlight=true;pendingPage(menu,pending,UiText.t("ui.dialogue.submitting_the_original_payment.64c9a8"));
         try {
             var grant=grant(player,state);
             if(!pending.markerSaved) {
@@ -231,35 +232,35 @@ public final class CollectionDialogue {
             submission.completion().whenComplete((delivery,error)->player.server.execute(()->{
                 pending.inFlight=false;
                 if(error!=null||delivery.outcome().status()==Journal.Status.UNKNOWN||delivery.outcome().status()==Journal.Status.NOT_ACCEPTED){
-                    if(live(player,menu,state))pendingPage(menu,pending,"Outcome pending. Recover this original payment before another.");return;
+                    if(live(player,menu,state))pendingPage(menu,pending,UiText.t("ui.dialogue.outcome_pending_recover_this_original_paymen.84869f"));return;
                 }
                 var book=PENDING.get(player.server);if(book!=null)book.remove(player.getUUID(),pending);
                 clearMarker(player,pending.operation);
                 if(player.server.getPlayerList().getPlayer(player.getUUID())==player&&Economy.serverServices(player.server)==state.services)
-                    player.displayClientMessage(Component.literal(delivery.outcome().status()==Journal.Status.COMMITTED
-                        ?"Collection payment recorded · "+money(pending.currency,pending.amount())
-                        :"Collection payment rejected. Refresh the balance before another preview."),false);
+                    player.displayClientMessage(UiText.component(player, delivery.outcome().status()==Journal.Status.COMMITTED
+                        ?UiText.t("ui.dialogue.collection_payment_recorded.8bca54")+money(pending.currency,pending.amount())
+                        :UiText.t("ui.dialogue.collection_payment_rejected_refresh_the_bala.7d4e96")),false);
                 CollectionAgents.refresh(player);
                 if(!live(player,menu,state))return;
                 if(delivery.outcome().status()==Journal.Status.COMMITTED)cases(player,menu,state,null);
-                else payment(menu,state,"Payment rejected. Refresh balances and obtain a new preview.");
+                else payment(menu,state,UiText.t("ui.dialogue.payment_rejected_refresh_balances_and_obtain.a86e2d"));
             }));
-        }catch(RuntimeException unavailable){pending.inFlight=false;pendingPage(menu,pending,"Payment unavailable. Recover the original request when ready.");}
+        }catch(RuntimeException unavailable){pending.inFlight=false;pendingPage(menu,pending,UiText.t("ui.dialogue.payment_unavailable_recover_the_original_req.5e4abc"));}
     }
     private static void recoverMarker(ServerPlayer player,CollectionMenu menu,State state) {
         var marker=player.getPersistentData().getCompound(RECOVERY);
         if(!marker.hasUUID("world")||!marker.hasUUID("operation")||!marker.getUUID("world").equals(state.services.worldId().value())) {
-            menu.publish("pending",List.of("Saved payment evidence needs review."),"Payment recovery unavailable for this world.",false,List.of());return;
+            menu.publish("pending",List.of(UiText.t("ui.dialogue.saved_payment_evidence_needs_review.fb470a")),UiText.t("ui.dialogue.payment_recovery_unavailable_for_this_world.91d3fb"),false,List.of());return;
         }
         var operation=new OperationId(marker.getUUID("operation"));
-        menu.publish("pending",List.of("Checking the original payment receipt."),"Waiting for authoritative recovery",true,List.of());
+        menu.publish("pending",List.of(UiText.t("ui.dialogue.checking_the_original_payment_receipt.5bc3fe")),UiText.t("ui.dialogue.waiting_for_authoritative_recovery.f28c81"),true,List.of());
         state.services.ledger().lookupCollectionPaymentReceipt(grant(player,state),operation).whenComplete((found,error)->player.server.execute(()->{
             if(!live(player,menu,state))return;
-            if(error!=null){menu.publish("pending",List.of("The saved original request remains protected."),"Receipt unavailable. Retry after financial catch-up.",false,List.of(choice("retry","","Recover original payment",false)));return;}
-            if(found.isPresent()&&found.orElseThrow().status()==Journal.Status.UNKNOWN){menu.publish("pending",List.of("The original outcome is still uncertain."),"Recover the original payment before another.",false,List.of(choice("retry","","Recover original payment",false)));return;}
+            if(error!=null){menu.publish("pending",List.of(UiText.t("ui.dialogue.the_saved_original_request_remains_protected.66f8d7")),UiText.t("ui.dialogue.receipt_unavailable_retry_after_financial_ca.d859ff"),false,List.of(choice("retry","",UiText.t("ui.dialogue.recover_original_payment.dd5898"),false)));return;}
+            if(found.isPresent()&&found.orElseThrow().status()==Journal.Status.UNKNOWN){menu.publish("pending",List.of(UiText.t("ui.dialogue.the_original_outcome_is_still_uncertain.4cec1c")),UiText.t("ui.dialogue.recover_the_original_payment_before_another.f9ffd0"),false,List.of(choice("retry","",UiText.t("ui.dialogue.recover_original_payment.dd5898"),false)));return;}
             clearMarker(player,operation);
-            if(found.isPresent())player.displayClientMessage(Component.literal(found.orElseThrow().status()==Journal.Status.COMMITTED?"Previous collection payment recorded.":"Previous collection payment rejected."),false);
-            else player.displayClientMessage(Component.literal("No committed original payment was found. Review the current balance before a new preview."),false);
+            if(found.isPresent())player.displayClientMessage(UiText.component(player, found.orElseThrow().status()==Journal.Status.COMMITTED?UiText.t("ui.dialogue.previous_collection_payment_recorded.ddfa41"):UiText.t("ui.dialogue.previous_collection_payment_rejected.361350")),false);
+            else player.displayClientMessage(UiText.component(player, UiText.t("ui.dialogue.no_committed_original_payment_was_found_revi.01aaef")),false);
             cases(player,menu,state,null);
         }));
     }
@@ -269,8 +270,9 @@ public final class CollectionDialogue {
         player.getPersistentData().remove(RECOVERY);
         if(player.server.getPlayerList().getPlayer(player.getUUID())==player)player.server.getPlayerList().save(player);
     }
-    private static String creditor(InstitutionCatalog.InstitutionId id){return InstitutionCatalog.find(id).map(InstitutionCatalog.Entry::name).orElse("Original lender");}
+    private static String creditor(InstitutionCatalog.InstitutionId id){return InstitutionCatalog.find(id).map(InstitutionCatalog.Entry::name).orElse(UiText.t("ui.dialogue.original_lender.0f4953"));}
     private static CollectionNetwork.Choice choice(String action,String value,String label,boolean selected){return new CollectionNetwork.Choice(action,value,label,selected);}
-    private static String money(EconomyCurrency currency,long amount){return CreditReport.money(currency,amount);}
-    private static void failure(CollectionMenu menu,String reason){menu.publish("payment",List.of(),reason,false,List.of(choice("cases","","Refresh cases",false),choice("funding","","Funding accounts",false)));}
+    private static String money(EconomyCurrency currency,long amount){return UiText.money(new Money(currency,amount));}
+    private static void failure(CollectionMenu menu,String reason){menu.publish("payment",List.of(),reason,false,List.of(choice("cases","",UiText.t("ui.dialogue.refresh_cases.9cbe98"),false),choice("funding","",UiText.t("ui.dialogue.funding_accounts.3ed457"),false)));}
+    private static String kind(DebtRecords.Kind value) { return value == DebtRecords.Kind.CARD ? UiText.t("ui.dialogue.kind.card") : UiText.t("ui.dialogue.kind.loan"); }
 }

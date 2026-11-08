@@ -44,9 +44,9 @@ public final class BankingWithdrawals {
                     if (state.reservation != null && !state.complete) throw new IllegalStateException("Pending withdrawal");
                     state.preview = null;
                     if (state.complete) { state.reservation = null; state.complete = false; state.committing = false; }
-                    BankingAccounts.cashAccounts(player, menu, "withdraw", List.of("Select the account to withdraw from, then enter an amount.",
-                            "Choose Review to see the cash and account total before anything happens.",
-                            "ATMs dispense bills. Tellers can also dispense coins."), "Enter an amount to continue");
+                    BankingAccounts.cashAccounts(player, menu, "withdraw", List.of(UiText.t("ui.bank.select_the_account_to_withdraw_from_then_enter.f4b7eb"),
+                            UiText.t("ui.bank.choose_review_to_see_the_cash_and_account_tota.f7884e"),
+                            UiText.t("ui.bank.atms_dispense_bills_tellers_can_also_dispense_.72d12d")), UiText.t("ui.bank.enter_an_amount_to_continue.b9c1c0"));
                 }
                 case "withdraw_preview" -> preview(player, menu, state, value);
                 case "withdraw_confirm" -> confirm(player, menu, state);
@@ -76,8 +76,8 @@ public final class BankingWithdrawals {
                 default -> { }
             }
         } catch (IllegalArgumentException | IllegalStateException | ArithmeticException invalid) {
-            show(player, menu, List.of("Enter a positive amount for the selected account, for example 60.",
-                    "Nothing was taken from your account."), "Check the amount and try again");
+            show(player, menu, List.of(UiText.t("ui.bank.enter_a_positive_amount_for_the_selected_accou.c4850b"),
+                    UiText.t("ui.bank.nothing_was_taken_from_your_account.a5f2e2")), UiText.t("ui.bank.check_the_amount_and_try_again.7a6dde"));
         }
     }
     static Parsed parse(String value) {
@@ -122,7 +122,7 @@ public final class BankingWithdrawals {
             final Parsed parsed;
             try { parsed = parse(cashCurrency(context.terminal()).code() + " " + value.trim()); }
             catch (IllegalArgumentException | ArithmeticException invalid) {
-                show(player, menu, List.of("Enter a positive cash amount in " + cashCurrency(context.terminal()).code() + ".", "Nothing was taken from your account."), "Check the amount and try again");
+                show(player, menu, List.of(UiText.t("ui.bank.enter_a_positive_cash_amount_in.55ffcf") + cashCurrency(context.terminal()).code() + ".", UiText.t("ui.bank.nothing_was_taken_from_your_account.a5f2e2")), UiText.t("ui.bank.check_the_amount_and_try_again.7a6dde"));
                 return;
             }
             state.world = context.world();
@@ -138,7 +138,7 @@ public final class BankingWithdrawals {
                     if (menu.page().equals("withdraw_mix")) {
                         state.preview = previousPreview;
                         showMix(player, menu, state);
-                        menu.publish("withdraw_mix", menu.lines(), "Mix must match the amount and fit your inventory", menu.choices());
+                        menu.publish("withdraw_mix", menu.lines(), UiText.t("ui.bank.mix_must_match_the_amount_and_fit_your_invento.39ad06"), menu.choices());
                     } else unavailable(player, menu);
                     return;
                 }
@@ -161,19 +161,19 @@ public final class BankingWithdrawals {
                     state.mix.put(denomination.id(), count);
                 }
                 var lines = new ArrayList<String>();
-                lines.add("Cash: " + money(quote.cash())); lines.add("Bank debit: " + money(quote.debit()));
+                lines.add(UiText.t("ui.bank.cash.f016dc") + money(quote.cash())); lines.add(UiText.t("ui.bank.bank_debit.c90280") + money(quote.debit()));
                 if(quote.pricing()!=null) {
                     var price=quote.pricing().split("\\|",-1);
-                    lines.add("FX principal: "+money(new Money(quote.debit().currency(),Long.parseLong(price[1])))+"; fee: "+money(new Money(quote.debit().currency(),Long.parseLong(price[3]))));
+                    lines.add(UiText.t("ui.bank.fx_principal.f945c9")+money(new Money(quote.debit().currency(),Long.parseLong(price[1])))+"; fee: "+money(new Money(quote.debit().currency(),Long.parseLong(price[3]))));
                 }
                 for (var line : quote.plan().lines()) lines.add(line.count() + " × " + money(new Money(quote.cash().currency(), line.denomination().minorUnits())));
-                lines.add("The entire batch needs " + stacks(quote) + " free inventory slots.");
-                lines.add("Choose Confirm withdrawal to debit and receive this exact batch.");
+                lines.add(UiText.t("ui.bank.the_entire_batch_needs.37a744") + stacks(quote) + UiText.t("ui.bank.free_inventory_slots.e38c98"));
+                lines.add(UiText.t("ui.bank.choose_confirm_withdrawal_to_debit_and_receive.7bc402"));
                 menu.setBusy(false);
                 var choices = new ArrayList<>(state.accountChoices);
-                choices.add(new BankingNetwork.Choice("withdraw_mix", "", "Cash select", false));
-                choices.add(new BankingNetwork.Choice("withdraw_confirm", quote.cash().majorUnits().toPlainString(), "Confirm withdrawal", false));
-                menu.publish("withdraw", lines, "Withdrawal preview", choices);
+                choices.add(new BankingNetwork.Choice("withdraw_mix", "", UiText.t("ui.bank.cash_select.8c80b8"), false));
+                choices.add(new BankingNetwork.Choice("withdraw_confirm", quote.cash().majorUnits().toPlainString(), UiText.t("ui.bank.confirm_withdrawal.854c34"), false));
+                menu.publish("withdraw", lines, UiText.t("ui.bank.withdrawal_preview.14d0fa"), choices);
                 state.previewRevision = menu.revision();
             });
         });
@@ -188,11 +188,11 @@ public final class BankingWithdrawals {
                     money(new Money(denomination.currency(), denomination.minorUnits())) + " × " + count, false));
         }
         long remaining = state.preview.cash().minorUnits() - selected;
-        String total = "Selected: " + money(new Money(state.preview.cash().currency(), selected));
-        String rest = remaining < 0 ? "Over by " + money(new Money(state.preview.cash().currency(), -remaining))
-                : "Remaining: " + money(new Money(state.preview.cash().currency(), remaining));
+        String total = UiText.t("ui.bank.selected.ae3c35") + money(new Money(state.preview.cash().currency(), selected));
+        String rest = remaining < 0 ? UiText.t("ui.bank.over_by.a559ab") + money(new Money(state.preview.cash().currency(), -remaining))
+                : UiText.t("ui.bank.remaining.5c9d2e") + money(new Money(state.preview.cash().currency(), remaining));
         menu.setBusy(false);
-        menu.publish("withdraw_mix", List.of(total, rest), "Choose bill counts, then review", choices);
+        menu.publish("withdraw_mix", List.of(total, rest), UiText.t("ui.bank.choose_bill_counts_then_review.4bc7d1"), choices);
     }
     static EconomyCurrency cashCurrency(TerminalPolicy.Snapshot terminal) {
         if(terminal==null || terminal.binding()==null || !terminal.binding().bound())throw new IllegalArgumentException("UNBOUND_BANK");
@@ -219,7 +219,7 @@ public final class BankingWithdrawals {
                     if (outcome.status() != Journal.Status.COMMITTED) {
                         if (outcome.status() == Journal.Status.DURABLY_REJECTED) {
                             state.preview = null;
-                            show(player, menu, List.of("The withdrawal was rejected before debit.", outcome.result().code(), "Request a new preview after checking the terminal and account."), "Withdrawal not reserved");
+                            show(player, menu, List.of(UiText.t("ui.bank.the_withdrawal_was_rejected_before_debit.15ce73"), outcome.result().code(), UiText.t("ui.bank.request_a_new_preview_after_checking_the_termi.9b1faa")), UiText.t("ui.bank.withdrawal_not_reserved.06acf5"));
                         }
                         return;
                     }
@@ -278,7 +278,7 @@ public final class BankingWithdrawals {
                 () -> journal(player, menu, state.preview, Withdrawals.Action.CANCEL, true), outcome -> {
                     if (outcome.status() == Journal.Status.COMMITTED) {
                         state.complete = true;
-                        show(player, menu, List.of("The withdrawal was cancelled before debit or cash issuance."), "Withdrawal cancelled");
+                        show(player, menu, List.of(UiText.t("ui.bank.the_withdrawal_was_cancelled_before_debit_or_c.fcd82f")), UiText.t("ui.bank.withdrawal_cancelled.d0c930"));
                     }
                 });
     }
@@ -298,12 +298,13 @@ public final class BankingWithdrawals {
         return menu.valid(player) && menu.session().equals(session) && menu.revision() == revision;
     }
     private static void unavailable(ServerPlayer player, BankingMenu menu) {
-        show(player, menu, List.of("The terminal, account, cash plan or full inventory capacity changed.",
-                "Check terminal settings, make room for the entire batch and request a new preview.", "Nothing was debited."), "Withdrawal unavailable");
+        show(player, menu, List.of(UiText.t("ui.bank.the_terminal_account_cash_plan_or_full_invento.4378ff"),
+                UiText.t("ui.bank.check_terminal_settings_make_room_for_the_enti.24fe44"), UiText.t("ui.bank.nothing_was_debited.e9dbfb")), UiText.t("ui.bank.withdrawal_unavailable.e8327c"));
     }
     private static void show(ServerPlayer player, BankingMenu menu, List<String> lines, String status) {
         if (!menu.valid(player)) return;
-        menu.setBusy(false); menu.publish("withdraw", lines, status);
+        menu.setBusy(false); menu.publish("withdraw", lines, status, List.of(),
+                BankingOperation.View.of(BankingOperation.State.DECLINED, "screen.economy.operation.declined"), null);
     }
-    private static String money(Money value) { return value.majorUnits().toPlainString() + " " + value.currency().code(); }
+    private static String money(Money value) { return UiText.money(value); }
 }

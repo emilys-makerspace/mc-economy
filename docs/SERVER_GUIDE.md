@@ -23,7 +23,7 @@ Create `config/economy-scheduling.properties` in the Minecraft instance director
 
 The callback budget limits when the server starts additional callbacks in a tick. A callback that has already started runs to completion. The drain setting controls how long economy waits for its workers to shut down.
 
-Internal GUI identifiers and journal details are hidden by default. Set `debugGui=true` in the same configuration file and restart the server when those diagnostics are needed.
+Internal GUI diagnostics are hidden by default; authorized transaction details show their original transaction and operation references. Set `debugGui=true` in the same configuration file and restart the server when those diagnostics are needed.
 
 ## Status and diagnostics
 
@@ -119,7 +119,7 @@ Restore into a **new, separate directory**:
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 50 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
+The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 53 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
 
 There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination.
 
@@ -241,3 +241,9 @@ A connected permission-level2 operator can review a loaded, captured trader with
 Activated offers use reference unit prices and show the effective unit and total before confirmation. Unsupported entries are omitted. There is no fallback to old emerald prices within activated policy. Exact supported outputs can trade; native required-component buybacks remain unsupported, including empty required predicates. Unknown custom data, operator-only goods, missing mod adapters, bounded work and failed rounded-spread proofs can also disable entries. The review never promises every component permutation.
 
 Activation covers at most32 captured keys and the world supports at most63 enabled keys in one atomic valuation publication; more refuses publication. Pending control requests/reviews are bounded. No old balance, stock/restock, demand anchor, receipt, activity/rate window or fixed loan is revalued, and retired carry is not paid out. Reference values remain separate from financial eligibility.
+
+## Posted history index
+
+Schema53 adds an owner history read index without changing original journal records, balances or legacy cursors. Follow the stopped-world upgrade-backup procedure before opening an older world. Initialization builds and validates the index in bounded batches and resumes persisted construction progress after reopen. Reads stay unavailable until source coverage is ready; malformed provenance refuses readiness instead of rewriting history. Complete-world backup and restore validate this projection against the original journal too.
+
+Player History uses recorded UTC timestamps, separate from the twenty-minute financial calendar. Account/currency/type/date filters read only owned facts; pages retain a committed upper boundary until Refresh. Sparse filters can reach an explicit work limit; refine the query. Original fees, counterparties and FX are shown only when retained facts establish them. Pending/refused operations are resolved through their original-operation controls, not fabricated as posted transactions.

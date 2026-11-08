@@ -1,3 +1,4 @@
+# Legacy testsuite descriptor; the active workflow runs run-full-tests.sh with static four-way splitting.
 name: economy tests
 discover: >-
   find src/test/java -type f -name '*Test.java' |
@@ -10,8 +11,8 @@ outputs:
   junit-directory: build/circleci/junit
 options:
   dynamic-test-splitting: true
-  test-impact-analysis: true
-  max-auto-rerun: 1
+  test-impact-analysis: false
+  max-auto-rerun: 0
   # Coverage does not capture resources, build configuration or shared fixtures.
   full-test-run-paths:
     - build.gradle

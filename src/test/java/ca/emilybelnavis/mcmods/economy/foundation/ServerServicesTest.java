@@ -1,9 +1,14 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.api.Identifiers.PlayerId;
+import ca.emilybelnavis.mcmods.economy.storage.SqliteStorage;
+import ca.emilybelnavis.mcmods.economy.storage.StorageException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
@@ -227,4 +232,97 @@ class ServerServicesTest {
                     assertInstanceOf(ca.emilybelnavis.mcmods.economy.storage.StorageException.class, error.getCause()).kind());
         } finally { release.countDown(); services.stop(Duration.ofSeconds(3)); }
     }
+
+    @Test void cleanShutdownDrainsAcceptedDatabaseWritesWithoutPublishingLateCallbacks() throws Exception {
+        var store = new SqliteStorage();
+        var services = new ServerServices(world.toRealPath(), store);
+        var started = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var owner = UUID.randomUUID().toString();
+        var firstAccount = UUID.randomUUID().toString();
+        var secondAccount = UUID.randomUUID().toString();
+        try {
+            ready(services);
+            var first = services.storage(() -> {
+                started.countDown();
+                try { release.await(); }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return store.transaction(tx -> tx.execute(
+                        "INSERT INTO account_catalog VALUES(?,?,'BANK','CAD','OPEN',1,0)", List.of(firstAccount, owner)));
+            }).toCompletableFuture();
+            assertTrue(started.await(3, TimeUnit.SECONDS));
+            var second = services.storage(() -> store.transaction(tx -> tx.execute(
+                    "INSERT INTO account_catalog VALUES(?,?,'BANK','USD','OPEN',1,0)", List.of(secondAccount, owner))))
+                    .toCompletableFuture();
+            var published = new AtomicInteger();
+            first.thenRun(published::incrementAndGet);
+            second.thenRun(published::incrementAndGet);
+            release.countDown();
+
+            assertTrue(services.stop(Duration.ofSeconds(3)));
+            assertTrue(first.isCompletedExceptionally());
+            assertTrue(second.isCompletedExceptionally());
+            assertEquals(0, published.get(), "Stopped menus must not receive successful callbacks");
+            assertThrows(IllegalStateException.class, () -> services.storage(() -> 1));
+        } finally {
+            release.countDown();
+            services.stop(Duration.ofSeconds(3));
+        }
+        var reopened = new SqliteStorage();
+        try {
+            reopened.initialize(world.toRealPath());
+            var accounts = reopened.transaction(tx -> tx.query(
+                    "SELECT account_id FROM account_catalog WHERE owner_id=? ORDER BY account_id", List.of(owner), 2));
+            assertEquals(java.util.Set.of(firstAccount, secondAccount), accounts.stream()
+                    .map(row -> row.get("account_id")).collect(java.util.stream.Collectors.toSet()));
+        } finally { reopened.close(); }
+    }
+
+    @Test void oneActorsReadBacklogCannotConsumeAnotherActorsAdmissionAndCapacityRecovers() throws Exception {
+        var store = new SqliteStorage();
+        var services = new ServerServices(world.toRealPath(), store, new SchedulingConfig(1, 4, 1, 5, 1000, 3));
+        var started = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var firstActor = new PlayerId(UUID.randomUUID());
+        var otherActor = new PlayerId(UUID.randomUUID());
+        try {
+            ready(services);
+            var blocked = services.storage(firstActor, () -> {
+                started.countDown();
+                try { release.await(); }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return 1;
+            }).toCompletableFuture();
+            assertTrue(started.await(3, TimeUnit.SECONDS));
+            var queued = services.storage(firstActor, () -> store.transaction(tx -> tx.query(
+                    "SELECT world_id FROM foundation_metadata WHERE singleton=1", List.of(), 1))).toCompletableFuture();
+            var rejected = services.storage(firstActor, () -> 3).toCompletableFuture();
+            var error = assertThrows(CompletionException.class, rejected::join);
+            assertEquals(StorageException.Kind.OVERLOAD, assertInstanceOf(StorageException.class, error.getCause()).kind());
+            var other = services.storage(otherActor, () -> store.transaction(tx -> tx.query(
+                    "SELECT world_id FROM foundation_metadata WHERE singleton=1", List.of(), 1))).toCompletableFuture();
+            assertFalse(other.isCompletedExceptionally());
+            release.countDown();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            while ((!blocked.isDone() || !queued.isDone() || !other.isDone()) && System.nanoTime() < deadline) {
+                services.tick(); Thread.sleep(1);
+            }
+            assertEquals(1, blocked.get(1, TimeUnit.SECONDS));
+            assertEquals(queued.get(1, TimeUnit.SECONDS), other.get(1, TimeUnit.SECONDS));
+            var recovered = services.storage(firstActor, () -> 4).toCompletableFuture();
+            deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            while (!recovered.isDone() && System.nanoTime() < deadline) { services.tick(); Thread.sleep(1); }
+            assertEquals(4, recovered.get(1, TimeUnit.SECONDS));
+        } finally {
+            release.countDown();
+            assertTrue(services.stop(Duration.ofSeconds(3)));
+        }
+    }
+
 }

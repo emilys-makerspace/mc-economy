@@ -484,9 +484,12 @@ public final class Deposits {
                 + pack(encodePreview(value.preview())) + "|" + pack(value.evidence()) + "|" + pack(value.reason()) + "|" + value.revision();
     }
     public static void validateFact(String payload) { validateFact(payload, 1); }
+    private static void validateFact(String payload, int version) { decodeFact(payload, version); }
     public static void validateFactV2(String payload) { validateFact(payload, 2); }
     public static void validateFactV3(String payload) { validateFact(payload, 3); }
-    private static void validateFact(String payload, int version) {
+    /** Immutable retained fact adapter; validation and canonical-version rules remain identical to startup. */
+    public record Fact(Action action, Reservation reservation) {}
+    public static Fact decodeFact(String payload, int version) {
         var p = payload.split("\\|", -1);
         if (p.length != 8) throw invalid("DEPOSIT_FACT");
         var action = Action.valueOf(p[0]);
@@ -496,6 +499,7 @@ public final class Deposits {
         if (reservation.revision() < 1) throw invalid("DEPOSIT_REVISION");
         if ((priced(reservation.preview())?3:minorSettlement(reservation.preview())?2:1)!=version) throw invalid("DEPOSIT_SETTLEMENT_VERSION");
         if (version>=2 && !encodeReservation(action, reservation).equals(payload)) throw invalid("DEPOSIT_FACT");
+        return new Fact(action, reservation);
     }
     private static boolean priced(Preview preview){return preview.groups().stream().anyMatch(g->g.pricing()!=null);}
     private static Map<EconomyCurrency,String> pricing(Preview preview){

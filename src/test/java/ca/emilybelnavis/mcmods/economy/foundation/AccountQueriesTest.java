@@ -13,6 +13,9 @@ import ca.emilybelnavis.mcmods.economy.api.PartyRef;
 import ca.emilybelnavis.mcmods.economy.journal.Journal;
 import ca.emilybelnavis.mcmods.economy.journal.JournalEngine;
 import ca.emilybelnavis.mcmods.economy.journal.LedgerHistory;
+import ca.emilybelnavis.mcmods.economy.journal.OwnerHistory;
+import ca.emilybelnavis.mcmods.economy.banking.BankingDashboardView;
+import ca.emilybelnavis.mcmods.economy.banking.BankingHistoryView;
 import ca.emilybelnavis.mcmods.economy.journal.SameCurrency;
 import ca.emilybelnavis.mcmods.economy.storage.FoundationStore;
 import ca.emilybelnavis.mcmods.economy.storage.SqliteStorage;
@@ -155,7 +158,8 @@ class AccountQueriesTest {
                     (intent, instruction, reads) -> true, null);
             var funded = new Journal.Intent(new OperationId(UUID.randomUUID()), new RequestId(UUID.randomUUID()),
                     owner, SameCurrency.CREDIT, adjustment.request(), null, null);
-            assertEquals(Journal.Status.COMMITTED, await(services, credit.submit(funded).completion()).outcome().status());
+            var fundingOutcome = await(services, credit.submit(funded).completion()).outcome();
+            assertEquals(Journal.Status.COMMITTED, fundingOutcome.status());
 
             var payment = await(services, ledger.planPayment(grant, other, 30)).orElseThrow();
             var operation = new OperationId(UUID.randomUUID());
@@ -173,6 +177,64 @@ class AccountQueriesTest {
             assertEquals(Optional.of(visible), await(services, services.inspectAccounts(inspection,
                     Map.of("ledger_history", account(1).value().toString()), () -> true,
                     reads -> LedgerHistory.page(reads, inspection.target(), account(1), null, 10))));
+
+            // The menu-facing service must freeze pages while new payments continue to commit.
+            var query = new OwnerHistory.Query(account(1).value(), null, null, null, OwnerHistory.Type.ALL, 1);
+            var first = await(services, ledger.ownerHistory(grant, query, null, null)).orElseThrow();
+            assertEquals(OwnerHistory.Availability.AVAILABLE, first.availability());
+            assertEquals(List.of(-3_000L), first.rows().stream().map(row -> row.amount().minorUnits()).toList());
+            assertNotNull(first.next());
+            var nextPayment = await(services, ledger.planPayment(grant, other, 10)).orElseThrow();
+            var newer = await(services, ledger.submit(grant, new OperationId(UUID.randomUUID()),
+                    new RequestId(UUID.randomUUID()), nextPayment).completion()).outcome();
+            assertEquals(Journal.Status.COMMITTED, newer.status());
+            var second = await(services, ledger.ownerHistory(grant, query, first.highWater(), first.next())).orElseThrow();
+            assertEquals(first.highWater(), second.highWater());
+            assertEquals(List.of(10_000L), second.rows().stream().map(row -> row.amount().minorUnits()).toList());
+            assertNull(second.next());
+            var refreshed = await(services, ledger.ownerHistory(grant, query, null, null)).orElseThrow();
+            assertTrue(refreshed.highWater() > first.highWater());
+            assertEquals(newer.transactionId().value(), refreshed.rows().getFirst().transaction());
+            assertTrue(await(services, ledger.historyDetail(grant, newer.transactionId().value(), first.highWater())).isEmpty());
+            var detail = await(services, ledger.historyDetail(grant, initial.transactionId().value(), first.highWater())).orElseThrow();
+            assertEquals(List.of(account(1).value()), detail.movements().stream().map(row -> row.account()).toList());
+
+            // Foreign accounts and inspection capabilities cannot become owner-menu authority.
+            assertEquals(OwnerHistory.Availability.DENIED,
+                    await(services, ledger.ownerHistory(otherGrant, query, null, null)).orElseThrow().availability());
+            assertTrue(await(services, ledger.historyDetail(otherGrant, fundingOutcome.transactionId().value(), refreshed.highWater())).isEmpty());
+            assertEquals(List.of(account(1)), await(services, ledger.historyAccounts(grant, null)).orElseThrow()
+                    .stream().map(AccountIdentity::id).toList());
+            assertThrows(IllegalArgumentException.class, () -> ledger.ownerHistory(inspection, query, null, null));
+            assertThrows(IllegalArgumentException.class, () -> ledger.historyDetail(inspection, initial.transactionId().value(), first.highWater()));
+            assertThrows(IllegalArgumentException.class, () -> ledger.historyAccounts(inspection, null));
+            assertThrows(IllegalArgumentException.class, () -> ledger.dashboard(inspection, account(1), null));
+            var dashboard = await(services, ledger.dashboard(grant, account(1), null)).orElseThrow();
+            assertEquals(new Money(EconomyCurrency.CAD, 6_000), dashboard.accounts().rows().getFirst().available());
+            assertEquals(newer.transactionId().value(), dashboard.recent().rows().getFirst().transaction());
+            var foreign = await(services, ledger.dashboard(otherGrant, account(1), null)).orElseThrow();
+            assertNull(foreign.recentAccount());
+            assertEquals(BankingDashboardView.Availability.UNAVAILABLE, foreign.recent().availability());
+            assertTrue(foreign.recent().rows().isEmpty());
+
+        } finally {
+            assertTrue(services.stop(Duration.ofSeconds(5)));
+        }
+    }
+
+    @Test void historyAndDashboardRejectCapabilitiesFromAnotherServerSession() throws Exception {
+        var services = open(new SqliteStorage());
+        try {
+            var party = new PartyRef(services.partyWorld(), new PartyRef.Player(owner));
+            var stale = PartyAuthorization.admit(services.partyWorld(), UUID.randomUUID(), owner, false, party, false).orElseThrow();
+            var ledger = services.ledger();
+            var rates = new BankingHistory.RateQuery(BankingHistoryView.Family.EFFECTIVE,
+                    EconomyCurrency.CAD, EconomyCurrency.USD, null, null, null);
+            assertThrows(IllegalArgumentException.class, () -> ledger.ownerHistory(stale, OwnerHistory.Query.all(), null, null));
+            assertThrows(IllegalArgumentException.class, () -> ledger.historyDetail(stale, UUID.randomUUID(), 0));
+            assertThrows(IllegalArgumentException.class, () -> ledger.historyAccounts(stale, null));
+            assertThrows(IllegalArgumentException.class, () -> ledger.dashboard(stale, null, null));
+            assertThrows(IllegalArgumentException.class, () -> ledger.historyRates(stale, rates));
         } finally {
             assertTrue(services.stop(Duration.ofSeconds(5)));
         }

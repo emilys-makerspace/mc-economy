@@ -2,6 +2,8 @@ package ca.emilybelnavis.mcmods.economy.collection;
 
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.foundation.ServerServices;
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
+import ca.emilybelnavis.mcmods.economy.banking.UiPublication;
 import java.util.*;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,7 +16,7 @@ public final class CollectionMenu extends AbstractContainerMenu {
     private final Inventory inventory;
     private final UUID entity,presentation,session;
     private long revision,lastActionTick=-10;
-    private String page="cases",status="Loading collection cases";
+    private String page="cases",status=UiText.t("ui.common.loading_cases");
     private List<String> lines=List.of();
     private List<CollectionNetwork.Choice> choices=List.of();
     private boolean busy=true;
@@ -57,9 +59,23 @@ public final class CollectionMenu extends AbstractContainerMenu {
         if(action.equals("exit"))return value.isEmpty();
         return choices.stream().anyMatch(c->c.action().equals(action)&&(c.value().equals(value)||action.equals("preview_partial")&&c.value().isEmpty()));
     }
-    public void publish(String page,List<String> lines,String status,boolean busy,List<CollectionNetwork.Choice> choices){
-        var snapshot=new CollectionNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,lines,status,busy,choices);
-        apply(snapshot);if(inventory.player instanceof ServerPlayer player)CollectionNetwork.send(player,snapshot);
+    public void publish(String page,List<String> lines,String status,boolean busy,List<CollectionNetwork.Choice> choices) {
+        if (!(inventory.player instanceof ServerPlayer player)) return;
+        String language=UiText.language(player);
+        CollectionNetwork.Snapshot snapshot;
+        try {
+            var text=UiPublication.render(lines,status,choices.stream().map(CollectionNetwork.Choice::label).toList(),language,16);
+            var controls=new ArrayList<CollectionNetwork.Choice>();
+            for(int i=0;i<choices.size();i++){var c=choices.get(i);controls.add(new CollectionNetwork.Choice(c.action(),c.value(),text.labels().get(i),c.selected()));}
+            snapshot=new CollectionNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,text.lines(),text.status(),busy,controls);
+        } catch(IllegalArgumentException unavailable) {
+            var controls=choices.stream().filter(c->c.action().equals("retry")||c.action().equals("exit"))
+                    .map(c->new CollectionNetwork.Choice(c.action(),c.value(),UiText.render(c.label(),language),c.selected())).toList();
+            snapshot=new CollectionNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,
+                    List.of(UiText.render(UiText.t("ui.common.view_unavailable"),language)),
+                    UiText.render(UiText.t("ui.common.review_unavailable"),language),busy,controls);
+        }
+        apply(snapshot);CollectionNetwork.send(player,snapshot);
     }
     public void apply(CollectionNetwork.Snapshot snapshot){
         if(snapshot.menuId()!=containerId||!session.equals(snapshot.session())||snapshot.revision()<=revision)return;revision=snapshot.revision();page=snapshot.page();lines=snapshot.lines();status=snapshot.status();busy=snapshot.busy();choices=snapshot.choices();

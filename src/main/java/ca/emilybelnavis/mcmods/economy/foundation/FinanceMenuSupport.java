@@ -20,14 +20,18 @@ public final class FinanceMenuSupport {
                     && menu.session().equals(session) && menu.revision() == revision;
         }
         public void reply(String page, List<String> lines, String status, List<BankingNetwork.Choice> choices) {
+            respond(page, lines, status, choices, BankingOperation.offered(false, choices));
+        }
+        public void decline(String page, List<String> lines, String status, List<BankingNetwork.Choice> choices) {
+            respond(page, lines, status, choices.stream().filter(c -> !BankingOperation.confirmation(c.action())).toList(),
+                    BankingOperation.View.of(BankingOperation.State.DECLINED, "screen.economy.operation.declined"));
+        }
+        public void respond(String page, List<String> lines, String status, List<BankingNetwork.Choice> choices,
+                            BankingOperation.View operation) {
             if (!live()) return;
             menu.setBusy(false);
-            var bounded = new ArrayList<String>();
-            for (var line : lines) {
-                for (int offset = 0; offset < line.length() && bounded.size() < 32; offset += 240)
-                    bounded.add(line.substring(offset, Math.min(line.length(), offset + 240)));
-            }
-            menu.publish(page, bounded, status, choices);
+            // Resolve and bound the complete translated terms only at the final menu publication.
+            menu.publish(page, lines, status, choices, operation, null);
         }
     }
     public static Audience audience(ServerPlayer player, BankingMenu menu) {

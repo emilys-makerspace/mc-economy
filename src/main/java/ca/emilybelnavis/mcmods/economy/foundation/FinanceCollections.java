@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
 import ca.emilybelnavis.mcmods.economy.api.*;
@@ -77,16 +78,15 @@ public final class FinanceCollections {
             var choices = new ArrayList<BankingNetwork.Choice>();
             for (var debt : cases) {
                 offered.add(debt.id());
-                choices.add(choice("finance_debt_case", debt.id().toString(), debt.kind() + " · "
+                choices.add(choice("finance_debt_case", debt.id().toString(), CreditReport.label(debt.kind()) + " · "
                         + creditor(debt) + " · " + money(debt.currency(), debt.debtMinor())));
             }
             state.offeredCases = Set.copyOf(offered);
             if (cases.size() == 16) {
                 state.after = cases.getLast().id();
-                choices.add(choice("finance_debt_next", "", "More collection cases"));
+                choices.add(choice("finance_debt_next", "",UiText.t("ui.finance.financecollections.1")));
             }
-            audience.reply("finance_debt", List.of(cases.isEmpty() ? "There are no collection cases on this page." : "Select your case to view its current creditor and protected repayment terms.",
-                    "Collection expiry and credit-report expiry have independent dates."), "Collections", choices);
+            audience.reply("finance_debt", List.of(cases.isEmpty() ? UiText.t("ui.finance.financecollections.3") : UiText.t("ui.finance.financecollections.4"),UiText.t("ui.finance.financecollections.5")),UiText.t("ui.finance.financecollections.2"), choices);
         });
     }
 
@@ -104,7 +104,7 @@ public final class FinanceCollections {
             state.selected = found.orElseThrow();
             var lines = caseLines(state.selected);
             if (!DebtLifecycle.demands(state.selected, System.currentTimeMillis())) {
-                audience.reply("finance_debt", lines, "Case has no current collection payment", List.of(choice("finance_debt_home", "", "Collection cases")));
+                audience.reply("finance_debt", lines,UiText.t("ui.finance.financecollections.6"), List.of(choice("finance_debt_home", "",UiText.t("ui.finance.financecollections.7"))));
                 return;
             }
             ownedAccounts(services, grant).whenComplete((accounts, failed) -> {
@@ -112,10 +112,9 @@ public final class FinanceCollections {
                 if (failed != null || accounts.isEmpty()) { unavailable(audience); return; }
                 state.accounts = accounts.orElseThrow();
                 var choices = new ArrayList<BankingNetwork.Choice>();
-                for (var account : state.accounts.values()) choices.add(choice("finance_debt_funding", account.id().value().toString(),
-                        account.currency().code() + " account" + (account.currency() == state.selected.currency() ? "" : " · explicit FX quote")));
-                choices.add(choice("finance_debt_home", "", "Collection cases"));
-                audience.reply("finance_debt", lines, "Choose payment funding", choices);
+                for (var account : state.accounts.values()) choices.add(choice("finance_debt_funding", account.id().value().toString(),UiText.t("ui.finance.creditmenus.18", account.currency().code(), (account.currency() == state.selected.currency() ? "" : UiText.t("ui.finance.fx_explicit")))));
+                choices.add(choice("finance_debt_home", "",UiText.t("ui.finance.financecollections.7")));
+                audience.reply("finance_debt", lines,UiText.t("ui.finance.financecollections.8"), choices);
             });
         });
     }
@@ -139,10 +138,7 @@ public final class FinanceCollections {
         state.funding = state.accounts.get(new AccountId(UUID.fromString(value)));
         if (state.funding == null || state.selected == null) throw new IllegalArgumentException("Funding not offered");
         clearQuote(state);
-        audience.reply("finance_debt", List.of("Current frozen debt " + money(state.selected.currency(), state.selected.debtMinor()),
-                "Enter the exact payment in " + state.selected.currency().code() + ". Enter the full balance for full settlement.",
-                "A committed positive partial payment before collection expiry renews the two-financial-year collection window."),
-                "Collection payment amount", List.of(choice("finance_debt_amount", "", "Review payment")));
+        audience.reply("finance_debt", List.of(UiText.t("ui.finance.financecollections.10", money(state.selected.currency(), state.selected.debtMinor())),UiText.t("ui.finance.financecollections.11", state.selected.currency().code()),UiText.t("ui.finance.financecollections.12")),UiText.t("ui.finance.financecollections.9"), List.of(choice("finance_debt_amount", "",UiText.t("ui.finance.creditmenus.61"))));
     }
 
     private static void preview(FinanceMenuSupport.Audience audience, ServerServices services,
@@ -179,21 +175,21 @@ public final class FinanceCollections {
 
     private static void review(FinanceMenuSupport.Audience audience, State state) {
         var lines = new ArrayList<>(caseLines(state.selected));
-        lines.add("Debt receives " + money(state.selected.currency(), state.payment.amountMinor()));
+        lines.add(UiText.t("ui.finance.financecollections.13", money(state.selected.currency(), state.payment.amountMinor())));
         if (state.fx == null) {
-            lines.add("Account debit " + money(state.selected.currency(), state.payment.amountMinor()));
-            lines.add("Payment fee 0 " + state.selected.currency().code());
+            lines.add(UiText.t("ui.finance.financecollections.14", money(state.selected.currency(), state.payment.amountMinor())));
+            lines.add(UiText.t("ui.finance.financecollections.15", state.selected.currency().code()));
         } else {
             var fx = state.fx.fx();
-            lines.add("Converted payment debit " + money(fx.debit().currency(), fx.debit().minorUnits()));
-            lines.add("Separate FX fee " + money(fx.fee().currency(), fx.fee().minorUnits()));
-            lines.add("Total account debit " + money(fx.debit().currency(), Math.addExact(fx.debit().minorUnits(), fx.fee().minorUnits())));
+            lines.add(UiText.t("ui.finance.creditmenus.62", money(fx.debit().currency(), fx.debit().minorUnits())));
+            lines.add(UiText.t("ui.finance.creditmenus.46", money(fx.fee().currency(), fx.fee().minorUnits())));
+            lines.add(UiText.t("ui.finance.creditmenus.63", money(fx.debit().currency(), Math.addExact(fx.debit().minorUnits(), fx.fee().minorUnits()))));
         }
-        lines.add("Quote expires " + Instant.ofEpochMilli(expires(state)));
-        if (state.payment.amountMinor() == state.selected.debtMinor()) lines.add("Full payment settles this case. Its paid-default report remains until the original report-expiry date.");
-        else lines.add("A successful positive partial payment acknowledges this debt and renews collection expiry to two financial years after settlement time.");
-        lines.add("Viewing, exiting or a failed payment never acknowledges debt or extends collection expiry.");
-        audience.reply("finance_debt", lines, "Review collection payment", List.of(choice("finance_debt_confirm", "", "Confirm payment")));
+        lines.add(UiText.t("ui.finance.creditmenus.67", Instant.ofEpochMilli(expires(state))));
+        if (state.payment.amountMinor() == state.selected.debtMinor()) lines.add(UiText.t("ui.finance.financecollections.16"));
+        else lines.add(UiText.t("ui.finance.financecollections.17"));
+        lines.add(UiText.t("ui.finance.financecollections.18"));
+        audience.reply("finance_debt", lines,UiText.t("ui.finance.financecollections.19"), List.of(choice("finance_debt_confirm", "",UiText.t("ui.finance.creditmenus.71"))));
         state.previewRevision = audience.menu().revision();
     }
 
@@ -215,12 +211,7 @@ public final class FinanceCollections {
 
     private static List<String> caseLines(DebtRecords.Case debt) {
         long now = System.currentTimeMillis();
-        return List.of(debt.kind() + " · " + creditor(debt), "Frozen debt " + money(debt.currency(), debt.debtMinor()),
-                "Collection state " + DebtLifecycle.caseState(debt), "Credit report " + DebtLifecycle.bureauStatus(debt, now),
-                "Original default " + Instant.ofEpochMilli(debt.defaultAt()),
-                "Collection expiry " + Instant.ofEpochMilli(debt.collectionExpires()),
-                "Original report expiry " + Instant.ofEpochMilli(debt.reportExpires()),
-                "No new interest, late fees or collector fees accrue after default.");
+        return List.of(CreditReport.label(debt.kind()) + " · " + creditor(debt),UiText.t("ui.finance.financecollections.20", money(debt.currency(), debt.debtMinor())),UiText.t("ui.finance.financecollections.21", CreditReport.label(DebtLifecycle.caseState(debt))),UiText.t("ui.finance.financecollections.22", CreditReport.label(DebtLifecycle.bureauStatus(debt, now))),UiText.t("ui.finance.financecollections.23", Instant.ofEpochMilli(debt.defaultAt())),UiText.t("ui.finance.financecollections.24", Instant.ofEpochMilli(debt.collectionExpires())),UiText.t("ui.finance.financecollections.25", Instant.ofEpochMilli(debt.reportExpires())),UiText.t("ui.finance.financecollections.26"));
     }
 
     private static long expires(State state) {
@@ -234,7 +225,7 @@ public final class FinanceCollections {
     }
 
     private static String money(EconomyCurrency currency, long minor) {
-        return new Money(currency, minor).majorUnits().toPlainString() + " " + currency.code();
+        return UiText.money(new Money(currency, minor));
     }
 
     private static BankingNetwork.Choice choice(String action, String value, String label) {
@@ -246,7 +237,6 @@ public final class FinanceCollections {
     }
 
     private static void unavailable(FinanceMenuSupport.Audience audience) {
-        audience.reply("finance_debt", List.of("Refresh your collection case and funding account before reviewing another payment."),
-                "Collection request unavailable", List.of(choice("finance_debt_home", "", "Collection cases")));
+        audience.decline("finance_debt", List.of(UiText.t("ui.finance.financecollections.28")),UiText.t("ui.finance.financecollections.27"), List.of(choice("finance_debt_home", "",UiText.t("ui.finance.financecollections.7"))));
     }
 }

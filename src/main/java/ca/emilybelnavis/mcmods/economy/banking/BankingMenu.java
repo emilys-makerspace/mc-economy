@@ -20,11 +20,11 @@ public final class BankingMenu extends AbstractContainerMenu {
     public enum Access {
         ATM, TELLER, KIOSK, REGISTER, CARD, ADMIN, WORLD_SETUP;
 
-        private static final Set<String> BANKING = Set.of("home", "manage_accounts", "setup", "accounts", "accounts_next", "account_select", "account_open", "account_close_preview", "account_close_confirm",
+        private static final Set<String> BANKING = Set.of("home", "payments", "manage_accounts", "setup", "accounts", "accounts_next", "account_select", "account_open", "account_close_preview", "account_close_confirm",
                 "history", "history_next", "fx", "exchange_preview", "exchange_confirm", "bank_retry", "deposit",
                 "deposit_preview", "deposit_confirm", "withdraw", "withdraw_preview", "withdraw_confirm", "withdraw_mix", "withdraw_mix_change", "withdraw_mix_review", "withdraw_mix_reset", "claims",
                 "claims_next", "collect", "retry", "cancel", "cards", "card_select", "card_lost", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next");
-        private static final Set<String> CARD_ACTIONS = Set.of("home", "manage_accounts", "setup", "accounts", "accounts_next", "account_select",
+        private static final Set<String> CARD_ACTIONS = Set.of("home", "payments", "manage_accounts", "setup", "accounts", "accounts_next", "account_select",
                 "history", "history_next", "fx", "exchange_preview", "exchange_confirm", "bank_retry", "claims",
                 "claims_next", "collect", "retry", "cancel", "cards", "card_select", "card_lost", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next");
         private static final Set<String> REGISTER_ACTIONS = Set.of("home", "shop", "buy_preview", "buy_confirm", "price", "claims",
@@ -32,11 +32,12 @@ public final class BankingMenu extends AbstractContainerMenu {
         private static final Set<String> ADMIN_ACTIONS = Set.of("kiosk_upgrade", "settings", "configure", "bank_retry", "cancel", "banking", "brand_preview", "brand_confirm");
 
         public boolean allows(String action) {
+            if (BankingHistoryView.ACTIONS.contains(action)) return this == ATM || this == TELLER || this == KIOSK || this == CARD;
             if (FinanceActions.handles(action)) return FinanceActions.allowed(this, action);
             return switch (this) {
                 case ATM -> BANKING.contains(action) && !action.startsWith("account_close_") && !action.equals("account_open") && !action.equals("setup");
                 case TELLER -> BANKING.contains(action) && !action.startsWith("account_close_") && !action.equals("account_open") && !action.equals("setup");
-                case KIOSK -> Set.of("home", "manage_accounts", "accounts", "accounts_next", "account_select", "history", "history_next", "bank_retry", "cancel", "branch_open", "branch_assign", "branch_switch", "branch_accept", "branch_close", "account_close_confirm", "branch_products", "cards", "card_select", "card_preview", "card_confirm", "card_lost", "claims", "claims_next", "collect", "retry", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next").contains(action);
+                case KIOSK -> Set.of("home", "payments", "manage_accounts", "accounts", "accounts_next", "account_select", "history", "history_next", "bank_retry", "cancel", "branch_open", "branch_assign", "branch_switch", "branch_accept", "branch_close", "account_close_confirm", "branch_products", "cards", "card_select", "card_preview", "card_confirm", "card_lost", "claims", "claims_next", "collect", "retry", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next").contains(action);
                 case REGISTER -> REGISTER_ACTIONS.contains(action);
                 case CARD -> CARD_ACTIONS.contains(action);
                 case ADMIN -> ADMIN_ACTIONS.contains(action);
@@ -60,6 +61,10 @@ public final class BankingMenu extends AbstractContainerMenu {
     private List<BankingNetwork.Choice> choices = List.of();
     private String status = "";
     private boolean busy;
+    private BankingOperation.View operation = BankingOperation.View.ready();
+    private BankingDashboardView dashboard;
+    private BankingHistoryView history;
+    private BankingOperation.View resultPresentation;
     private boolean depositSlotsVisible = true;
 
     public BankingMenu(int id, Inventory inventory, TerminalPolicy.Anchor anchor, UUID generation, UUID session) {
@@ -121,6 +126,9 @@ public final class BankingMenu extends AbstractContainerMenu {
     public List<BankingNetwork.Choice> choices() { return choices; }
     public String status() { return status; }
     public boolean busy() { return busy; }
+    public BankingOperation.View operation() { return operation; }
+    public BankingDashboardView dashboard() { return dashboard; }
+    public BankingHistoryView history() { return history; }
     public void setBusy(boolean value) { busy = value; }
     public SimpleContainer depositInputs() { return inputs; }
     /** Client presentation only; server inventory admission still checks the current page. */
@@ -147,26 +155,96 @@ public final class BankingMenu extends AbstractContainerMenu {
     }
     public boolean acceptAction(ServerPlayer player, UUID candidateSession, long candidateRevision, String action) {
         if (!session.equals(candidateSession) || candidateRevision != revision || !valid(player) || !allows(action)) return false;
+        if (operation.state() == BankingOperation.State.PROCESSING) return false;
+        if (operation.unresolved() && !Set.of("retry", "bank_retry").contains(action)) return false;
+        if (BankingOperation.confirmation(action) && operation.confirming()
+                && operation.expiresAt() > 0 && System.currentTimeMillis() >= operation.expiresAt()) {
+            setBusy(false);
+            publish(page, List.of(UiText.t("ui.common.terms_expired")), UiText.t("ui.common.review_expired"),
+                    choices.stream().filter(c -> !BankingOperation.confirmation(c.action())).toList(),
+                    BankingOperation.View.of(BankingOperation.State.EXPIRED_STALE, "screen.economy.operation.expired_stale"), null);
+            return false;
+        }
+        if (BankingOperation.confirmation(action) && (!operation.confirming()
+                || (operation.expiresAt() > 0 && System.currentTimeMillis() >= operation.expiresAt())
+                || choices.stream().noneMatch(c -> c.action().equals(action)))) return false;
         if (busy && !action.equals("retry") && !action.equals("bank_retry") && !action.equals("cancel")) return false;
         long now = player.serverLevel().getServer().getTickCount();
         if (now - lastActionTick < 2) return false;
         lastActionTick = now; return true;
     }
     public void publish(String page, List<String> lines, String status) {
-        publish(page, lines, status, this.page.equals(page) ? choices : List.of());
+        publish(page, lines, status, this.page.equals(page)
+                ? choices.stream().filter(c -> !BankingOperation.confirmation(c.action())).toList() : List.of());
     }
     public void publish(String page, List<String> lines, String status, List<BankingNetwork.Choice> choices) {
+        var view = BankingOperation.offered(busy, choices);
+        if (resultPresentation != null && view.state() == BankingOperation.State.READY) view = resultPresentation;
+        resultPresentation = null;
+        publish(page, lines, status, choices, view, null);
+    }
+    public void publish(String page, List<String> lines, String status, List<BankingNetwork.Choice> choices,
+                        BankingOperation.View operation, BankingDashboardView dashboard) {
+        publish(page, lines, status, choices, operation, dashboard, null);
+    }
+    public void publish(String page, List<String> lines, String status, List<BankingNetwork.Choice> choices,
+                        BankingOperation.View operation, BankingDashboardView dashboard, BankingHistoryView history) {
+        if (inventory.player instanceof ServerPlayer player && operation.state() != BankingOperation.State.PROCESSING) {
+            var data = player.getPersistentData();
+            var pending = data.getCompound("economy_banking_pending");
+            String lookup = "bank_retry";
+            if (!pending.hasUUID("operation")) { pending = data.getCompound("economy_banking_cash_pending"); lookup = "retry"; }
+            if (pending.hasUUID("operation")) {
+                operation = BankingOperation.View.original(BankingOperation.State.OUTCOME_UNCERTAIN, pending.getUUID("operation"),
+                        pending.hasUUID("request") ? pending.getUUID("request") : null, null);
+                choices = List.of(new BankingNetwork.Choice(lookup, "", UiText.t("ui.common.lookup_original"), false));
+            }
+        }
         boolean debug = inventory.player instanceof ServerPlayer player && BankingController.services(player).debugGui();
-        var visibleLines = debug ? List.copyOf(lines) : BankingPresentation.lines(lines);
+        var visibleLines = debug || history != null ? List.copyOf(lines) : BankingPresentation.lines(lines);
         var visibleStatus = debug ? status : BankingPresentation.status(status);
-        var snapshot = new BankingNetwork.Snapshot(containerId, session, Math.addExact(revision, 1), page, visibleLines, visibleStatus, busy, choices);
-        this.revision = snapshot.revision(); this.page = snapshot.page(); this.lines = snapshot.lines(); this.status = snapshot.status(); this.choices = snapshot.choices();
+        String language = inventory.player instanceof ServerPlayer p ? UiText.language(p) : "en_gb";
+        BankingNetwork.Snapshot snapshot;
+        try {
+            var publication = UiPublication.render(visibleLines, visibleStatus, choices.stream().map(BankingNetwork.Choice::label).toList(), language, 32);
+            var translatedChoices = new ArrayList<BankingNetwork.Choice>();
+            for (int i=0;i<choices.size();i++) { var c=choices.get(i); translatedChoices.add(new BankingNetwork.Choice(c.action(),c.value(),publication.labels().get(i),c.selected())); }
+            snapshot = new BankingNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,publication.lines(),publication.status(),busy,translatedChoices,operation,dashboard,history);
+        } catch (IllegalArgumentException invalidDisplay) {
+            var fallbackChoices = operation.state()==BankingOperation.State.OUTCOME_UNCERTAIN
+                    ? choices.stream().map(c->new BankingNetwork.Choice(c.action(),c.value(),UiText.render(UiText.t("ui.common.lookup_original"),language),c.selected())).toList()
+                    : List.<BankingNetwork.Choice>of();
+            var fallbackState = operation.unresolved() ? operation : BankingOperation.View.of(BankingOperation.State.DECLINED,"screen.economy.operation.review_unavailable");
+            snapshot = new BankingNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,
+                    List.of(UiText.render(UiText.t("ui.common.view_unavailable"),language)),UiText.render(UiText.t("ui.common.review_unavailable"),language),
+                    busy,fallbackChoices,fallbackState,null,null);
+        }
+
+        this.revision = snapshot.revision(); this.page = snapshot.page(); this.lines = snapshot.lines(); this.status = snapshot.status(); this.choices = snapshot.choices(); this.operation = snapshot.operation(); this.dashboard = snapshot.dashboard(); this.history = snapshot.history();
         if (inventory.player instanceof ServerPlayer player) BankingNetwork.send(player, snapshot);
         broadcastChanges();
     }
     public void applyClientSnapshot(long revision, String page, List<String> lines, String status, boolean busy, List<BankingNetwork.Choice> choices) {
+        applyClientSnapshot(revision, page, lines, status, busy, choices, BankingOperation.offered(busy, choices), null);
+    }
+    public void applyClientSnapshot(long revision, String page, List<String> lines, String status, boolean busy,
+                                    List<BankingNetwork.Choice> choices, BankingOperation.View operation, BankingDashboardView dashboard) {
+        applyClientSnapshot(revision, page, lines, status, busy, choices, operation, dashboard, null);
+    }
+    public void applyClientSnapshot(long revision, String page, List<String> lines, String status, boolean busy,
+                                    List<BankingNetwork.Choice> choices, BankingOperation.View operation,
+                                    BankingDashboardView dashboard, BankingHistoryView history) {
         if (revision <= this.revision) return;
-        this.revision = revision; this.page = page; this.lines = List.copyOf(lines); this.status = status; this.busy = busy; this.choices = List.copyOf(choices);
+        this.revision = revision; this.page = page; this.lines = List.copyOf(lines); this.status = status; this.busy = busy; this.choices = List.copyOf(choices); this.operation = operation; this.dashboard = dashboard; this.history = history;
+    }
+    public void result(ca.emilybelnavis.mcmods.economy.journal.Journal.Outcome outcome) {
+        resultPresentation = BankingOperation.outcome(outcome);
+    }
+    public void processing(UUID operationId, UUID requestId) {
+        resultPresentation = null;
+        setBusy(true);
+        publish(page, lines, UiText.t("ui.common.processing_original"), List.of(),
+                BankingOperation.View.original(BankingOperation.State.PROCESSING, operationId, requestId, null), null);
     }
     @Override public boolean stillValid(Player player) {
         return player instanceof ServerPlayer serverPlayer ? valid(serverPlayer) : player == inventory.player;

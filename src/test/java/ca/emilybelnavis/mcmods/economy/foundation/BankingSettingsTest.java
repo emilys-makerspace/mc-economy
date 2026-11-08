@@ -2,6 +2,7 @@ package ca.emilybelnavis.mcmods.economy.foundation;
 
 import ca.emilybelnavis.mcmods.economy.api.EconomyCurrency;
 import ca.emilybelnavis.mcmods.economy.cash.CashCatalog;
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.journal.TerminalPolicy;
 import java.util.List;
 import java.util.Set;
@@ -18,12 +19,12 @@ class BankingSettingsTest {
     }
 
     @Test void lifecycleRejectionsExplainTheAccountLimitAndResolution() {
-        assertTrue(BankingAccounts.failureMessage("BANK_CAP_REACHED").contains("4 open accounts"));
-        assertTrue(BankingAccounts.failureMessage("BANK_CAP_REACHED").contains("bank branch"));
-        assertTrue(BankingAccounts.failureMessage("BANK_CURRENCY_EXISTS").contains("already have"));
-        assertTrue(BankingAccounts.failureMessage("ACCOUNT_PROTECTED").contains("cannot be closed"));
-        assertTrue(BankingAccounts.failureMessage("ACTIVE_HOLD").contains("reserved"));
-        assertTrue(BankingAccounts.failureMessage("UNRESOLVED_OBLIGATION").contains("deliveries"));
+        assertTrue(UiText.render(BankingAccounts.failureMessage("BANK_CAP_REACHED"), "en_gb").contains("4 open accounts"));
+        assertTrue(UiText.render(BankingAccounts.failureMessage("BANK_CAP_REACHED"), "en_gb").contains("bank branch"));
+        assertTrue(UiText.render(BankingAccounts.failureMessage("BANK_CURRENCY_EXISTS"), "en_gb").contains("already have"));
+        assertTrue(UiText.render(BankingAccounts.failureMessage("ACCOUNT_PROTECTED"), "en_gb").contains("cannot be closed"));
+        assertTrue(UiText.render(BankingAccounts.failureMessage("ACTIVE_HOLD"), "en_gb").contains("reserved"));
+        assertTrue(UiText.render(BankingAccounts.failureMessage("UNRESOLVED_OBLIGATION"), "en_gb").contains("deliveries"));
     }
 
     @Test void allCashMeansOnlyAcceptedCurrenciesAndAtmBills() {

@@ -394,9 +394,12 @@ public final class Withdrawals {
                 + "|" + pack(encodePreview(value.preview())) + "|" + pack(value.evidence()) + "|" + pack(value.reason()) + "|" + value.revision();
     }
     public static void validateFact(String value) { validateFact(value, 1); }
+    private static void validateFact(String value, int version) { decodeFact(value, version); }
     public static void validateFactV2(String value) { validateFact(value, 2); }
     public static void validateFactV3(String value) { validateFact(value, 3); }
-    private static void validateFact(String value, int version) {
+    /** Immutable retained fact adapter; validation and canonical-version rules remain identical to startup. */
+    public record Fact(Action action, Reservation reservation) {}
+    public static Fact decodeFact(String value, int version) {
         var p = value.split("\\|", -1);
         if (p.length != 8) throw invalid("WITHDRAWAL_FACT");
         var action = Action.valueOf(p[0]);
@@ -406,6 +409,7 @@ public final class Withdrawals {
         if (reservation.revision() < 1) throw invalid("WITHDRAWAL_REVISION");
         if ((reservation.preview().pricing()!=null?3:minorSettlement(reservation.preview())?2:1)!=version) throw invalid("WITHDRAWAL_SETTLEMENT_VERSION");
         if (version>=2 && !encode(action, reservation).equals(value)) throw invalid("WITHDRAWAL_FACT");
+        return new Fact(action, reservation);
     }
     /** CHF cash/account settlement preserves cents; legacy cash/account pairs retain the old bank quantum. */
     private static long quantum(EconomyCurrency cash, EconomyCurrency account) {

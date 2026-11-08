@@ -28,11 +28,11 @@ class BankingDepositFeedbackTest {
         String result = message("private unexpected diagnostic");
         assertFalse(result.contains("private unexpected diagnostic"));
         assertTrue(result.contains("cash remains protected"));
-        assertEquals(result, BankingController.depositProblem(new IllegalArgumentException()));
+        assertEquals(result, UiText.render(BankingController.depositProblem(new IllegalArgumentException()), "en_gb"));
     }
 
     private static String message(String code) {
-        String result = BankingController.depositProblem(new IllegalArgumentException(code));
+        String result = UiText.render(BankingController.depositProblem(new IllegalArgumentException(code)), "en_gb");
         assertFalse(result.contains(code));
         return result;
     }

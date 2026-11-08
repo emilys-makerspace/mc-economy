@@ -680,6 +680,39 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         return services.readAccounts(grant, false, reads -> LedgerHistory.page(reads, grant.target(), account, cursor, limit));
     }
 
+    /** One owner-authorized worker transaction; no section advances financial time or mutates state. */
+    /** New frozen owner query; the legacy ascending history facade above remains unchanged. */
+    public CompletionStage<Optional<OwnerHistory.Page>> ownerHistory(PartyAuthorization.Grant grant,
+            OwnerHistory.Query query, Long highWater, OwnerHistory.Key before) {
+        requireOwner(grant);
+        return services.readAccounts(grant, false, reads -> Optional.of(OwnerHistory.begin(query,
+                highWater == null ? OwnerHistory.highWater(reads) : highWater, before)))
+                .thenCompose(start -> start.isEmpty() ? java.util.concurrent.CompletableFuture.completedStage(Optional.empty())
+                        : ownerHistoryTurn(grant, start.orElseThrow()));
+    }
+    private CompletionStage<Optional<OwnerHistory.Page>> ownerHistoryTurn(PartyAuthorization.Grant grant, OwnerHistory.Scan scan) {
+        return services.readAccounts(grant, false, reads -> Optional.of(OwnerHistory.scan(reads, grant.target(), scan)))
+                .thenCompose(next -> next.isEmpty() ? java.util.concurrent.CompletableFuture.completedStage(Optional.empty())
+                        : next.orElseThrow().complete() ? java.util.concurrent.CompletableFuture.completedStage(Optional.of(OwnerHistory.finish(next.orElseThrow())))
+                        : ownerHistoryTurn(grant, next.orElseThrow()));
+    }
+    public CompletionStage<Optional<HistoryDetails.Detail>> historyDetail(PartyAuthorization.Grant grant, UUID transaction, long highWater) {
+        requireOwner(grant); return services.readAccounts(grant, false, reads -> HistoryDetails.read(reads, grant.target(), transaction, highWater));
+    }
+    public CompletionStage<Optional<List<AccountIdentity>>> historyAccounts(PartyAuthorization.Grant grant, AccountId after) {
+        requireOwner(grant); return services.readAccounts(grant, false, reads -> Optional.of(AccountCatalog.history(reads, grant.target(), after, 17)));
+    }
+    public CompletionStage<Optional<BankingHistory.RatePage>> historyRates(PartyAuthorization.Grant grant, BankingHistory.RateQuery query) {
+        requireOwner(grant); return services.readAccounts(grant, false, reads -> Optional.of(BankingHistory.readRates(reads, grant.target().world(), query)));
+    }
+
+    public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.banking.BankingDashboardView>> dashboard(
+            PartyAuthorization.Grant grant, AccountId selected, TerminalPolicy.Anchor anchor) {
+        requireOwner(grant);
+        return services.readAccounts(grant, false, reads -> Optional.of(
+                BankingDashboard.read(reads, grant.target(), selected, anchor, System.currentTimeMillis())));
+    }
+
     public CompletionStage<Optional<LedgerHistory.Page>> inspectHistory(CommandSourceStack source,
             Function<MinecraftServer, ServerServices> sessions, PartyRef target, AccountId account, String cursor, int limit) {
         return inspect(source, sessions, target, Map.of("ledger_history", account.value().toString()),

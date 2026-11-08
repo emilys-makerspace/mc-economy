@@ -151,6 +151,8 @@ public final class JournalEngine {
                         Integer.toString(intent.request().version()), intent.canonical(), intent.requestId().value().toString(), status.name(),
                         Integer.toString(result.version()), result.code(), result.payload(), transactionId == null ? null : transactionId.value().toString(),
                         sequence == null ? null : Long.toString(sequence.value()), audit));
+        if (sequence != null && store.snapshot().schemaVersion() >= 53)
+            ca.emilybelnavis.mcmods.economy.storage.OwnerHistorySchema.committed(tx, sequence.value());
         return new Outcome(intent.operationId(), intent.requestId(), status, transactionId, sequence, result);
     }
     /** Authorized internal replay boundary only. No side effects, deliveries, or cache publication. */

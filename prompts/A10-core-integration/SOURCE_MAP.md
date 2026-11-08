@@ -1,6 +1,8 @@
-# A10 source map — current behavior and implementation gaps
+# A10 source map — checkpoint baseline and implementation links
 
-Revalidated by A10-01 source/document review, 2026-11-08. [Frozen implementation contracts](../../.codex/architecture/a10-source-contracts.md) and [evidence](../../.codex/verification/A10-01.md) refine the [shared contract](CONTRACT.md) and [technical plan](TECHNICAL.md). Entries below describe current source; new DTOs, wire9 and history projection are future additions, not runtime results. Third-party compatibility remains outside A10.
+A10-02-02 installs [owner history](../../.codex/architecture/owner-history.md) under banking wire10/schema53: original-fact projection/bootstrap, frozen filtered pages, captured details, separate historical FX and updated dashboard recent reads. Its [verification](../../.codex/verification/A10-02-02.md) supersedes history-gap descriptions in the A10-01 baseline below. Legacy LedgerHistory/API contracts remain unchanged.
+
+Revalidated by A10-01 source/document review, 2026-11-08. [Frozen implementation contracts](../../.codex/architecture/a10-source-contracts.md) and [evidence](../../.codex/verification/A10-01.md) refine the [shared contract](CONTRACT.md) and [technical plan](TECHNICAL.md). Entries below retain that checkpoint baseline. Installed [A10-02-01 dashboard/state architecture](../../.codex/architecture/banking-dashboard.md) now supersedes its banking8 snapshot, English control inference and UI retry descriptions: banking9 carries typed state/dashboard data and both UI paths are lookup-only. The richer history projection remains unimplemented. Third-party compatibility remains outside A10.
 
 ## Entry points and transport
 

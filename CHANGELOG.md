@@ -4,6 +4,26 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-08
 
+### A10-02-03 — Core localization and explanations
+
+- Added UK English, Canadian French and French translations for core banking, dashboard, history, financial reviews, automatic-payment consent and optional banker/collection explanations.
+- Displayed money retains exact minor units and explicit currency codes with locale number formatting. Numeric input remains ASCII with a decimal point and no grouping.
+- Rendered reviews are checked against existing display budgets; incomplete reviews cannot offer financial confirmation.
+
+### A10-02-02 — Filtered history and original transaction details
+
+- Added newest-first owner History with account, currency, recorded UTC range and transaction-type filters, frozen pages and original details.
+- Added explicit captured fee/counterparty/FX availability and separate legacy-daily/effective-time FX history.
+- Added additive schema53 history indexing with bounded resumable startup validation, atomic live updates and complete-world backup/restore checks; original facts and legacy cursors remain unchanged.
+- Banking protocol10 carries bounded history data. Dashboard recent activity now uses the new indexed reader.
+
+### A10-02-01 — Banking overview and operation status
+
+- Added a bank-aware Home overview with separate account balances, sampled upcoming payments and newest-first selected-account activity.
+- Added server-offered service navigation and a Payments page that preserves terminal and card restrictions.
+- Replaced text-based review/retry controls with structured server state and original operation/receipt references under banking protocol9.
+- Outcome checks now look up the original operation only. Confirmed absence requires a fresh review; item delivery remains separate from financial completion.
+
 ### A9-06 — Opt-in reference-price trading
 
 - Fixed valuation refresh failing with 18–63 activated market/item scopes.

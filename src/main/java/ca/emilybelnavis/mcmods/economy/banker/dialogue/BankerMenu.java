@@ -1,6 +1,8 @@
 package ca.emilybelnavis.mcmods.economy.banker.dialogue;
 import ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime;
 import ca.emilybelnavis.mcmods.economy.banker.entity.BankerEntity;
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
+import ca.emilybelnavis.mcmods.economy.banking.UiPublication;
 import java.util.*;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,7 +17,7 @@ public final class BankerMenu extends AbstractContainerMenu {
     private long revision,lastActionTick=-10;
     private List<String> lines=List.of();
     private List<BankerNetwork.Choice> choices=List.of();
-    private String page="questions",status="Choose a question.";
+    private String page="questions",status=UiText.t("ui.common.choose_question");
     public BankerMenu(int id,Inventory inventory,UUID entity,UUID assignment,long assignmentRevision,UUID session){super(BankerMenuCatalog.BANKER.get(),id);this.inventory=inventory;this.entity=entity;this.assignment=assignment;this.assignmentRevision=assignmentRevision;this.session=session;}
     static BankerMenu fromNetwork(int id,Inventory inventory,RegistryFriendlyByteBuf b){return new BankerMenu(id,inventory,b.readUUID(),b.readUUID(),b.readVarLong(),b.readUUID());}
     public void writeOpening(RegistryFriendlyByteBuf b){b.writeUUID(entity);b.writeUUID(assignment);b.writeVarLong(assignmentRevision);b.writeUUID(session);}
@@ -31,7 +33,22 @@ public final class BankerMenu extends AbstractContainerMenu {
         if(!choices.stream().anyMatch(c->c.action().equals(action.action())&&c.value().equals(action.value())))return false;
         long tick=player.server.getTickCount();if(tick-lastActionTick<2)return false;lastActionTick=tick;return true;
     }
-    public void publish(String page,List<String> lines,List<BankerNetwork.Choice> choices){var snapshot=new BankerNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,lines,"Choose a question or continue to banking.",false,choices);apply(snapshot);if(inventory.player instanceof ServerPlayer p)BankerNetwork.send(p,snapshot);}
+    public void publish(String page,List<String> lines,List<BankerNetwork.Choice> choices) {
+        if (!(inventory.player instanceof ServerPlayer player)) return;
+        String language=UiText.language(player);
+        BankerNetwork.Snapshot snapshot;
+        try {
+            var text=UiPublication.render(lines,UiText.t("ui.common.choose_question_or_bank"),choices.stream().map(BankerNetwork.Choice::label).toList(),language,16);
+            var controls=new ArrayList<BankerNetwork.Choice>();
+            for(int i=0;i<choices.size();i++){var c=choices.get(i);controls.add(new BankerNetwork.Choice(c.action(),c.value(),text.labels().get(i),c.selected()));}
+            snapshot=new BankerNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,text.lines(),text.status(),false,controls);
+        } catch(IllegalArgumentException unavailable) {
+            snapshot=new BankerNetwork.Snapshot(containerId,session,Math.addExact(revision,1),page,
+                    List.of(UiText.render(UiText.t("ui.common.view_unavailable"),language)),
+                    UiText.render(UiText.t("ui.common.choose_question"),language),false,List.of());
+        }
+        apply(snapshot);BankerNetwork.send(player,snapshot);
+    }
     public void apply(BankerNetwork.Snapshot snapshot){if(snapshot.menuId()!=containerId||!session.equals(snapshot.session())||snapshot.revision()<=revision)return;revision=snapshot.revision();page=snapshot.page();lines=snapshot.lines();status=snapshot.status();choices=snapshot.choices();}
     @Override public boolean stillValid(Player player){return player instanceof ServerPlayer p?valid(p):player==inventory.player;}
     @Override public ItemStack quickMoveStack(Player player,int index){return ItemStack.EMPTY;}

@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.loan.*;
 import java.time.Instant;
 import java.util.*;
@@ -9,68 +10,61 @@ public final class LoanReport {
     private LoanReport() {}
     public static List<String> owner(LoanDiagnostics.ContractView view){
         var l=view.contract();var s=l.servicing();var lines=new ArrayList<String>();
-        lines.add("Loan "+l.id()+" / "+l.lender().key()+" / "+l.status()+" / revision "+l.revision());
-        lines.add("Fixed unsecured "+l.product()+"; currency "+l.currency().code()+"; original principal "+CreditReport.money(l.currency(),l.originalPrincipalMinor()));
-        lines.add("Captured APR "+l.apr().movePointRight(2).stripTrailingZeros().toPlainString()+"%; prime "+l.primeApr()+" v"+l.primeVersion()+"; policy v"+l.policyVersion());
-        lines.add("Captured score "+l.capturedScore()+" / profile revision "+l.profileRevision()+" / Tier "+l.tier()+". Later rates do not reprice this contract.");
-        lines.add("Term "+l.years()+" financial years; 13 payments/year; installment "+CreditReport.money(l.currency(),s.installmentMinor()));
-        lines.add("Posted principal "+CreditReport.money(l.currency(),s.principalMinor())+"; posted interest "+CreditReport.money(l.currency(),s.interestMinor()));
-        lines.add("Saved accrued interest "+s.accruedMajor()+"; signed residual "+s.residualMajor()+" "+l.currency().code());
-        lines.add("As-of exact debt: "+(view.current()?view.exactDebtMajor()+" "+l.currency().code():"unavailable; saved amounts only"));
-        lines.add("Outstanding required "+CreditReport.money(l.currency(),view.requiredMinor())+"; past due "+CreditReport.money(l.currency(),view.pastDueMinor())+"; oldest due "+date(view.oldestDueAt()));
-        lines.add("Next monthly close "+(l.status()!=Loans.Status.ACTIVE?"none":date(l.nextMonth()))+"; overdue boundaries "+view.overdueMonths()+"; "+view.availability());
-        if(l.status()==Loans.Status.DEFAULTED)lines.add("Debt is frozen at default. Repayment uses its collection case and current creditor.");
-        lines.add("Claim: "+(s.closed()?"SETTLED":"unsecured lender receivable")+"; collateral: unsupported (B6 adapter required).");
+        lines.add(UiText.t("ui.finance.loanreport.1", l.id(), l.lender().key(), CreditReport.label(l.status()), l.revision()));
+        lines.add(UiText.t("ui.finance.loanreport.2", CreditReport.label(l.product()), l.currency().code(), CreditReport.money(l.currency(),l.originalPrincipalMinor())));
+        lines.add(UiText.t("ui.finance.loanreport.3", UiText.decimal(l.apr().movePointRight(2).stripTrailingZeros()), l.primeApr(), l.primeVersion(), l.policyVersion()));
+        lines.add(UiText.t("ui.finance.loanreport.4", l.capturedScore(), l.profileRevision(), l.tier()));
+        lines.add(UiText.t("ui.finance.loanreport.5", l.years(), CreditReport.money(l.currency(),s.installmentMinor())));
+        lines.add(UiText.t("ui.finance.loanreport.6", CreditReport.money(l.currency(),s.principalMinor()), CreditReport.money(l.currency(),s.interestMinor())));
+        lines.add(UiText.t("ui.finance.loanreport.7", s.accruedMajor(), s.residualMajor(), l.currency().code()));
+        lines.add(UiText.t("ui.finance.loanreport.8", (view.current()?UiText.t("ui.finance.amount", UiText.decimal(view.exactDebtMajor()), l.currency().code()):UiText.t("ui.finance.snapshot_only"))));
+        lines.add(UiText.t("ui.finance.loanreport.9", CreditReport.money(l.currency(),view.requiredMinor()), CreditReport.money(l.currency(),view.pastDueMinor()), date(view.oldestDueAt())));
+        lines.add(UiText.t("ui.finance.loanreport.10", (l.status()!=Loans.Status.ACTIVE?UiText.t("ui.finance.none"):date(l.nextMonth())), view.overdueMonths(), CreditReport.label(view.availability())));
+        if(l.status()==Loans.Status.DEFAULTED)lines.add(UiText.t("ui.finance.loanreport.11"));
+        lines.add(UiText.t("ui.finance.loanreport.12", (s.closed()?UiText.t("ui.finance.settled"):UiText.t("ui.finance.unsecured_receivable"))));
         return List.copyOf(lines);
     }
     public static List<String> schedule(LoanDiagnostics.SchedulePage page){
-        var lines=new ArrayList<String>();lines.add("Original projected schedule v"+page.version()+" / "+page.scheduleHash()+". Early payments may shorten actual payoff; historical rows are unchanged.");
-        for(var row:page.entries())lines.add("#"+row.ordinal()+" due "+date(row.dueAt())+": payment "+row.paymentMinor()+", principal "+row.principalMinor()+", interest "+row.interestMinor()+", remaining principal "+row.remainingPrincipalMinor()+" "+page.currency().code()+" minor units");
-        if(page.entries().isEmpty())lines.add("No schedule rows on this page.");
-        if(page.nextOrdinal()!=null)lines.add("Next schedule page: after "+page.nextOrdinal());return List.copyOf(lines);
+        var lines=new ArrayList<String>();lines.add(UiText.t("ui.finance.loanreport.13", page.version(), page.scheduleHash()));
+        for(var row:page.entries())lines.add(UiText.t("ui.finance.loanreport.14", row.ordinal(), date(row.dueAt()), row.paymentMinor(), row.principalMinor(), row.interestMinor(), row.remainingPrincipalMinor(), page.currency().code()));
+        if(page.entries().isEmpty())lines.add(UiText.t("ui.finance.loanreport.15"));
+        if(String.valueOf(page.nextOrdinal())!=null)lines.add(UiText.t("ui.finance.loanreport.16", String.valueOf(page.nextOrdinal())));return List.copyOf(lines);
     }
     public static List<String> installments(Loans.InstallmentPage page){
-        var lines=new ArrayList<String>();lines.add("Frozen monthly installments v1; amounts are contract-currency minor units, earned interest in major units.");
-        for(var row:page.installments())lines.add("#"+row.ordinal()+" due "+date(row.dueAt())+": original required "+row.originalMinor()+", earned "+row.earnedMajor()+", posted interest "+row.postedInterestMinor()+", debt at close "+row.debtMinor());
-        if(page.installments().isEmpty())lines.add("No closed installments on this page.");
-        if(page.nextOrdinal()!=null)lines.add("Next installments page: after "+page.nextOrdinal());return List.copyOf(lines);
+        var lines=new ArrayList<String>();lines.add(UiText.t("ui.finance.loanreport.17"));
+        for(var row:page.installments())lines.add(UiText.t("ui.finance.loanreport.18", row.ordinal(), date(row.dueAt()), row.originalMinor(), row.earnedMajor(), row.postedInterestMinor(), row.debtMinor()));
+        if(page.installments().isEmpty())lines.add(UiText.t("ui.finance.loanreport.19"));
+        if(String.valueOf(page.nextOrdinal())!=null)lines.add(UiText.t("ui.finance.loanreport.20", String.valueOf(page.nextOrdinal())));return List.copyOf(lines);
     }
     public static List<String> payoff(Loans.PaymentQuote quote){
-        var r=quote.request();return List.of("Full payoff preview: "+CreditReport.money(quote.payoff().source().currency(),r.amountMinor()),
-            "Calculated "+date(r.capturedAt())+"; expires "+date(r.expiresAt())+"; loan revision "+r.loanRevision()+"; funding revision "+r.fundingRevision()+"; ledger revision "+r.fundingLedgerRevision(),
-            "Preview only. No debit or interest waiver occurred. Different funding currency needs a separate explicit FX and fee quote before payment.",
-            "A successful fresh full payoff alone waives additional unposted interest earned within this quote window. State changes require a new confirmation.");
+        var r=quote.request();return List.of(UiText.t("ui.finance.loanreport.21", CreditReport.money(quote.payoff().source().currency(),r.amountMinor())),UiText.t("ui.finance.loanreport.22", date(r.capturedAt()), date(r.expiresAt()), r.loanRevision(), r.fundingRevision(), r.fundingLedgerRevision()),UiText.t("ui.finance.loanreport.23"),UiText.t("ui.finance.loanreport.24"));
     }
     public static List<String> application(Loans.ApplicationDecision d){
-        return List.of("Application "+d.application()+": "+d.reason()+" at "+date(d.effectiveAt()),
-            "Lender "+d.lender().key()+" / "+d.product()+"; requested "+CreditReport.money(d.currency(),d.requestedMinor())+" / "+d.years()+" years",
-            "Captured profile "+(d.established()?"score "+d.capturedScore()+" revision "+d.profileRevision():"not established")+"; Tier "+d.tier()+"; policy v"+d.policyVersion(),
-            "Captured prime "+d.primeApr()+" v"+d.primeVersion()+"; APR "+d.apr()+"; maximum term "+d.maximumYears(),
-            "Captured world exposure "+d.currentExposureWorldMinor()+"; maximum principal "+d.maximumPrincipalWorldMinor()+"; exposure ceiling "+d.totalExposureCeilingWorldMinor()+" "+d.worldCurrency().code()+" minor; FX publication "+d.fxPublication());
+        return List.of(UiText.t("ui.finance.loanreport.25", d.application(), CreditReport.label(d.reason()), date(d.effectiveAt())),UiText.t("ui.finance.loanreport.26", d.lender().key(), CreditReport.label(d.product()), CreditReport.money(d.currency(),d.requestedMinor()), d.years()),UiText.t("ui.finance.loanreport.27", (d.established()?UiText.t("ui.finance.profile", d.capturedScore(), d.profileRevision()):UiText.t("ui.finance.not_established")), d.tier(), d.policyVersion()),UiText.t("ui.finance.loanreport.28", d.primeApr(), d.primeVersion(), d.apr(), d.maximumYears()),UiText.t("ui.finance.loanreport.29", d.currentExposureWorldMinor(), d.maximumPrincipalWorldMinor(), d.totalExposureCeilingWorldMinor(), d.worldCurrency().code(), d.fxPublication()));
     }
     public static List<String> operator(LoanDiagnostics.OperatorView view){
         var lines=new ArrayList<>(owner(view.contract()));var r=view.reconciliation();
-        lines.add("Inspection journal frontier "+view.journalFrontier()+" at "+date(view.asOf()));
-        lines.add("Loan owner debt / liability: "+r.ownerCurrencyDebtMinor()+" / "+r.borrowerLiabilityMinor()+"; match="+r.ownerMatches());
-        lines.add("Shared lender card+loan debt / receivable: "+r.issuerCurrencyDebtMinor()+" / "+r.issuerReceivableMinor()+"; match="+r.issuerMatches());
-        lines.add("Owner journal sum "+r.ownerJournalMinor()+"; complete="+r.ownerJournalComplete()+"; match="+r.ownerJournalMatches());
-        lines.add("Lender journal sum "+r.issuerJournalMinor()+"; complete="+r.issuerJournalComplete()+"; match="+r.issuerJournalMatches());
-        if(!r.ownerFacilitiesComplete()||!r.issuerFacilitiesComplete()||!r.ownerJournalComplete()||!r.issuerJournalComplete())lines.add("Reconciliation incomplete: bounded history/portfolio exceeded. Partial totals are not full balances.");
-        lines.add("Monthly provider: "+view.provider());
+        lines.add(UiText.t("ui.finance.loanreport.30", view.journalFrontier(), date(view.asOf())));
+        lines.add(UiText.t("ui.finance.loanreport.31", r.ownerCurrencyDebtMinor(), r.borrowerLiabilityMinor(), r.ownerMatches()));
+        lines.add(UiText.t("ui.finance.loanreport.32", r.issuerCurrencyDebtMinor(), r.issuerReceivableMinor(), r.issuerMatches()));
+        lines.add(UiText.t("ui.finance.loanreport.33", r.ownerJournalMinor(), r.ownerJournalComplete(), r.ownerJournalMatches()));
+        lines.add(UiText.t("ui.finance.loanreport.34", r.issuerJournalMinor(), r.issuerJournalComplete(), r.issuerJournalMatches()));
+        if(!r.ownerFacilitiesComplete()||!r.issuerFacilitiesComplete()||!r.ownerJournalComplete()||!r.issuerJournalComplete())lines.add(UiText.t("ui.finance.loanreport.35"));
+        lines.add(UiText.t("ui.finance.loanreport.36", view.provider()));
         lines.add(view.currentPrimeStatus());
         view.application().ifPresent(d->lines.addAll(application(d)));
-        view.funding().ifPresent(f->lines.add("Captured funding: "+f));
-        if(view.funding().isEmpty())lines.add("Original funding witness unavailable; no reconstruction from current capital.");
+        view.funding().ifPresent(f->lines.add(UiText.t("ui.finance.loanreport.37", f)));
+        if(view.funding().isEmpty())lines.add(UiText.t("ui.finance.loanreport.38"));
         for(var e:view.events().entries()){
-            lines.add("Event "+e.sequence()+":"+e.position()+" v"+e.version()+" "+e.kind()+" at "+date(e.effectiveAt())+" "+new TreeMap<>(e.details()));
+            lines.add(UiText.t("ui.finance.creditreport.50", e.sequence(), e.position(), e.version(), e.kind(), date(e.effectiveAt()), new TreeMap<>(e.details())));
             var p=e.payment();if(p!=null){
-                lines.add("Received "+p.amountMinor()+" = principal "+p.principalMinor()+" + interest "+p.interestMinor()+" contract-currency minor; journal match="+p.journalMatches());
-                lines.add("Recognized interest "+p.recognizedInterestMinor()+" minor; signed residual disposition "+p.residualDispositionMajor()+"; additional interest waived "+p.additionalInterestWaivedMajor()+" major.");
-                lines.add("Allocation count "+p.allocations().size()+"; totals exclude FX fees.");
+                lines.add(UiText.t("ui.finance.loanreport.39", p.amountMinor(), p.principalMinor(), p.interestMinor(), p.journalMatches()));
+                lines.add(UiText.t("ui.finance.loanreport.40", p.recognizedInterestMinor(), p.residualDispositionMajor(), p.additionalInterestWaivedMajor()));
+                lines.add(UiText.t("ui.finance.loanreport.41", p.allocations().size()));
             }
         }
-        var next=view.events().nextCursor();if(next!=null)lines.add("Next events: after "+next.sequence()+" "+next.position());
+        var next=view.events().nextCursor();if(next!=null)lines.add(UiText.t("ui.finance.loanreport.42", String.valueOf(next.sequence()), String.valueOf(next.position())));
         return List.copyOf(lines);
     }
-    private static String date(Long time){return time==null?"none":Instant.ofEpochMilli(time).toString();}
+    private static String date(Long time){return time==null?UiText.t("ui.finance.none"):Instant.ofEpochMilli(time).toString();}
 }

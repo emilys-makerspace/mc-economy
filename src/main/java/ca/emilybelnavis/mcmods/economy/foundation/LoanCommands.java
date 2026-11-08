@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.*;
 import com.mojang.brigadier.context.CommandContext;
@@ -57,9 +58,9 @@ public final class LoanCommands {
             if(!live(source,sessions,a,false))return;
             if(error!=null||found.isEmpty()){unavailable(source);return;}
             var page=found.orElseThrow();
-            for(var v:page.entries())send(source,v.contract().id()+" / "+v.contract().lender().key()+" / "+v.contract().currency().code()+" / "+v.contract().status());
-            if(page.entries().isEmpty())send(source,"No loans on this page.");
-            if(page.nextCursor()!=null)send(source,"Next: /economy loan list "+page.nextCursor());
+            for(var v:page.entries())send(source,v.contract().id()+" / "+v.contract().lender().key()+" / "+v.contract().currency().code()+" / "+loanStatus(v.contract().status()));
+            if(page.entries().isEmpty())send(source,UiText.t("ui.dialogue.no_loans_on_this_page.69b8ca"));
+            if(page.nextCursor()!=null)send(source,UiText.t("ui.dialogue.next_economy_loan_list.3c28b3")+page.nextCursor());
         });return 1;
     }
     private static int owner(CommandContext<CommandSourceStack> c,Function<MinecraftServer,ServerServices> sessions,String section,int after){
@@ -106,8 +107,13 @@ public final class LoanCommands {
             LoanReport.operator(found.orElseThrow()).forEach(line->send(source,line));
         });return 1;
     }
-    private static void send(CommandSourceStack source,String line){source.sendSuccess(()->Component.literal(line),false);}
+    private static void send(CommandSourceStack source,String line){source.sendSuccess(()->UiText.component(source, line),false);}
     private static int unavailable(CommandSourceStack source){
-        source.sendFailure(Component.literal("Loan diagnostics unavailable for this selection or cursor. If scheduled finance is pending, retry after catch-up; an operator can inspect its progress. Payoff requires an active loan and owned open BANK funding; different currencies require explicit FX confirmation."));return 0;
+        source.sendFailure(UiText.component(source, UiText.t("ui.dialogue.loan_diagnostics_unavailable_for_this_select.1462fc")));return 0;
     }
+    private static String loanStatus(ca.emilybelnavis.mcmods.economy.loan.Loans.Status status) { return switch(status) {
+        case ACTIVE -> UiText.t("ui.dialogue.loan_status.active");
+        case DEFAULTED -> UiText.t("ui.dialogue.loan_status.defaulted");
+        case SETTLED -> UiText.t("ui.dialogue.loan_status.settled");
+    }; }
 }

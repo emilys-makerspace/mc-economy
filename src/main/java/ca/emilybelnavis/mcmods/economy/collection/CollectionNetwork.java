@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.collection;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -25,7 +26,7 @@ public final class CollectionNetwork {
         public Type<Action> type(){return TYPE;}
     }
     public record Choice(String action,String value,String label,boolean selected) {
-        public Choice {if(!ACTIONS.contains(action))throw new IllegalArgumentException("Collection choice");text(value,128);text(label,128);}
+        public Choice {if(!ACTIONS.contains(action))throw new IllegalArgumentException("Collection choice");text(value,128);text(label,UiText.isDeferred(label)?UiText.MAX_DEFERRED:128);}
     }
     public record Snapshot(int menuId,UUID session,long revision,String page,List<String> lines,String status,boolean busy,List<Choice> choices) implements CustomPacketPayload {
         public static final Type<Snapshot> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("economy","collection_snapshot"));

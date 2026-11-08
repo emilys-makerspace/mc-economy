@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.collection;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.PlayerId;
 import ca.emilybelnavis.mcmods.economy.api.PartyRef;
@@ -203,7 +204,7 @@ public final class CollectionAgents {
                         ||!eligible(entry,System.currentTimeMillis())||!safe(entry.player,position)) {release(entry);return;}
                 var agent=CollectionCatalog.AGENT.get().create(entry.player.serverLevel());
                 if(agent==null){release(entry);return;}
-                agent.bind(entry.player.getUUID(),lease);agent.setCustomName(Component.literal("Collection Agent"));
+                agent.bind(entry.player.getUUID(),lease);agent.setCustomName(Component.translatable("ui.dialogue.collection_agent.5fc2c1"));
                 agent.moveTo(position.getX()+0.5,position.getY(),position.getZ()+0.5,entry.player.getYRot(),0);
                 entry.agent=agent;
                 if(!entry.player.serverLevel().addFreshEntity(agent)){entry.agent=null;release(entry);return;}
@@ -239,11 +240,11 @@ public final class CollectionAgents {
             if(!CollectionProtection.allows(entry.player,agent.position(),CollectionProtection.Action.SPAWN)){remove(entry,true);return;}
             double distance=entry.player.distanceToSqr(agent);
             if(distance<=64) {
-                if(now<entry.greetingUntil&&agent.tickCount%20==0)entry.player.displayClientMessage(Component.literal("A collection representative is available. Right-click to review your cases."),true);
+                if(now<entry.greetingUntil&&agent.tickCount%20==0)entry.player.displayClientMessage(UiText.component(entry.player, UiText.t("ui.dialogue.a_collection_representative_is_available_rig.7b4116")),true);
                 else if(now>=entry.greetingUntil&&!entry.greetingCleared) {
                     entry.player.displayClientMessage(Component.empty(),true);entry.greetingCleared=true;
                 } else if(now-entry.lastReminder>=DebtRecords.DAY) {
-                    entry.player.displayClientMessage(Component.literal("You can review collectible cases with your collection representative."),false);entry.lastReminder=now;
+                    entry.player.displayClientMessage(UiText.component(entry.player, UiText.t("ui.dialogue.you_can_review_collectible_cases_with_your_c.3a8b4b")),false);entry.lastReminder=now;
                 }
             }
             if(distance<=9){agent.getNavigation().stop();entry.blockedTicks=0;return;}

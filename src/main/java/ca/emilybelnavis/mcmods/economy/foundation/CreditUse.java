@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.api.*;
 import ca.emilybelnavis.mcmods.economy.banking.*;
@@ -30,10 +31,8 @@ public final class CreditUse {
         try {
             if (action.equals("credit_advance")) {
                 QUOTES.remove(menu);
-                audience.reply("credit_advance", List.of("Hold your active credit card and select an owned account using My accounts.",
-                        "The advance credits that account. Cash withdrawal is a separate review and confirmation.",
-                        "Maximum outstanding advances are 20% of your credit limit. No advance fee."), "Enter advance amount",
-                        List.of(new BankingNetwork.Choice("credit_adv_preview", "", "Review advance", false)));
+                audience.reply("credit_advance", List.of(UiText.t("ui.finance.credituse.2"),UiText.t("ui.finance.credituse.3"),UiText.t("ui.finance.credituse.4")),UiText.t("ui.finance.credituse.1"),
+                        List.of(new BankingNetwork.Choice("credit_adv_preview", "",UiText.t("ui.finance.credituse.5"), false)));
             } else if (action.equals("credit_adv_preview")) {
                 if (!FinanceMenuSupport.offered(audience, action, "")) return;
                 var account = BankingAccounts.selected(menu);
@@ -50,12 +49,8 @@ public final class CreditUse {
                             if (!audience.live()) return;
                             if (failure != null || quote.isEmpty()) { unavailable(audience); return; }
                             var q = quote.orElseThrow(); QUOTES.put(menu, q);
-                            audience.reply("credit_advance", List.of("Advance " + CreditReport.money(q.facility().currency(), q.request().amountMinor()),
-                                    "Advance APR " + q.facility().advance().apr().multiply(new java.math.BigDecimal("100")).toPlainString() + "%",
-                                    "Interest accrues daily from the advance. No grace period or advance fee.",
-                                    "This credits the selected bank account. Cash needs a separate withdrawal.",
-                                    "Quote expires " + java.time.Instant.ofEpochMilli(q.request().expiresAt())), "Review advance",
-                                    List.of(new BankingNetwork.Choice("credit_adv_confirm", "", "Confirm advance", false)));
+                            audience.reply("credit_advance", List.of(UiText.t("ui.finance.credituse.6", CreditReport.money(q.facility().currency(), q.request().amountMinor())),UiText.t("ui.finance.credituse.7", UiText.decimal(q.facility().advance().apr().multiply(new java.math.BigDecimal("100")))),UiText.t("ui.finance.credituse.8"),UiText.t("ui.finance.credituse.9"),UiText.t("ui.finance.creditmenus.67", java.time.Instant.ofEpochMilli(q.request().expiresAt()))),UiText.t("ui.finance.credituse.5"),
+                                    List.of(new BankingNetwork.Choice("credit_adv_confirm", "",UiText.t("ui.finance.credituse.10"), false)));
                         });
                     } catch (RuntimeException invalid) { unavailable(audience); }
                 });
@@ -68,6 +63,6 @@ public final class CreditUse {
         } catch (RuntimeException invalid) { unavailable(audience); }
     }
     private static void unavailable(FinanceMenuSupport.Audience audience) {
-        audience.reply("credit_advance", List.of("Refresh the selected account, held card and advance amount."), "Advance unavailable", List.of());
+        audience.decline("credit_advance", List.of(UiText.t("ui.finance.credituse.12")),UiText.t("ui.finance.credituse.11"), List.of());
     }
 }

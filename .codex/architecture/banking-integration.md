@@ -1,5 +1,9 @@
 # Bank and credit menus and integration
 
+Current A10-02-02 [owner history](owner-history.md) installs banking wire10/schema53 with original detail and separate FX-family views. It supersedes the wire9/current-schema statements in earlier package chronology below; [evidence](../verification/A10-02-02.md) records bounds and native/restore checks.
+
+Current A10-02-01 [dashboard/state contract](banking-dashboard.md) installs banking wire9 and lookup-only UI recovery with [focused/native evidence](../verification/A10-02-01.md). The A6 delivery chronology below remains historical; financial APIs2/1/1 and schema52 retain their current meaning.
+
 A6-12 extends the authenticated A5 banking menu with protocol 7. `FinanceActions` is a finite allowlist with physical-surface restrictions. Existing menu ID, session, revision, player-instance, dimension, reach and terminal generation checks remain on every packet. New application, increase and replacement actions require a kiosk. The existing sealed issuer-specific proof rechecks bank, binding, base currency and captured economic revisions at settlement. A broken or rebranded terminal invalidates the proof.
 
 `CreditMenus` owns application, limit, token/lost/replacement and native/FX repayment views. `LoanMenus` owns fixed bank/subprime offers, bounded original schedules/installments and native/FX payments/payoff. `FinanceCollections` owns bounded cases and remote native/FX payments. `FinanceReports` supplies wealth/tier and original report views. Readers retain owner grants. Operator inspection remains a separate audited path. The client sends offered choices or bounded amount text. Rates, score, tier, dates, ownership, fees and debt come from server services.

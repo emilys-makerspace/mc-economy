@@ -1,5 +1,7 @@
 # World storage, identifiers and migrations
 
+A10-02-02 installs schema53 [owner history projection](owner-history.md): bounded startup source validation/bootstrap, atomic live append and offline backup/restore provenance checks. Original journal facts and existing migration/backup requirements remain unchanged; [evidence](../verification/A10-02-02.md) records the stopped disposable restore witness.
+
 ## Storage ownership and API
 
 Production startup supplies FoundationRuntime to ServerServices; it owns SqliteStorage on the storage worker. One storage worker owns its

@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
 import ca.emilybelnavis.mcmods.economy.api.*;
@@ -88,10 +89,9 @@ public final class AutopayMenus {
         state.kind = null;
         state.offered = Map.of();
         clearSelection(state);
-        audience.reply(PAGE, List.of("Automatic payments are OFF until you opt in separately for a facility.",
-                "Choose a card or loan to review its named funding account and payment target."), "Automatic payments",
-                List.of(choice("auto_cards", "", "Credit-card automatic payments"),
-                        choice("auto_loans", "", "Loan automatic payments")));
+        audience.reply(PAGE, List.of(UiText.t("ui.finance.autopaymenus.2"),UiText.t("ui.finance.autopaymenus.3")),UiText.t("ui.finance.autopaymenus.1"),
+                List.of(choice("auto_cards", "",UiText.t("ui.finance.autopaymenus.4")),
+                        choice("auto_loans", "",UiText.t("ui.finance.autopaymenus.5"))));
     }
 
     private static void page(FinanceMenuSupport.Audience audience, ServerServices services,
@@ -120,11 +120,10 @@ public final class AutopayMenus {
             state.offered = Map.copyOf(offered);
             if (products.size() == 16) {
                 state.after = products.getLast().id();
-                choices.add(choice("auto_next", "", "More facilities"));
+                choices.add(choice("auto_next", "",UiText.t("ui.finance.creditmenus.23")));
             } else state.after = null;
-            choices.add(choice("auto_home", "", "Choose cards or loans"));
-            audience.reply(PAGE, List.of(products.isEmpty() ? "There are no facilities on this page."
-                    : "Choose your facility to inspect or change automatic payments."), "Choose a facility", choices);
+            choices.add(choice("auto_home", "",UiText.t("ui.finance.autopaymenus.6")));
+            audience.reply(PAGE, List.of(products.isEmpty() ? UiText.t("ui.finance.autopaymenus.8") : UiText.t("ui.finance.autopaymenus.9")),UiText.t("ui.finance.autopaymenus.7"), choices);
         });
     }
 
@@ -146,23 +145,22 @@ public final class AutopayMenus {
                     state.accounts = selection.accounts();
                     var lines = new ArrayList<String>();
                     lines.add(state.selected.label());
-                    lines.add("Automatic payments " + (state.settings != null && state.settings.enabled() ? "ON" : "OFF"));
+                    lines.add(UiText.t("ui.finance.autopaymenus.10", (state.settings != null && state.settings.enabled() ? UiText.t("ui.finance.on") : UiText.t("ui.finance.off"))));
                     if (state.settings != null && state.settings.enabled()) {
-                        lines.add("Payment target " + modeName(state.settings.mode()));
+                        lines.add(UiText.t("ui.finance.autopaymenus.11", modeName(state.settings.mode())));
                         var source = state.accounts.get(state.settings.funding());
-                        lines.add(source == null ? "The named funding account is currently unavailable. No replacement account is selected automatically."
-                                : "Named funding account " + accountName(source));
-                        lines.add("Settings effective " + Instant.ofEpochMilli(state.settings.effectiveAt()));
+                        lines.add(source == null ? UiText.t("ui.finance.autopaymenus.12") : UiText.t("ui.finance.autopaymenus.13", accountName(source)));
+                        lines.add(UiText.t("ui.finance.autopaymenus.14", Instant.ofEpochMilli(state.settings.effectiveAt())));
                     }
                     var choices = new ArrayList<BankingNetwork.Choice>();
                     if (state.selected.available()) {
-                        lines.add("Select an owned open BANK account in " + state.selected.currency().code() + " to review enabling or changing payments.");
+                        lines.add(UiText.t("ui.finance.autopaymenus.15", state.selected.currency().code()));
                         for (var account : state.accounts.values()) choices.add(choice("auto_funding", account.id().value().toString(), accountName(account)));
-                        if (state.accounts.isEmpty()) lines.add("No open same-currency funding account is available. Manual FX repayments remain available.");
-                    } else lines.add("This facility is closed, settled or defaulted. New automatic payments cannot be enabled.");
-                    if (state.settings != null && state.settings.enabled()) choices.add(choice("auto_disable", "", "Review turning automatic payments OFF"));
-                    choices.add(choice("auto_home", "", "Choose another facility"));
-                    audience.reply(PAGE, lines, "Automatic-payment settings", choices);
+                        if (state.accounts.isEmpty()) lines.add(UiText.t("ui.finance.autopaymenus.16"));
+                    } else lines.add(UiText.t("ui.finance.autopaymenus.17"));
+                    if (state.settings != null && state.settings.enabled()) choices.add(choice("auto_disable", "",UiText.t("ui.finance.autopaymenus.18")));
+                    choices.add(choice("auto_home", "",UiText.t("ui.finance.autopaymenus.19")));
+                    audience.reply(PAGE, lines,UiText.t("ui.finance.autopaymenus.20"), choices);
                 });
     }
 
@@ -189,16 +187,13 @@ public final class AutopayMenus {
         state.preview = null;
         if (state.funding == null || state.selected == null || !state.selected.available()) throw new IllegalArgumentException("Funding not offered");
         if (state.selected.kind() == Kind.LOAN) {
-            audience.reply(PAGE, List.of("Named funding account " + accountName(state.funding),
-                    "The loan target is total due installment arrears, capped by the outstanding debt."), "Choose loan payment target",
-                    List.of(choice("auto_mode", Autopay.Mode.LOAN_DUE.name(), "Review due-installment payments")));
+            audience.reply(PAGE, List.of(UiText.t("ui.finance.autopaymenus.13", accountName(state.funding)),UiText.t("ui.finance.autopaymenus.22")),UiText.t("ui.finance.autopaymenus.21"),
+                    List.of(choice("auto_mode", Autopay.Mode.LOAN_DUE.name(),UiText.t("ui.finance.autopaymenus.23"))));
         } else {
-            audience.reply(PAGE, List.of("Named funding account " + accountName(state.funding),
-                    "Choose the card target you consent to pay at each due window.",
-                    "Minimum is the default target. Statement and full-payoff targets may exceed the contractual minimum."), "Choose card payment target",
-                    List.of(new BankingNetwork.Choice("auto_mode", Autopay.Mode.MINIMUM.name(), "Required minimum (default)", true),
-                            choice("auto_mode", Autopay.Mode.STATEMENT.name(), "Statement balance after payments"),
-                            choice("auto_mode", Autopay.Mode.FULL_PAYOFF.name(), "Current full payoff")));
+            audience.reply(PAGE, List.of(UiText.t("ui.finance.autopaymenus.13", accountName(state.funding)),UiText.t("ui.finance.autopaymenus.25"),UiText.t("ui.finance.autopaymenus.26")),UiText.t("ui.finance.autopaymenus.24"),
+                    List.of(new BankingNetwork.Choice("auto_mode", Autopay.Mode.MINIMUM.name(),UiText.t("ui.finance.autopaymenus.27"), true),
+                            choice("auto_mode", Autopay.Mode.STATEMENT.name(),UiText.t("ui.finance.autopaymenus.28")),
+                            choice("auto_mode", Autopay.Mode.FULL_PAYOFF.name(),UiText.t("ui.finance.autopaymenus.29"))));
         }
     }
 
@@ -217,25 +212,25 @@ public final class AutopayMenus {
         var lines = new ArrayList<String>();
         lines.add(product.label());
         if (enabled) {
-            lines.add("Turn automatic payments ON using " + accountName(state.funding));
-            lines.add("Authorized target " + modeName(mode));
+            lines.add(UiText.t("ui.finance.autopaymenus.30", accountName(state.funding)));
+            lines.add(UiText.t("ui.finance.autopaymenus.31", modeName(mode)));
             lines.add(targetDescription(mode));
-            lines.add("At each future due boundary the selected amount is debited all-or-nothing if funds suffice.");
-            lines.add("An unsuccessful attempt retries once per financial day for two days after the original due date. Each financial day lasts 20 real minutes.");
-            lines.add("Only the named same-currency account is used. There is no automatic FX, overdraft, account substitution or refinancing.");
-            lines.add("Manual payments reduce the target. Paying only the minimum does not stop a still-unpaid statement or full-payoff target.");
-            lines.add("A completed target stops that window. New spending belongs to a later due window.");
-            lines.add("Opt-out, closure or default stops automatic payments. Being offline does not disable opted-in payments.");
-            lines.add("Changing these settings cancels the old retry consent and applies to future due windows. Pay existing arrears manually until then.");
-            lines.add("This confirmation authorizes future debits for the selected target. Normal contractual interest and due dates continue.");
+            lines.add(UiText.t("ui.finance.autopaymenus.32"));
+            lines.add(UiText.t("ui.finance.autopaymenus.33"));
+            lines.add(UiText.t("ui.finance.autopaymenus.34"));
+            lines.add(UiText.t("ui.finance.autopaymenus.35"));
+            lines.add(UiText.t("ui.finance.autopaymenus.36"));
+            lines.add(UiText.t("ui.finance.autopaymenus.37"));
+            lines.add(UiText.t("ui.finance.autopaymenus.38"));
+            lines.add(UiText.t("ui.finance.autopaymenus.39"));
         } else {
-            lines.add("Turn automatic payments OFF and cancel pending automatic-payment retries for this facility.");
-            lines.add("Existing debt, interest, due dates and reporting continue. Make manual repayments when required.");
+            lines.add(UiText.t("ui.finance.autopaymenus.40"));
+            lines.add(UiText.t("ui.finance.autopaymenus.41"));
         }
-        lines.add("Review valid until " + Instant.ofEpochMilli(state.expiresAt));
-        audience.reply(PAGE, lines, "Review automatic-payment consent",
-                List.of(choice("auto_confirm", "", enabled ? "Confirm automatic payments ON" : "Confirm automatic payments OFF"),
-                        choice("auto_home", "", "Cancel and choose another facility")));
+        lines.add(UiText.t("ui.finance.autopaymenus.42", Instant.ofEpochMilli(state.expiresAt)));
+        audience.reply(PAGE, lines,UiText.t("ui.finance.autopaymenus.43"),
+                List.of(choice("auto_confirm", "", enabled ? UiText.t("ui.finance.autopaymenus.44") : UiText.t("ui.finance.autopaymenus.45")),
+                        choice("auto_home", "",UiText.t("ui.finance.autopaymenus.46"))));
         state.previewRevision = audience.menu().revision();
     }
 
@@ -253,30 +248,30 @@ public final class AutopayMenus {
     private static Product card(CreditFacilities.Facility card) {
         return new Product(Kind.CARD, card.id(), card.currency(), card.revision(),
                 card.status() == CreditFacilities.Status.ACTIVE && card.access() != CreditFacilities.Access.CLOSED,
-                "Card · " + InstitutionCatalog.require(card.issuer()).name() + " · " + money(card.currency(), card.owedMinor()));
+                UiText.t("ui.finance.card_label", InstitutionCatalog.require(card.issuer()).name(), money(card.currency(), card.owedMinor())));
     }
     private static Product loan(Loans.Contract loan) {
         return new Product(Kind.LOAN, loan.id(), loan.currency(), loan.revision(), loan.status() == Loans.Status.ACTIVE,
-                "Loan · " + InstitutionCatalog.require(loan.lender()).name() + " · " + money(loan.currency(), loan.owedMinor()));
+                UiText.t("ui.finance.loan_label", InstitutionCatalog.require(loan.lender()).name(), money(loan.currency(), loan.owedMinor())));
     }
     private static String accountName(AccountIdentity account) {
-        return account.currency().code() + (account.primary() ? " primary BANK account" : " BANK account");
+        return UiText.t(account.primary() ? "ui.finance.primary_account" : "ui.finance.account", account.currency().code());
     }
-    private static String money(EconomyCurrency currency, long minor) { return new Money(currency, minor).majorUnits().toPlainString() + " " + currency.code(); }
+    private static String money(EconomyCurrency currency, long minor) { return UiText.money(new Money(currency, minor)); }
     private static String modeName(Autopay.Mode mode) {
         return switch (mode) {
-            case MINIMUM -> "required total minimum";
-            case STATEMENT -> "immutable statement balance less later payments";
-            case FULL_PAYOFF -> "fresh current full payoff at each attempt";
-            case LOAN_DUE -> "total due installment arrears";
+            case MINIMUM -> UiText.t("ui.finance.mode.minimum");
+            case STATEMENT -> UiText.t("ui.finance.mode.statement");
+            case FULL_PAYOFF -> UiText.t("ui.finance.mode.full");
+            case LOAN_DUE -> UiText.t("ui.finance.mode.loan");
         };
     }
     private static String targetDescription(Autopay.Mode mode) {
         return switch (mode) {
-            case MINIMUM -> "Pay the remaining required total minimum, capped by debt.";
-            case STATEMENT -> "Pay that statement's remaining balance after subsequent payments, even if its minimum is already satisfied.";
-            case FULL_PAYOFF -> "Pay the freshly calculated full debt at each retry, including contractual accrued amounts, only with sufficient funds.";
-            case LOAN_DUE -> "Pay total due installment arrears, capped by debt. Partial funding never creates a partial automatic debit.";
+            case MINIMUM -> UiText.t("ui.finance.target.minimum");
+            case STATEMENT -> UiText.t("ui.finance.target.statement");
+            case FULL_PAYOFF -> UiText.t("ui.finance.target.full");
+            case LOAN_DUE -> UiText.t("ui.finance.target.loan");
         };
     }
     private static BankingNetwork.Choice choice(String action, String value, String label) { return new BankingNetwork.Choice(action, value, label, false); }
@@ -291,7 +286,6 @@ public final class AutopayMenus {
         if (!FinanceMenuSupport.offered(audience, action, value)) throw new IllegalArgumentException("Selection not offered");
     }
     private static void unavailable(FinanceMenuSupport.Audience audience) {
-        audience.reply(PAGE, List.of("Refresh your facility and funding account before reviewing automatic-payment settings again."),
-                "Automatic-payment settings unavailable", List.of(choice("auto_home", "", "Automatic-payment settings")));
+        audience.decline(PAGE, List.of(UiText.t("ui.finance.autopaymenus.48")),UiText.t("ui.finance.autopaymenus.47"), List.of(choice("auto_home", "",UiText.t("ui.finance.autopaymenus.20"))));
     }
 }

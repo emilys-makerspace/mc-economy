@@ -126,9 +126,10 @@ class BankingBoundaryTest {
         var id = UUID.randomUUID();
         assertEquals(List.of("1. CAD primary — open", "History for CAD", "12.50 CAD", "1. Register purchase"), BankingPresentation.lines(List.of(
                 "1. CAD primary — open", "History for CAD " + id, "#42 12.50 CAD", "Transaction " + id,
-                "1. " + id + " — register-goods-v1")));
-        assertEquals("Outcome needs checking. Use Retry.", BankingPresentation.status("UNKNOWN — retry preserves operation " + id));
-        assertEquals("Register configured.", BankingPresentation.status("REGISTER_CONFIGURED"));
+                "1. " + id + " — register-goods-v1")).stream().map(line -> UiText.render(line, "en_gb")).toList());
+        assertEquals("Outcome needs checking. Use Retry.", UiText.render(BankingPresentation.status("UNKNOWN — retry preserves operation " + id), "en_gb"));
+        assertEquals("Request processed. Review the current result.",
+                UiText.render(BankingPresentation.status("REGISTER_CONFIGURED"), "en_gb"));
     }
 
     @Test void transactionHistoryHeadingSurvivesIdentifierFiltering() {
@@ -218,5 +219,65 @@ class BankingBoundaryTest {
 
     private static BankingNetwork.Snapshot snapshot(String page, List<String> lines, String status) {
         return new BankingNetwork.Snapshot(1, SESSION, 1, page, lines, status, false);
+    }
+
+    @Test void historyWireRoundTripRetainsFrozenQueryOriginalDetailAndExactFx() {
+        var tx = UUID.randomUUID(); var op = UUID.randomUUID(); var account = UUID.randomUUID();
+        var generation = UUID.randomUUID();
+        var amount = new ca.emilybelnavis.mcmods.economy.api.Money(EconomyCurrency.CAD, -1000);
+        var query = new ca.emilybelnavis.mcmods.economy.journal.OwnerHistory.Query(account, EconomyCurrency.CAD,
+                1000L, 9000L, ca.emilybelnavis.mcmods.economy.journal.OwnerHistory.Type.FX, 8);
+        var detail = new ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.Detail(tx, op, 42, 2000,
+                "economy:ledger", "economy:exchange", "COMMITTED", List.of(
+                    new ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.Movement(account, 0, amount, 1, 4)), false,
+                new ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.Fee(
+                    ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.Availability.KNOWN,
+                    new ca.emilybelnavis.mcmods.economy.api.Money(EconomyCurrency.CAD, 0)),
+                new ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.Counterparty(
+                    ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.Visibility.PRIVATE, ""),
+                List.of(new ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.CapturedFx(UUID.randomUUID(), "EFFECTIVE",
+                    1000, "CAD", "USD", "1.25", "1.00", 2,
+                    ca.emilybelnavis.mcmods.economy.journal.HistoryDetails.Availability.KNOWN)), List.of(), false);
+        var history = new BankingHistoryView(generation, 42, query, List.of(), detail, null, "AVAILABLE");
+        var snapshot = new BankingNetwork.Snapshot(1, SESSION, 7, "history_detail", List.of("Recorded UTC"),
+                "Captured facts", false, List.of(), BankingOperation.View.ready(), null, history);
+        var buffer = new net.minecraft.network.RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), net.minecraft.core.RegistryAccess.EMPTY);
+        try {
+            BankingNetwork.Snapshot.CODEC.encode(buffer, snapshot);
+            assertTrue(buffer.readableBytes() <= BankingNetwork.MAX_SNAPSHOT_BYTES);
+            assertEquals(snapshot, BankingNetwork.Snapshot.CODEC.decode(buffer));
+        } finally { buffer.release(); }
+        assertFalse(BankingMenu.Access.REGISTER.allows("history_detail"));
+        assertTrue(BankingMenu.Access.CARD.allows("history_rates"));
+    }
+
+    @Test void protocolPreservesStructuredOriginalOutcomeRegardlessOfPresentationLanguage() {
+        var operation = UUID.randomUUID(); var request = UUID.randomUUID();
+        var view = BankingOperation.View.original(BankingOperation.State.OUTCOME_UNCERTAIN, operation, request, null);
+        var snapshot = new BankingNetwork.Snapshot(1, SESSION, 7, "fx", List.of("Montant en CAD"),
+                "Résultat à vérifier", false, List.of(new BankingNetwork.Choice("bank_retry", "", "Vérifier", false)), view, null);
+        var buffer = new net.minecraft.network.RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), net.minecraft.core.RegistryAccess.EMPTY);
+        try {
+            BankingNetwork.Snapshot.CODEC.encode(buffer, snapshot);
+            assertTrue(buffer.readableBytes() <= BankingNetwork.MAX_SNAPSHOT_BYTES);
+            var decoded = BankingNetwork.Snapshot.CODEC.decode(buffer);
+            assertEquals(snapshot, decoded);
+            assertEquals(operation, decoded.operation().operationId());
+            assertEquals(request, decoded.operation().requestId());
+            assertEquals(BankingOperation.State.OUTCOME_UNCERTAIN, decoded.operation().state());
+            assertEquals(List.of("bank_retry"), decoded.choices().stream().map(BankingNetwork.Choice::action).toList());
+        } finally { buffer.release(); }
+    }
+
+    @Test void typedPayloadRefusesMalformedMoneyAndUnboundedArgumentsBeforePublication() {
+        assertThrows(IllegalArgumentException.class, () -> new BankingOperation.Argument(BankingOperation.ArgumentKind.MONEY, "XYZ", 100));
+        var arg = new BankingOperation.Argument(BankingOperation.ArgumentKind.INTEGER, "", 1);
+        assertThrows(IllegalArgumentException.class, () -> new BankingOperation.View(BankingOperation.State.READY,
+                "screen.economy.operation.ready", Collections.nCopies(9, arg), null, null, null, null, 0));
+        assertThrows(IllegalArgumentException.class, () -> new BankingOperation.View(BankingOperation.State.REVIEW,
+                "screen.economy.operation.review", List.of(), null, null, null, null, 0));
+        assertEquals(BankingOperation.State.READY, snapshot("fx", List.of(), "Confirm preview then retry").operation().state());
+        assertEquals(BankingOperation.State.REVIEW, BankingOperation.offered(false,
+                List.of(new BankingNetwork.Choice("exchange_confirm", "", "Confirmer", false))).state());
     }
 }

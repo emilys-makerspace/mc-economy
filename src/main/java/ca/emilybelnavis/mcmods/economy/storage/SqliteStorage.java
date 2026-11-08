@@ -57,6 +57,7 @@ public final class SqliteStorage implements FoundationStore {
     private int initializingVersion;
     private String initialFingerprint;
     private JournalCompatibility compatibility;
+    private OwnerHistorySchema.Initializer historyInitializer;
     private boolean initialized;
     private boolean cleanEligible;
     private volatile ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress storageProgress =
@@ -115,6 +116,11 @@ public final class SqliteStorage implements FoundationStore {
         checkOwner();
         if (initialized) return storageProgress;
         try {
+            if (historyInitializer != null) {
+                if (!historyInitializer.step()) return storageProgress = new ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress(
+                        "owner-history", historyInitializer.cursor(), historyInitializer.target(), false);
+                return completeInitialization();
+            }
             if (compatibility != null) {
                 boolean done = compatibility.step();
                 storageProgress = new ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress("journal-validation", compatibility.validated(), -1, false);
@@ -177,7 +183,17 @@ public final class SqliteStorage implements FoundationStore {
             HoldSchema.validate(connection);
             FxSettlementSchema.validate(connection);
             LedgerHistorySchema.validate(connection);
+            OwnerHistorySchema.validate(connection);
             FinancialCalendarSchema.validate(connection);
+            historyInitializer = new OwnerHistorySchema.Initializer(connection);
+            if (!historyInitializer.step()) return storageProgress = new ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress(
+                    "owner-history", historyInitializer.cursor(), historyInitializer.target(), false);
+            return completeInitialization();
+        } catch (SQLException e) { cleanupFailure(); throw StorageException.sql(e); }
+        catch (IOException e) { cleanupFailure(); throw new StorageException(StorageException.Kind.CORRUPTION_IO, "Identity publication failed", e); }
+        catch (RuntimeException e) { cleanupFailure(); throw e; }
+    }
+    private ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress completeInitialization() throws SQLException, IOException {
             if (!Files.exists(identityFile)) StorageFiles.writeNew(identityFile, encodeIdentity(initializingIdentity));
             if (Files.exists(pendingFile)) { Files.delete(pendingFile); StorageFiles.forceDirectory(databasePath.getParent()); }
             snapshot = new Snapshot(new WorldId(initializingIdentity), SchemaMigrations.CURRENT, scalar("PRAGMA journal_mode"),
@@ -185,9 +201,6 @@ public final class SqliteStorage implements FoundationStore {
             try (var statement = connection.createStatement()) { statement.executeUpdate("UPDATE runtime_state SET clean_shutdown=0 WHERE singleton=1"); }
             initialized = true; cleanEligible = true;
             return storageProgress = new ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress("storage-ready", 1, 1, true);
-        } catch (SQLException e) { cleanupFailure(); throw StorageException.sql(e); }
-        catch (IOException e) { cleanupFailure(); throw new StorageException(StorageException.Kind.CORRUPTION_IO, "Identity publication failed", e); }
-        catch (RuntimeException e) { cleanupFailure(); throw e; }
     }
     private CommitObserver commitObserver = (intent, reads, commit) -> commit;
     public void commitObserver(CommitObserver observer) { checkOwner(); commitObserver = java.util.Objects.requireNonNull(observer); }
@@ -394,6 +407,7 @@ public final class SqliteStorage implements FoundationStore {
             HoldSchema.validate(connection);
             FxSettlementSchema.validate(connection);
             LedgerHistorySchema.validate(connection);
+            OwnerHistorySchema.validateFacts(connection);
             FinancialCalendarSchema.validate(connection);
             var validation = new JournalCompatibility(connection, catalog, snapshot.worldId().value().toString());
             while (!validation.step()) { /* Recovery holds the sole worker; reads are paged and interruptible. */ }

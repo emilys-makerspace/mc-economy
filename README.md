@@ -2,6 +2,11 @@
 
 ![Economy — Banking. Cash. Commerce.](docs/branding/economy-banner.png)
 
+![CircleCI](https://img.shields.io/circleci/build/github/emilys-makerspace/mc-economy?style=flat-square&logo=circleci)
+[![Codecov](https://img.shields.io/codecov/c/github/emilys-makerspace/mc-economy?style=flat-square&logo=codecov)](https://codecov.io/gh/emilys-makerspace/mc-economy)
+[![Codacy grade](https://img.shields.io/codacy/grade/ccf84f4c7752479aae00fa4013374edb?style=flat-square&logo=codacy)](https://app.codacy.com/gh/emilys-makerspace/mc-economy/dashboard)
+
+
 Banking, physical cash and player shops for Minecraft, with credit, loans and a persistent world economy. Currently in alpha.
 
 **Requires Minecraft 1.21.1 · NeoForge 21.1.252 · Java 21.** No additional mods are required.
@@ -17,7 +22,7 @@ Banking, physical cash and player shops for Minecraft, with credit, loans and a 
 
 New kiosks are two blocks wide and two blocks high. Existing narrow kiosks remain usable and offer a free **Upgrade kiosk** action in owner/operator settings when space and support are clear.
 
-New eligible vanilla villages can generate mid-century modern bank branches, with compact and larger designs for all 23 banks across plains, desert, savanna, snowy and taiga styles. Buildings use local wood, working branch kiosks and banker desks. Right-click an active kiosk to see that bank’s account options. Choose **Open primary account** or **Open \<native currency\> account** when offered. Selecting the button submits the account-opening request. A banker is optional. Their private dialogue starts with questions to choose from, and answers appear when you select one.
+New eligible vanilla villages can generate mid-century modern bank branches, with compact and larger designs for all 23 banks across plains, desert, savanna, snowy and taiga styles. Buildings use local wood, working branch kiosks and banker desks. Right-click an active kiosk, open **Banking destinations → Accounts → Visit branch services** to see that bank’s account options. Choose **Open primary account** or **Open \<native currency\> account** when offered. Selecting the button submits the account-opening request. A banker is optional. Their private dialogue starts with questions to choose from, and answers appear when you select one.
 
 Choose the world's currency before exploring for new banks. Operators can use `/locate structure #economy:banks` to find bank locations in unexplored areas. The coordinates lead to the source village, with its bank nearby. Existing explored villages are preserved, and difficult terrain can leave a selected branch pending. Superflat village/bank generation has an unresolved limitation tracked in [issue #3](https://github.com/emilybelnavis/economy/issues/3). See the [server guide](docs/SERVER_GUIDE.md#village-branch-diagnostics) for supported generation, status and safe terrain retry.
 
@@ -31,10 +36,14 @@ Securities trading, variable-rate loans and collateral-backed loans are future w
 
 1. Install the Economy jar in your NeoForge instance's `mods` folder.
 2. Start a world and choose its currency when prompted; `/economy choose CAD` also supports selection.
-3. Right-click an active branch kiosk and review its bank and native currency. Select **Open primary account** or **Open \<native currency\> account** when offered to submit the request. You can do this directly without speaking to a banker. Machine owners bind their own terminals to a bank through **sneak + empty-hand right-click** and enable cash services separately.
+3. Right-click an active branch kiosk and review its bank and native currency on Home. Open **Banking destinations → Accounts → Visit branch services** (or **Open a new account** if you already have an account). Select **Open primary account** or **Open \<native currency\> account** when offered to submit the request. You can do this directly without speaking to a banker. Machine owners bind their own terminals to a bank through **sneak + empty-hand right-click** and enable cash services separately.
 4. Use an ATM or teller to deposit, withdraw or exchange funds. An active issued card provides remote banking access.
 
+Home shows separate account balances, sampled upcoming payments and recent activity for the selected account. **History** lists newest posted movements first. Open **History controls → Filters** to choose owned accounts (including closed accounts), currency, recorded UTC date range or transaction type; choose a row for original details. Pages stay frozen while you browse; **Refresh** includes newer commits. Unknown fees/counterparties or missing captured FX are labeled, and historical FX rates have a separate informational view. Use **Banking destinations** for available services and **Refresh** for a new summary. Unavailable sections are labeled explicitly. **Payments** groups the services allowed at that terminal or card. Review current terms before confirming; if the outcome needs checking, use **Check original outcome** first. A confirmed absent operation requires a fresh review and is never automatically resubmitted. Item delivery and retained claims are separate from financial completion.
+
 Accounts are limited to four per player, with one per currency. Creative cards are collectibles and do not grant banking access. Financial time continues while the server is offline: one financial day lasts 20 real minutes, and a month lasts 28 financial days.
+
+Core banking, history, financial reviews and banker explanations support English (UK), French (Canada) and French (France), selected through Minecraft's language setting. Displayed amounts use that language's number formatting and retain their currency code. Enter amounts with ASCII digits, a decimal point and no grouping separators (for example `12.50`); commas and grouped numbers are rejected. UTC date filters and command syntax keep their documented format.
 
 ## Villager trading and economic rates
 

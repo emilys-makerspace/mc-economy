@@ -1,0 +1,13 @@
+# Core localization — A10-02-03
+
+Covered banking/dashboard/history/review/help, world denomination, terminal setup, account lifecycle, finance reports, optional banker questions and Collection Agent messages use en_gb/fr_ca/fr_fr resources. en_us supplies the same new messages for fallback. Bank/network names, currency codes, identifiers, UTC instants and canonical command syntax remain stable. Uncovered asset names and operator diagnostics may remain English; this is not whole-mod translation acceptance.
+
+`banking/UiText` carries bounded deferred presentation messages with numbered arguments in source strings. Money arguments retain currency and signed long minor units; decimals retain exact BigDecimal scale; counts are integral. JDK locale number formatting only affects display. Canonical numeric parsing and request/evidence fields do not consume rendered values. Copyable numeric command cursors are string arguments. All new catalog calls have matching literal argument coverage and locale placeholder multisets.
+
+`UiPublication` resolves deferred messages in the receiving player's reported Minecraft locale before enforcing the existing 240-character body chunks, 256-character status, 128-character labels, 12,000 UTF-8 byte budget and menu-specific line limits. Long status text moves intact into the body. Overflow refuses the view and removes confirmation controls; unresolved original-operation identities and lookup remain protected. Markers never enter the final network snapshots. Command reports render for player locale or en_gb console. Client-owned labels and typed status money use `UiTextClient`; semantic operation reasons remain ordinary client translation keys.
+
+Deferred tokens use JSON between source-only control delimiters; recursive rendering and redaction are bounded. `mapText` redacts literal/argument strings without changing message keys or typed numbers. The existing BankingPresentation English inspection is diagnostic redaction only; it never decides operation state, authority or offered financial action. Access, action/value IDs, operation states, server grants and captured evidence remain authoritative.
+
+Banking wire10, banker/collection wire1, schema53 and public API versions2/1/1 are unchanged. Required dependencies and source registration remain unchanged. Numeric input explicitly uses ASCII digits, dot decimal separator and no grouping; French comma input is rejected. UTC filters retain ISO syntax.
+
+See [verification](../verification/A10-02-03.md). A10-03 owns the representative long French financial review and viewport/GUI-scale matrix. Resource completeness does not establish layout or multiplayer acceptance.

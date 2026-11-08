@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.*;
 import com.mojang.brigadier.context.CommandContext;
@@ -68,6 +69,6 @@ public final class CreditCommands {
             catch(IllegalArgumentException invalid){unavailable(source);}
         });return 1;
     }
-    private static void send(CommandSourceStack source,String line){source.sendSuccess(()->Component.literal(line),false);}
-    private static int unavailable(CommandSourceStack source){source.sendFailure(Component.literal("Credit diagnostics unavailable for this selection or cursor."));return 0;}
+    private static void send(CommandSourceStack source,String line){source.sendSuccess(()->UiText.component(source, line),false);}
+    private static int unavailable(CommandSourceStack source){source.sendFailure(UiText.component(source, UiText.t("ui.dialogue.credit_diagnostics_unavailable_for_this_sele.a0c34a")));return 0;}
 }

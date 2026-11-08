@@ -392,3 +392,29 @@ if (providers.gradleProperty('referenceTraderProbe').isPresent()) {
         }
     }
 }
+
+// Opt-in fresh-world dashboard/state witness, excluded from release jars.
+if (providers.gradleProperty('bankingDashboardProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.bankingDashboardProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'banking-dashboard-failed.txt').exists() || !new File(root, 'banking-dashboard-passed.txt').exists())
+                throw new GradleException('Banking dashboard/state witness did not pass')
+        }
+    }
+}
+
+// Opt-in native owner-history witness; release jars exclude all probe classes.
+if (providers.gradleProperty('bankingHistoryProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.bankingHistoryProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'banking-history-failed.txt').exists() || !new File(root, 'banking-history-passed.txt').exists())
+                throw new GradleException('Filtered owner-history witness did not pass')
+        }
+    }
+}

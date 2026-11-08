@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
 import ca.emilybelnavis.mcmods.economy.api.*;
@@ -83,7 +84,7 @@ public final class LoanMenus {
                 default -> throw new IllegalArgumentException("Loan action");
             }
         } catch (IllegalArgumentException | IllegalStateException | ArithmeticException invalid) {
-            unavailable(audience, "Review the current account, amount and live branch before trying again.");
+            unavailable(audience,UiText.t("ui.finance.loanmenus.1"));
         }
     }
     private static void home(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant,
@@ -92,18 +93,18 @@ public final class LoanMenus {
         audience.menu().setBusy(true);
         services.ledger().loanPage(grant, after, 8).whenComplete((found, error) -> {
             if (!audience.live()) return;
-            if (error != null || found.isEmpty()) { unavailable(audience, "Loan history is unavailable."); return; }
+            if (error != null || found.isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.2")); return; }
             var page = found.orElseThrow();
             state.next = page.nextCursor();
             var choices = new ArrayList<BankingNetwork.Choice>();
             for (var entry : page.entries()) {
                 var loan = entry.contract();
                 choices.add(choice("view", loan.id().toString(), InstitutionCatalog.require(loan.lender()).name()
-                        + " · " + money(loan.currency(), loan.owedMinor()) + " · " + loan.status(), false));
+                        + " · " + money(loan.currency(), loan.owedMinor()) + " · " + CreditReport.label(loan.status()), false));
             }
-            if (state.next != null) choices.add(choice("next", "", "More loans", false));
-            if (audience.menu().access() == BankingMenu.Access.KIOSK) choices.add(choice("apply", "", "Apply at this bank", false));
-            reply(audience, "finance_loan_home", List.of(page.entries().isEmpty() ? "You have no loans." : "Choose a loan to review its contract, schedule or repayment."), "My loans", choices);
+            if (state.next != null) choices.add(choice("next", "",UiText.t("ui.finance.loanmenus.3"), false));
+            if (audience.menu().access() == BankingMenu.Access.KIOSK) choices.add(choice("apply", "",UiText.t("ui.finance.loanmenus.4"), false));
+            reply(audience, "finance_loan_home", List.of(page.entries().isEmpty() ? UiText.t("ui.finance.loanmenus.5") : UiText.t("ui.finance.loanmenus.6")), UiText.t("ui.finance.my_loans"), choices);
         });
     }
     private static void view(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant,
@@ -113,7 +114,7 @@ public final class LoanMenus {
         audience.menu().setBusy(true);
         services.ledger().loanView(grant, id).thenCombine(accounts(services, grant), Map::entry).whenComplete((result, error) -> {
             if (!audience.live()) return;
-            if (error != null || result.getKey().isEmpty()) { unavailable(audience, "This loan is unavailable."); return; }
+            if (error != null || result.getKey().isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.7")); return; }
             var found = result.getKey().orElseThrow();
             state.loan = found.contract();
             state.accounts = result.getValue();
@@ -121,15 +122,14 @@ public final class LoanMenus {
             state.paymentFx = null;
             if (state.funding == null || !state.accounts.containsKey(state.funding.id().value())) state.funding = first(state.accounts);
             var choices = new ArrayList<BankingNetwork.Choice>();
-            choices.add(choice("schedule", "", "Original schedule", false));
-            choices.add(choice("inst", "", "Closed installments", false));
+            choices.add(choice("schedule", "",UiText.t("ui.finance.loanmenus.8"), false));
+            choices.add(choice("inst", "",UiText.t("ui.finance.loanmenus.9"), false));
             if (state.loan.status() == Loans.Status.ACTIVE) {
-                state.accounts.values().forEach(account -> choices.add(choice("funding", account.id().value().toString(),
-                        "Pay from " + account.currency().code(), state.funding != null && account.id().equals(state.funding.id()))));
-                choices.add(choice("repay", "", "Review payment amount", false));
-                choices.add(choice("payoff", "", "Review full payoff", false));
+                state.accounts.values().forEach(account -> choices.add(choice("funding", account.id().value().toString(),UiText.t("ui.finance.loanmenus.10", account.currency().code()), state.funding != null && account.id().equals(state.funding.id()))));
+                choices.add(choice("repay", "",UiText.t("ui.finance.loanmenus.11"), false));
+                choices.add(choice("payoff", "",UiText.t("ui.finance.loanmenus.12"), false));
             }
-            reply(audience, "finance_loan_payment", LoanReport.owner(found), "Loan contract", choices);
+            reply(audience, "finance_loan_payment", LoanReport.owner(found), UiText.t("ui.finance.loan_contract"), choices);
         });
     }
     private static void schedule(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant,
@@ -140,13 +140,13 @@ public final class LoanMenus {
         audience.menu().setBusy(true);
         services.ledger().loanSchedulePage(grant, state.loan.id(), state.scheduleAfter, 8).whenComplete((found, error) -> {
             if (!audience.live()) return;
-            if (error != null || found.isEmpty()) { unavailable(audience, "The schedule is unavailable."); return; }
+            if (error != null || found.isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.13")); return; }
             var page = found.orElseThrow();
             state.scheduleNext = page.nextOrdinal();
             var choices = new ArrayList<BankingNetwork.Choice>();
-            if (state.scheduleNext != null) choices.add(choice("sched_next", "", "More schedule rows", false));
-            choices.add(choice("home", "", "My loans", false));
-            reply(audience, "finance_loan_schedule", LoanReport.schedule(page), "Original schedule", choices);
+            if (state.scheduleNext != null) choices.add(choice("sched_next", "",UiText.t("ui.finance.loanmenus.14"), false));
+            choices.add(choice("home", "",UiText.t("ui.finance.loanmenus.15"), false));
+            reply(audience, "finance_loan_schedule", LoanReport.schedule(page), UiText.t("ui.finance.schedule"), choices);
         });
     }
     private static void installments(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant,
@@ -157,13 +157,13 @@ public final class LoanMenus {
         audience.menu().setBusy(true);
         services.ledger().loanInstallments(grant, state.loan.id(), state.installmentAfter, 8).whenComplete((found, error) -> {
             if (!audience.live()) return;
-            if (error != null || found.isEmpty()) { unavailable(audience, "The installments are unavailable."); return; }
+            if (error != null || found.isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.16")); return; }
             var page = found.orElseThrow();
             state.installmentNext = page.nextOrdinal();
             var choices = new ArrayList<BankingNetwork.Choice>();
-            if (state.installmentNext != null) choices.add(choice("inst_next", "", "More installments", false));
-            choices.add(choice("home", "", "My loans", false));
-            reply(audience, "finance_loan_schedule", LoanReport.installments(page), "Closed installments", choices);
+            if (state.installmentNext != null) choices.add(choice("inst_next", "",UiText.t("ui.finance.loanmenus.17"), false));
+            choices.add(choice("home", "",UiText.t("ui.finance.loanmenus.15"), false));
+            reply(audience, "finance_loan_schedule", LoanReport.installments(page), UiText.t("ui.finance.installments"), choices);
         });
     }
     private static void application(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state) {
@@ -172,23 +172,20 @@ public final class LoanMenus {
         services.ledger().branchContext(grant, audience.menu().anchor(), null).thenCombine(accounts(services, grant), Map::entry)
                 .whenComplete((result, error) -> {
             if (!audience.live()) return;
-            if (error != null || result.getKey().isEmpty()) { unavailable(audience, "The branch is unavailable."); return; }
+            if (error != null || result.getKey().isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.18")); return; }
             var branch = result.getKey().orElseThrow();
             InstitutionCatalog.Entry bank;
             try { bank = bank(branch); }
-            catch (IllegalArgumentException unavailable) { unavailable(audience, "Visit a live branded bank kiosk for loan applications."); return; }
+            catch (IllegalArgumentException unavailable) { unavailable(audience,UiText.t("ui.finance.loanmenus.19")); return; }
             state.accounts = result.getValue();
             if (state.destination == null || !state.accounts.containsKey(state.destination.id().value())) state.destination = first(state.accounts);
             if (!bank.tier1()) state.product = CreditUnderwriting.Product.BANK_LOAN;
             var choices = new ArrayList<BankingNetwork.Choice>();
-            choices.add(choice("product", CreditUnderwriting.Product.BANK_LOAN.name(), "Bank loan", state.product == CreditUnderwriting.Product.BANK_LOAN));
-            if (bank.tier1()) choices.add(choice("product", CreditUnderwriting.Product.SUBPRIME_LOAN.name(), "Ironbridge subprime", state.product == CreditUnderwriting.Product.SUBPRIME_LOAN));
-            state.accounts.values().forEach(account -> choices.add(choice("destination", account.id().value().toString(),
-                    "Receive in " + account.currency().code(), state.destination != null && account.id().equals(state.destination.id()))));
-            if (state.destination != null) choices.add(choice("preview", "", "Review requested loan", false));
-            reply(audience, "finance_loan_input", List.of(bank.name() + " loan applications", "Enter whole principal units and term years, for example 1000 2.",
-                    "Bank loans use the bank's base currency. Subprime uses world currency.", "A foreign destination requires a separately displayed FX conversion and fee.",
-                    "Fixed, unsecured loans only. Collateral and variable-rate loans are unavailable."), "Choose product and destination", choices);
+            choices.add(choice("product", CreditUnderwriting.Product.BANK_LOAN.name(),UiText.t("ui.finance.loanmenus.20"), state.product == CreditUnderwriting.Product.BANK_LOAN));
+            if (bank.tier1()) choices.add(choice("product", CreditUnderwriting.Product.SUBPRIME_LOAN.name(),UiText.t("ui.finance.loanmenus.21"), state.product == CreditUnderwriting.Product.SUBPRIME_LOAN));
+            state.accounts.values().forEach(account -> choices.add(choice("destination", account.id().value().toString(),UiText.t("ui.finance.loanmenus.22", account.currency().code()), state.destination != null && account.id().equals(state.destination.id()))));
+            if (state.destination != null) choices.add(choice("preview", "",UiText.t("ui.finance.loanmenus.23"), false));
+            reply(audience, "finance_loan_input", List.of(UiText.t("ui.finance.loanmenus.24", bank.name()),UiText.t("ui.finance.loanmenus.25"),UiText.t("ui.finance.loanmenus.26"),UiText.t("ui.finance.loanmenus.27"),UiText.t("ui.finance.loanmenus.28")), UiText.t("ui.finance.choose_product_destination"), choices);
         });
     }
     private static void preview(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant,
@@ -227,14 +224,13 @@ public final class LoanMenus {
             });
         }).whenComplete((found, error) -> {
             if (!audience.live()) return;
-            if (error != null || found.isEmpty()) { unavailable(audience, "Current loan terms are unavailable."); return; }
+            if (error != null || found.isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.29")); return; }
             var data = found.orElseThrow();
             var branch = data.getKey();
             var context = data.getValue().getKey();
             var offer = data.getValue().getValue();
             if (!offer.worldOffer().available() || !offer.worldOffer().approved()) {
-                reply(audience, "finance_loan_offer", List.of("Application eligibility result " + offer.worldOffer().reason(),
-                        "Maximum principal " + money(offer.maximumNativePrincipal()), "No loan has been opened."), "Application unavailable", List.of(choice("apply", "", "Review application", false)));
+                reply(audience, "finance_loan_offer", List.of(UiText.t("ui.finance.loanmenus.30", CreditReport.label(offer.worldOffer().reason())),UiText.t("ui.finance.loanmenus.31", money(offer.maximumNativePrincipal())),UiText.t("ui.finance.loanmenus.32")), UiText.t("ui.finance.application_unavailable"), List.of(choice("apply", "",UiText.t("ui.finance.loanmenus.33"), false)));
                 return;
             }
             try {
@@ -252,11 +248,11 @@ public final class LoanMenus {
                 } else {
                     services.ledger().quoteLoanDisbursementFx(grant, request).whenComplete((fx, fxError) -> {
                         if (!audience.live()) return;
-                        if (fxError != null || fx.isEmpty()) { unavailable(audience, "The explicit disbursement FX quote is unavailable."); return; }
+                        if (fxError != null || fx.isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.34")); return; }
                         publishOffer(audience, state, new ApplicationPreview(branch, context, offer, request, fx.orElseThrow(), expiresAt));
                     });
                 }
-            } catch (IllegalArgumentException | IllegalStateException invalid) { unavailable(audience, "The branch changed. Review a fresh offer."); }
+            } catch (IllegalArgumentException | IllegalStateException invalid) { unavailable(audience,UiText.t("ui.finance.loanmenus.35")); }
         });
     }
     private static void publishOffer(FinanceMenuSupport.Audience audience, State state, ApplicationPreview preview) {
@@ -265,20 +261,19 @@ public final class LoanMenus {
         var offer = preview.offer().worldOffer();
         var schedule = LoanServicing.schedule(request.currency(), request.principalMinor(), offer.apr(), request.years(), request.product() == CreditUnderwriting.Product.SUBPRIME_LOAN);
         var lines = new ArrayList<String>();
-        lines.add("Requested principal " + money(request.currency(), request.principalMinor()) + " over " + request.years() + " financial years.");
-        lines.add("Fixed APR " + offer.apr().movePointRight(2).stripTrailingZeros().toPlainString() + "%. Monthly rate is APR / 13.");
-        lines.add("13 installments per year. Normal installment " + money(request.currency(), schedule.installmentMinor()) + ". Final installment reconciles rounding.");
+        lines.add(UiText.t("ui.finance.loanmenus.36", money(request.currency(), request.principalMinor()), request.years()));
+        lines.add(UiText.t("ui.finance.loanmenus.37", UiText.decimal(offer.apr().movePointRight(2).stripTrailingZeros())));
+        lines.add(UiText.t("ui.finance.loanmenus.38", money(request.currency(), schedule.installmentMinor())));
         long firstDue = Math.addExact(System.currentTimeMillis(), Loans.MONTH);
-        lines.add("First installment is due 28 financial days after committed origination. Approximate due time " + Instant.ofEpochMilli(firstDue) + ".");
-        lines.add("No origination fee. Unsecured debt. Missed requirements cause arrears, then default and collections after three past-due months.");
-        lines.add("Payment reporting starts two days after due dates. A default remains reported for seven financial years.");
+        lines.add(UiText.t("ui.finance.loanmenus.39", Instant.ofEpochMilli(firstDue)));
+        lines.add(UiText.t("ui.finance.loanmenus.40"));
+        lines.add(UiText.t("ui.finance.loanmenus.41"));
         if (preview.fx() != null) {
-            lines.add("Explicit conversion credits " + money(preview.fx().destinationCurrency(), preview.fx().creditedMinor()) + ".");
-            lines.add("Conversion fee " + money(preview.fx().destinationCurrency(), preview.fx().feeFundingMinor()) + ". Net received "
-                    + money(preview.fx().destinationCurrency(), Math.subtractExact(preview.fx().creditedMinor(), preview.fx().feeFundingMinor())) + ".");
-        } else lines.add("Receive " + money(request.currency(), request.principalMinor()) + " in the selected owned account.");
-        lines.add("Confirm within 30 seconds at this same live branch. Current eligibility and all revisions are checked again.");
-        reply(audience, "finance_loan_offer", lines, "Review loan terms", List.of(choice("confirm", "", "Confirm loan application", false), choice("apply", "", "Change application", false)));
+            lines.add(UiText.t("ui.finance.loanmenus.42", money(preview.fx().destinationCurrency(), preview.fx().creditedMinor())));
+            lines.add(UiText.t("ui.finance.loanmenus.43", money(preview.fx().destinationCurrency(), preview.fx().feeFundingMinor()), money(preview.fx().destinationCurrency(), Math.subtractExact(preview.fx().creditedMinor(), preview.fx().feeFundingMinor()))));
+        } else lines.add(UiText.t("ui.finance.loanmenus.44", money(request.currency(), request.principalMinor())));
+        lines.add(UiText.t("ui.finance.loanmenus.45"));
+        reply(audience, "finance_loan_offer", lines, UiText.t("ui.finance.review_terms"), List.of(choice("confirm", "",UiText.t("ui.finance.loanmenus.46"), false), choice("apply", "",UiText.t("ui.finance.loanmenus.47"), false)));
     }
     private static void confirm(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state) {
         requireOffered(audience, PREFIX + "confirm", "");
@@ -302,14 +297,13 @@ public final class LoanMenus {
         state.funding = Objects.requireNonNull(state.accounts.get(UUID.fromString(value)));
         state.payment = null;
         state.paymentFx = null;
-        reply(audience, "finance_loan_payment", List.of("Selected funding account " + state.funding.currency().code(),
-                "Enter an amount in the loan's currency, or choose full payoff. Any FX fee is shown before confirmation."), "Choose payment amount", paymentChoices(state));
+        reply(audience, "finance_loan_payment", List.of(UiText.t("ui.finance.loanmenus.48", state.funding.currency().code()),UiText.t("ui.finance.loanmenus.49")), UiText.t("ui.finance.choose_amount"), paymentChoices(state));
     }
     private static List<BankingNetwork.Choice> paymentChoices(State state) {
         var choices = new ArrayList<BankingNetwork.Choice>();
-        state.accounts.values().forEach(account -> choices.add(choice("funding", account.id().value().toString(), "Pay from " + account.currency().code(), account.id().equals(state.funding.id()))));
-        choices.add(choice("repay", "", "Review payment amount", false));
-        choices.add(choice("payoff", "", "Review full payoff", false));
+        state.accounts.values().forEach(account -> choices.add(choice("funding", account.id().value().toString(),UiText.t("ui.finance.loanmenus.10", account.currency().code()), account.id().equals(state.funding.id()))));
+        choices.add(choice("repay", "",UiText.t("ui.finance.loanmenus.11"), false));
+        choices.add(choice("payoff", "",UiText.t("ui.finance.loanmenus.12"), false));
         return choices;
     }
     private static void payment(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state, String value, boolean payoff) {
@@ -324,14 +318,14 @@ public final class LoanMenus {
         if (funding.currency() == loan.currency()) {
             services.ledger().quoteLoanRepayment(grant, loan.id(), funding.id(), amount, payoff).whenComplete((found, error) -> {
                 if (!audience.live()) return;
-                if (error != null || found.isEmpty()) { unavailable(audience, "The current repayment quote is unavailable."); return; }
+                if (error != null || found.isEmpty()) { unavailable(audience,UiText.t("ui.finance.loanmenus.50")); return; }
                 state.payment = found.orElseThrow();
                 publishPayment(audience, state.payment, null, loan.currency());
             });
         } else {
             services.ledger().quoteLoanRepaymentFx(grant, loan.id(), funding.id(), amount, payoff).whenComplete((quote, error) -> {
                 if (!audience.live()) return;
-                if (error != null) { unavailable(audience, "The current repayment FX quote is unavailable."); return; }
+                if (error != null) { unavailable(audience,UiText.t("ui.finance.loanmenus.51")); return; }
                 state.paymentFx = quote;
                 publishPayment(audience, quote.payment(), quote, loan.currency());
             });
@@ -340,14 +334,14 @@ public final class LoanMenus {
     private static void publishPayment(FinanceMenuSupport.Audience audience, Loans.PaymentQuote quote, LoanRepaymentFx.Quote fx, EconomyCurrency currency) {
         var r = quote.request();
         var lines = new ArrayList<String>();
-        lines.add(r.fullPayoff() ? "Full payoff includes earned interest at the quoted instant." : "A partial payment reduces earned interest first, then principal, under the saved allocation policy.");
+        lines.add(r.fullPayoff() ? UiText.t("ui.finance.loanmenus.52") : UiText.t("ui.finance.loanmenus.53"));
         if (fx != null) {
-            lines.add("Loan receives " + money(fx.fx().credit()) + ". Funding debit " + money(fx.fx().debit()) + ".");
-            lines.add("Explicit FX fee " + money(fx.fx().fee()) + ". Total funding debit " + money(fx.fx().debit().currency(), Math.addExact(fx.fx().debit().minorUnits(), fx.fx().fee().minorUnits())) + ".");
-        } else lines.add("Debit and apply " + money(currency, r.amountMinor()) + ". Fee 0.");
-        lines.add("Expires " + Instant.ofEpochMilli(r.expiresAt()) + ". Funding and loan revisions are checked again.");
-        if (r.fullPayoff()) lines.add("Successful full payoff waives additional unposted interest earned only within this quote window.");
-        reply(audience, "finance_loan_pay_quote", lines, "Review loan repayment", List.of(choice("pay_confirm", "", "Confirm loan repayment", false), choice("home", "", "My loans", false)));
+            lines.add(UiText.t("ui.finance.loanmenus.54", money(fx.fx().credit()), money(fx.fx().debit())));
+            lines.add(UiText.t("ui.finance.loanmenus.55", money(fx.fx().fee()), money(fx.fx().debit().currency(), Math.addExact(fx.fx().debit().minorUnits(), fx.fx().fee().minorUnits()))));
+        } else lines.add(UiText.t("ui.finance.loanmenus.56", money(currency, r.amountMinor())));
+        lines.add(UiText.t("ui.finance.loanmenus.57", Instant.ofEpochMilli(r.expiresAt())));
+        if (r.fullPayoff()) lines.add(UiText.t("ui.finance.loanmenus.58"));
+        reply(audience, "finance_loan_pay_quote", lines, UiText.t("ui.finance.review_repayment"), List.of(choice("pay_confirm", "",UiText.t("ui.finance.loanmenus.59"), false), choice("home", "",UiText.t("ui.finance.loanmenus.15"), false)));
     }
     private static void payConfirm(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state) {
         requireOffered(audience, PREFIX + "pay_confirm", "");
@@ -386,23 +380,13 @@ public final class LoanMenus {
         return new BankingNetwork.Choice(PREFIX + action, value, label, selected);
     }
     private static void unavailable(FinanceMenuSupport.Audience audience, String text) {
-        reply(audience, "finance_loan_home", List.of(text), "Loan request unavailable", List.of(choice("home", "", "My loans", false)));
+        audience.decline("finance_loan_home", List.of(text),UiText.t("ui.finance.loanmenus.60"), List.of(choice("home", "",UiText.t("ui.finance.loanmenus.15"), false)));
     }
     private static void reply(FinanceMenuSupport.Audience audience, String page, List<String> lines, String status, List<BankingNetwork.Choice> choices) {
-        var bounded = new ArrayList<String>();
-        for (String line : lines) {
-            int offset = 0;
-            do {
-                int end = Math.min(offset + 240, line.length());
-                bounded.add(line.substring(offset, end));
-                offset = end;
-            } while (offset < line.length());
-        }
-        if (bounded.size() > 32) throw new IllegalArgumentException("Loan response bound");
-        audience.reply(page, bounded, status, choices);
+        audience.reply(page, lines, status, choices);
     }
     private static String money(EconomyCurrency currency, long minor) { return money(new Money(currency, minor)); }
-    private static String money(Money money) { return money.majorUnits().toPlainString() + " " + money.currency().code(); }
+    private static String money(Money money) { return UiText.money(money); }
     private static long amount(EconomyCurrency currency, String value) {
         if (!value.matches("[0-9]{1,18}(\\.[0-9]{1,2})?")) throw new IllegalArgumentException("Payment amount");
         long amount = new BigDecimal(value).multiply(BigDecimal.valueOf(currency.minorUnitsPerMajor())).longValueExact();

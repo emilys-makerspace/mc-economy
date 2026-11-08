@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import ca.emilybelnavis.mcmods.economy.api.EconomyCurrency;
@@ -54,7 +55,7 @@ public final class DenominationChooser {
                     if (chooser == null || player == null || source.source != player
                             || !chooser.choose(player, chooser.lease,
                             StringArgumentType.getString(context, "currency").toUpperCase(java.util.Locale.ROOT))) {
-                        source.sendFailure(Component.literal("Currency choice unavailable. Use the current chooser prompt."));
+                        source.sendFailure(UiText.component(source, UiText.t("ui.dialogue.currency_choice_unavailable_use_the_current_.870ee0")));
                         return 0;
                     }
                     return 1;
@@ -87,8 +88,7 @@ public final class DenominationChooser {
         holder = players.isEmpty() ? null : players.getFirst();
         lease = holder == null ? null : UUID.randomUUID();
         if (holder != null) ca.emilybelnavis.mcmods.economy.banking.BankingController.openWorldSetup(holder, lease);
-        if (holder != null) holder.sendSystemMessage(Component.literal("Choose this world's currency with /economy choose "
-                + "<currency> (for example, /economy choose CAD). Available: " + EconomyCurrency.all()));
+        if (holder != null) holder.sendSystemMessage(UiText.component(holder, UiText.t("ui.dialogue.world_currency_prompt", EconomyCurrency.all().toString())));
     }
 
     public boolean canChoose(ServerPlayer player, UUID suppliedLease) {
@@ -123,7 +123,7 @@ public final class DenominationChooser {
             uncertain = false;
             open = outcome.status() == Journal.Status.COMMITTED || outcome.result().code().equals("FX_ALREADY_OPEN");
             if (open && holder != null && holder.server.getPlayerList().getPlayer(holder.getUUID()) == holder) {
-                holder.sendSystemMessage(Component.literal("World currency selected."));
+                holder.sendSystemMessage(UiText.component(holder, UiText.t("ui.dialogue.world_currency_selected.cba0c2")));
             }
             accepted = null;
             holder = null;

@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.banking.*;
 import ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle;
@@ -31,13 +32,13 @@ public final class FinanceReports {
                 if (error != null || found.isEmpty()) { unavailable(audience); return; }
                 var snapshot = found.orElseThrow();
                 var lines = new ArrayList<String>();
-                lines.add("Tier 2 begins at 100,000,000 in the current server currency.");
-                if (snapshot.netWorth() != null) lines.add("Net worth " + snapshot.netWorth().toPlainString() + " " + snapshot.denomination());
-                lines.add("Qualification " + (snapshot.available() ? snapshot.eligible() ? "Tier 2 eligible" : "Tier 1" : "unavailable"));
-                lines.add("Availability " + snapshot.reason());
-                lines.add("Valued at " + snapshot.valuedAt() + " with policy v" + snapshot.policyVersion());
-                lines.add("Includes supported assets and liabilities. Trading and collateral lending are unavailable.");
-                audience.reply("finance_wealth", lines, "Net worth and tier", List.of());
+                lines.add(UiText.t("ui.finance.financereports.1"));
+                if (snapshot.netWorth() != null) lines.add(UiText.t("ui.finance.financereports.2", UiText.decimal(snapshot.netWorth()), snapshot.denomination()));
+                lines.add(UiText.t("ui.finance.financereports.3", (snapshot.available() ? snapshot.eligible() ? UiText.t("ui.finance.tier2") : UiText.t("ui.finance.tier1") : UiText.t("ui.finance.unavailable"))));
+                lines.add(UiText.t("ui.finance.financereports.4", CreditReport.label(snapshot.reason())));
+                lines.add(UiText.t("ui.finance.financereports.5", snapshot.valuedAt(), snapshot.policyVersion()));
+                lines.add(UiText.t("ui.finance.financereports.6"));
+                audience.reply("finance_wealth", lines,UiText.t("ui.finance.financereports.7"), List.of());
             });
         } else if (action.startsWith("finance_cases")) {
             if (action.equals("finance_cases")) state.cases = null;
@@ -46,10 +47,10 @@ public final class FinanceReports {
                 if (error != null || found.isEmpty()) { unavailable(audience); return; }
                 var page = found.orElseThrow(); state.cases = page.nextCursor();
                 var choices = state.cases == null ? List.<BankingNetwork.Choice>of()
-                        : List.of(new BankingNetwork.Choice("finance_cases_next", "", "Next cases", false));
+                        : List.of(new BankingNetwork.Choice("finance_cases_next", "",UiText.t("ui.finance.financereports.8"), false));
                 var lines = new ArrayList<>(DebtReport.cases(page));
-                lines.add("Use the Collection Agent for protected partial or full payments on collectible cases.");
-                audience.reply("finance_cases", lines, "Collections", choices);
+                lines.add(UiText.t("ui.finance.financereports.9"));
+                audience.reply("finance_cases", lines,UiText.t("ui.finance.financecollections.2"), choices);
             });
         } else {
             if (action.equals("finance_report")) state.reports = null;
@@ -57,12 +58,12 @@ public final class FinanceReports {
                 if (!audience.live()) return;
                 if (error != null || found.isEmpty()) { unavailable(audience); return; }
                 var page = found.orElseThrow(); state.reports = page.nextCursor();
-                audience.reply("finance_report", DebtReport.reports(page, null), "Credit report",
-                        state.reports == null ? List.of() : List.of(new BankingNetwork.Choice("finance_report_next", "", "Next reports", false)));
+                audience.reply("finance_report", DebtReport.reports(page, null),UiText.t("ui.finance.financereports.10"),
+                        state.reports == null ? List.of() : List.of(new BankingNetwork.Choice("finance_report_next", "",UiText.t("ui.finance.financereports.11"), false)));
             });
         }
     }
     private static void unavailable(FinanceMenuSupport.Audience audience) {
-        audience.reply("finance_report", List.of("Refresh this owner view when services are ready."), "Report unavailable", List.of());
+        audience.reply("finance_report", List.of(UiText.t("ui.finance.financereports.13")),UiText.t("ui.finance.financereports.12"), List.of());
     }
 }

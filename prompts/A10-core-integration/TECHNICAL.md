@@ -1,5 +1,9 @@
 # A10 technical contract — revision 1
 
+A10-02-02 delivery: [wire10/schema53 owner history](../../.codex/architecture/owner-history.md) installs the filtered/captured-detail design. A single general atomic post-commit projection hook replaces the proposed runtime catch-up, without per-handler changes or menu bootstrap. The legacy cursor and publication-family meanings remain unchanged. Full localization/layout/network/API/operations still require separate selections.
+
+Implementation progress: [A10-02-01](../../.codex/A10-02-01.md) installs the bounded dashboard, structured state and banking wire9 in its [recorded scope](../../.codex/architecture/banking-dashboard.md). Version8/source-gap statements below describe the approved design baseline; later history/localization/layout/network/API/operations remain separate selections. Any further delivered codec change requires a new transport version.
+
 Status: technical revision1 approved 2026-11-08 with all A10 prompts, subject to prerequisites. No implementation package is selected/executed by this document. [Source map](SOURCE_MAP.md) distinguishes existing behavior from additions below; [runtime plan](RUNTIME_PLAN.md) defines engineering workloads/budgets and resource caveats. A10-01 revalidated source feasibility and froze [implementation contracts](../../.codex/architecture/a10-source-contracts.md); these refine proposed symbols/bounds and record resource gaps without implementing them.
 
 ## Scope, ownership and compatibility

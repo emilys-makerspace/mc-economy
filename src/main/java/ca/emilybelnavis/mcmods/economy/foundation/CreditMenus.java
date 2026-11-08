@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
 import ca.emilybelnavis.mcmods.economy.api.*;
@@ -72,9 +73,8 @@ public final class CreditMenus {
                 case "finance_credit_network" -> {
                     requireOffered(audience, action, value);
                     state.network = InstitutionCatalog.Network.valueOf(value);
-                    audience.reply("finance_credit", terms(state.network, List.of("Enter the requested whole-unit credit limit.",
-                            state.context.profile().isEmpty() ? "Your first facility must have a 2,500 limit in world currency." : "Approval uses your current score and total exposure.")),
-                            "Requested credit limit", List.of(choice("finance_credit_preview", "", "Review limit")));
+                    audience.reply("finance_credit", terms(state.network, List.of(UiText.t("ui.finance.creditmenus.2"),
+                            state.context.profile().isEmpty() ? UiText.t("ui.finance.creditmenus.3") : UiText.t("ui.finance.creditmenus.4"))),UiText.t("ui.finance.creditmenus.1"), List.of(choice("finance_credit_preview", "",UiText.t("ui.finance.creditmenus.5"))));
                 }
                 case "finance_credit_preview" -> preview(audience, state, value, false);
                 case "finance_credit_limit" -> preview(audience, state, value, true);
@@ -111,15 +111,12 @@ public final class CreditMenus {
             state.context = snapshot.context();
             var bank = InstitutionCatalog.require(state.branch.terminal().binding().institution());
             if (!bank.tier1() && (!state.context.tier().available() || !state.context.tier().eligible())) {
-                audience.reply("finance_credit", List.of("This institution requires current Tier 2 qualification."),
-                        "Credit application unavailable", List.of());
+                audience.reply("finance_credit", List.of(UiText.t("ui.finance.creditmenus.7")),UiText.t("ui.finance.creditmenus.6"), List.of());
                 return;
             }
             state.currency = state.context.profile().isEmpty() ? state.context.denomination().currency() : bank.baseCurrency();
             var choices = bank.networks().stream().sorted().map(network -> choice("finance_credit_network", network.name(), network.name())).toList();
-            audience.reply("finance_credit", List.of(bank.name(), "Contract currency " + state.currency.code(),
-                    "A first issued facility establishes credit. An accepted later application records an inquiry.",
-                    "Choose a payment network to review its fixed purchase and advance APRs."), "Credit application", choices);
+            audience.reply("finance_credit", List.of(bank.name(),UiText.t("ui.finance.creditmenus.9", state.currency.code()),UiText.t("ui.finance.creditmenus.10"),UiText.t("ui.finance.creditmenus.11")),UiText.t("ui.finance.creditmenus.8"), choices);
         });
     }
 
@@ -145,11 +142,8 @@ public final class CreditMenus {
         if (!increase && state.context.profile().isEmpty() && state.limit != Math.multiplyExact(2_500L, state.currency.minorUnitsPerMajor()))
             throw new IllegalArgumentException("Starter exact limit");
         String confirm = increase ? "finance_credit_raise_ok" : "finance_credit_confirm";
-        var lines = terms(state.network, List.of("Requested limit " + money(state.currency, state.limit),
-                "Current saved score " + state.context.profile().map(profile -> Integer.toString(profile.score())).orElse("650 on first issuance"),
-                "Final approval rechecks issuer funding, score, exposure and Tier qualification.",
-                "Accepted applications can affect your credit score. New cards are collected from protected claims."));
-        audience.reply("finance_credit", lines, "Review credit application", List.of(choice(confirm, "", "Submit application")));
+        var lines = terms(state.network, List.of(UiText.t("ui.finance.creditmenus.12", money(state.currency, state.limit)),UiText.t("ui.finance.creditmenus.13", state.context.profile().map(profile -> Integer.toString(profile.score())).orElse(UiText.t("ui.finance.first_score"))),UiText.t("ui.finance.creditmenus.14"),UiText.t("ui.finance.creditmenus.15")));
+        audience.reply("finance_credit", lines,UiText.t("ui.finance.creditmenus.16"), List.of(choice(confirm, "",UiText.t("ui.finance.creditmenus.17"))));
         state.previewRevision = audience.menu().revision();
     }
 
@@ -188,11 +182,8 @@ public final class CreditMenus {
             if (!audience.live()) return;
             if (error != null || found.isEmpty()) { unavailable(audience); return; }
             state.accounts = found.orElseThrow();
-            var choices = state.accounts.values().stream().map(account -> choice("finance_credit_fund", account.id().value().toString(),
-                    account.currency().code() + " account" + (account.currency() == state.facility.currency() ? "" : " · FX quote required"))).toList();
-            audience.reply("finance_credit", List.of("Posted balance " + money(state.facility.currency(), state.facility.owedMinor()),
-                    "Unmet minimum " + money(state.facility.currency(), state.facility.requiredMinor()),
-                    "Choose your funding account. Cross-currency payment includes an explicit FX fee."), "Credit repayment funding", choices);
+            var choices = state.accounts.values().stream().map(account -> choice("finance_credit_fund", account.id().value().toString(),UiText.t("ui.finance.creditmenus.18", account.currency().code(), (account.currency() == state.facility.currency() ? "" : UiText.t("ui.finance.fx_required"))))).toList();
+            audience.reply("finance_credit", List.of(UiText.t("ui.finance.creditmenus.20", money(state.facility.currency(), state.facility.owedMinor())),UiText.t("ui.finance.creditmenus.21", money(state.facility.currency(), state.facility.requiredMinor())),UiText.t("ui.finance.creditmenus.22")),UiText.t("ui.finance.creditmenus.19"), choices);
         });
     }
 
@@ -214,10 +205,9 @@ public final class CreditMenus {
                     InstitutionCatalog.require(facility.issuer()).name() + " · " + facility.network() + " · " + money(facility.currency(), facility.owedMinor())));
             if (page.size() == 16) {
                 state.after = page.getLast().id();
-                choices.add(choice("finance_credit_more", "", "More facilities"));
+                choices.add(choice("finance_credit_more", "",UiText.t("ui.finance.creditmenus.23")));
             }
-            audience.reply("finance_credit", List.of(offered.isEmpty() ? "No eligible credit facility is on this page." : "Choose your credit facility.",
-                    "Defaulted debt is serviced through collections."), state.cardMode ? "Credit cards" : state.increasing ? "Increase credit limit" : "Credit repayment", choices);
+            audience.reply("finance_credit", List.of(offered.isEmpty() ? UiText.t("ui.finance.creditmenus.24") : UiText.t("ui.finance.creditmenus.25"),UiText.t("ui.finance.creditmenus.26")), state.cardMode ? UiText.t("ui.finance.cards") : state.increasing ? UiText.t("ui.finance.increase") : UiText.t("ui.finance.repayment"), choices);
         });
     }
 
@@ -240,23 +230,18 @@ public final class CreditMenus {
             state.token = found.orElseThrow();
             var choices = new ArrayList<BankingNetwork.Choice>();
             if (state.token.status() == ca.emilybelnavis.mcmods.economy.card.IssuedCards.Status.ACTIVE)
-                choices.add(choice("finance_credit_lost", "", "Report card lost"));
+                choices.add(choice("finance_credit_lost", "",UiText.t("ui.finance.creditmenus.27")));
             if (audience.menu().access() == BankingMenu.Access.KIOSK)
-                choices.add(choice("finance_credit_replace", "", "Review card replacement"));
-            choices.add(choice("claims", "", "Collect issued card"));
-            audience.reply("finance_credit", List.of(InstitutionCatalog.require(state.token.issuer()).name() + " · " + state.token.network(),
-                    "Saved card status " + state.token.status(), "Card expires " + Instant.ofEpochMilli(state.token.expiresAt()),
-                    "Replacement requires this issuer's live branch kiosk. Reporting lost revokes spending access immediately.",
-                    "An issued card is delivered through protected claims. Collect it once from Claims."), "Credit card", choices);
+                choices.add(choice("finance_credit_replace", "",UiText.t("ui.finance.creditmenus.28")));
+            choices.add(choice("claims", "",UiText.t("ui.finance.creditmenus.29")));
+            audience.reply("finance_credit", List.of(InstitutionCatalog.require(state.token.issuer()).name() + " · " + state.token.network(),UiText.t("ui.finance.creditmenus.31", CreditReport.label(state.token.status())),UiText.t("ui.finance.creditmenus.32", Instant.ofEpochMilli(state.token.expiresAt())),UiText.t("ui.finance.creditmenus.33"),UiText.t("ui.finance.creditmenus.34")),UiText.t("ui.finance.creditmenus.30"), choices);
         });
     }
 
     private static void lostPreview(FinanceMenuSupport.Audience audience, State state) {
         requireOffered(audience, "finance_credit_lost", "");
         if (state.token == null) throw new IllegalStateException("Missing card");
-        audience.reply("finance_credit", List.of("Reporting this card lost revokes its spending access.",
-                "Your debt and repayment access remain. Replacement is available at the issuer's branch kiosk."),
-                "Review lost card report", List.of(choice("finance_credit_lost_ok", "", "Revoke lost card")));
+        audience.reply("finance_credit", List.of(UiText.t("ui.finance.creditmenus.36"),UiText.t("ui.finance.creditmenus.37")),UiText.t("ui.finance.creditmenus.35"), List.of(choice("finance_credit_lost_ok", "",UiText.t("ui.finance.creditmenus.38"))));
         state.previewRevision = audience.menu().revision();
     }
 
@@ -290,11 +275,8 @@ public final class CreditMenus {
                 if (!audience.live()) return;
                 if (failed != null || found.isEmpty()) { unavailable(audience); return; }
                 state.accounts = found.orElseThrow();
-                var choices = state.accounts.values().stream().map(account -> choice("finance_credit_fee", account.id().value().toString(),
-                        account.currency().code() + " funding account")).toList();
-                audience.reply("finance_credit", List.of("Early replacement costs 25 world-currency units.",
-                        "Choose a funding account to review the combined replacement and FX debit before confirmation."),
-                        "Replacement fee funding", choices);
+                var choices = state.accounts.values().stream().map(account -> choice("finance_credit_fee", account.id().value().toString(),UiText.t("ui.finance.creditmenus.39", account.currency().code()))).toList();
+                audience.reply("finance_credit", List.of(UiText.t("ui.finance.creditmenus.41"),UiText.t("ui.finance.creditmenus.42")),UiText.t("ui.finance.creditmenus.40"), choices);
             });
         });
     }
@@ -329,18 +311,18 @@ public final class CreditMenus {
 
     private static void replacementReview(FinanceMenuSupport.Audience audience, State state) {
         var lines = new ArrayList<String>();
-        lines.add("Issuer " + InstitutionCatalog.require(state.token.issuer()).name());
-        if (state.replacementFee == null) lines.add("Renewal-window replacement fee 0.");
+        lines.add(UiText.t("ui.finance.creditmenus.43", InstitutionCatalog.require(state.token.issuer()).name()));
+        if (state.replacementFee == null) lines.add(UiText.t("ui.finance.creditmenus.44"));
         else {
             var capture = state.replacementFee.capture().split("\\|", -1);
-            lines.add("Converted replacement fee " + money(state.replacementFee.currency(), Long.parseLong(capture[4])));
-            lines.add("Separate FX fee " + money(state.replacementFee.currency(), Long.parseLong(capture[5])));
-            lines.add("Combined account debit " + money(state.replacementFee.currency(), state.replacementFee.debitMinor()));
-            lines.add("Fee quote expires " + Instant.ofEpochMilli(state.replacementFee.expiresAt()));
+            lines.add(UiText.t("ui.finance.creditmenus.45", money(state.replacementFee.currency(), Long.parseLong(capture[4]))));
+            lines.add(UiText.t("ui.finance.creditmenus.46", money(state.replacementFee.currency(), Long.parseLong(capture[5]))));
+            lines.add(UiText.t("ui.finance.creditmenus.47", money(state.replacementFee.currency(), state.replacementFee.debitMinor())));
+            lines.add(UiText.t("ui.finance.creditmenus.48", Instant.ofEpochMilli(state.replacementFee.expiresAt())));
         }
-        lines.add("Confirmation revokes the previous token and creates one protected replacement claim.");
-        lines.add("The existing facility, debt and statement dates remain attached to this account.");
-        audience.reply("finance_credit", lines, "Review credit card replacement", List.of(choice("finance_credit_repl_ok", "", "Confirm replacement")));
+        lines.add(UiText.t("ui.finance.creditmenus.49"));
+        lines.add(UiText.t("ui.finance.creditmenus.50"));
+        audience.reply("finance_credit", lines,UiText.t("ui.finance.creditmenus.51"), List.of(choice("finance_credit_repl_ok", "",UiText.t("ui.finance.creditmenus.52"))));
         state.previewRevision = audience.menu().revision();
     }
 
@@ -368,9 +350,7 @@ public final class CreditMenus {
             state.context = snapshot.context();
             state.network = state.facility.network();
             state.currency = state.facility.currency();
-            audience.reply("finance_credit", terms(state.network, List.of("Current limit " + money(state.currency, state.facility.limitMinor()),
-                    "Enter the new total whole-unit limit. Current debt and card identity stay attached to this facility.")),
-                    "Increase requested limit", List.of(choice("finance_credit_limit", "", "Review new limit")));
+            audience.reply("finance_credit", terms(state.network, List.of(UiText.t("ui.finance.creditmenus.54", money(state.currency, state.facility.limitMinor())),UiText.t("ui.finance.creditmenus.55"))),UiText.t("ui.finance.creditmenus.53"), List.of(choice("finance_credit_limit", "",UiText.t("ui.finance.creditmenus.56"))));
         });
     }
 
@@ -389,10 +369,7 @@ public final class CreditMenus {
         requireOffered(audience, "finance_credit_fund", value);
         state.funding = state.accounts.get(new AccountId(UUID.fromString(value)));
         if (state.funding == null || state.facility == null) throw new IllegalArgumentException("Funding not offered");
-        audience.reply("finance_credit", List.of("Amount is in facility currency " + state.facility.currency().code(),
-                "Maximum posted payment " + money(state.facility.currency(), state.facility.owedMinor()),
-                "Use an exact positive amount. Review the account debit and any FX fee before confirming."),
-                "Credit payment amount", List.of(choice("finance_credit_amount", "", "Review payment")));
+        audience.reply("finance_credit", List.of(UiText.t("ui.finance.creditmenus.58", state.facility.currency().code()),UiText.t("ui.finance.creditmenus.59", money(state.facility.currency(), state.facility.owedMinor())),UiText.t("ui.finance.creditmenus.60")),UiText.t("ui.finance.creditmenus.57"), List.of(choice("finance_credit_amount", "",UiText.t("ui.finance.creditmenus.61"))));
     }
 
     private static void paymentPreview(FinanceMenuSupport.Audience audience, ServerServices services,
@@ -426,17 +403,17 @@ public final class CreditMenus {
 
     private static void paymentReview(FinanceMenuSupport.Audience audience, State state, Money debit, Money fee, long expires) {
         var lines = new ArrayList<String>();
-        lines.add("Converted payment debit " + money(debit.currency(), debit.minorUnits()));
-        lines.add("Separate FX fee " + money(fee.currency(), fee.minorUnits()));
-        lines.add("Total account debit " + money(debit.currency(), Math.addExact(debit.minorUnits(), fee.minorUnits())));
-        lines.add("Facility payment " + money(state.facility.currency(), state.repayment.amountMinor()));
-        lines.add("Outstanding required minimum before payment " + money(state.facility.currency(), state.facility.requiredMinor()));
+        lines.add(UiText.t("ui.finance.creditmenus.62", money(debit.currency(), debit.minorUnits())));
+        lines.add(UiText.t("ui.finance.creditmenus.46", money(fee.currency(), fee.minorUnits())));
+        lines.add(UiText.t("ui.finance.creditmenus.63", money(debit.currency(), Math.addExact(debit.minorUnits(), fee.minorUnits()))));
+        lines.add(UiText.t("ui.finance.creditmenus.64", money(state.facility.currency(), state.repayment.amountMinor())));
+        lines.add(UiText.t("ui.finance.creditmenus.65", money(state.facility.currency(), state.facility.requiredMinor())));
         state.facility.requirements().stream().filter(requirement -> requirement.unmetMinor() > 0)
-                .mapToLong(CardServicing.Requirement::dueAt).min().ifPresent(due -> lines.add("Oldest unmet due " + Instant.ofEpochMilli(due)));
-        lines.add("Quote expires " + Instant.ofEpochMilli(expires));
-        lines.add("Payments satisfy oldest requirements first and reduce debt under the saved allocation policy.");
-        lines.add("Unpaid minimums can lead to delinquency, default and collections.");
-        audience.reply("finance_credit", lines, "Review credit payment", List.of(choice("finance_credit_pay_ok", "", "Confirm payment")));
+                .mapToLong(CardServicing.Requirement::dueAt).min().ifPresent(due -> lines.add(UiText.t("ui.finance.creditmenus.66", Instant.ofEpochMilli(due))));
+        lines.add(UiText.t("ui.finance.creditmenus.67", Instant.ofEpochMilli(expires)));
+        lines.add(UiText.t("ui.finance.creditmenus.68"));
+        lines.add(UiText.t("ui.finance.creditmenus.69"));
+        audience.reply("finance_credit", lines,UiText.t("ui.finance.creditmenus.70"), List.of(choice("finance_credit_pay_ok", "",UiText.t("ui.finance.creditmenus.71"))));
         state.previewRevision = audience.menu().revision();
     }
 
@@ -471,13 +448,13 @@ public final class CreditMenus {
 
     private static List<String> terms(InstitutionCatalog.Network network, List<String> introduction) {
         var lines = new ArrayList<>(introduction);
-        lines.add("Purchase APR " + CreditFacilities.apr(network, false).movePointRight(2).toPlainString() + "%");
-        lines.add("Cash advance APR " + CreditFacilities.apr(network, true).movePointRight(2).toPlainString() + "%");
-        lines.add("Advances are limited to 20% of the contractual limit. Interest accrues from draw with no grace period.");
-        lines.add("Statements close every 28 financial days. New minimum is 2% of principal plus period interest, capped by remaining debt after older minimums.");
-        lines.add("Payment is due 14 financial days after statement close. Each financial day is 20 real minutes.");
-        lines.add("Unpaid requirements can be reported after two financial days and default after 84 financial days.");
-        lines.add("Origination fee 0. No late, collector or post-default interest charges.");
+        lines.add(UiText.t("ui.finance.creditmenus.72", UiText.decimal(CreditFacilities.apr(network, false).movePointRight(2))));
+        lines.add(UiText.t("ui.finance.creditmenus.73", UiText.decimal(CreditFacilities.apr(network, true).movePointRight(2))));
+        lines.add(UiText.t("ui.finance.creditmenus.74"));
+        lines.add(UiText.t("ui.finance.creditmenus.75"));
+        lines.add(UiText.t("ui.finance.creditmenus.76"));
+        lines.add(UiText.t("ui.finance.creditmenus.77"));
+        lines.add(UiText.t("ui.finance.creditmenus.78"));
         return List.copyOf(lines);
     }
 
@@ -500,11 +477,10 @@ public final class CreditMenus {
     }
 
     private static String money(EconomyCurrency currency, long minor) {
-        return new Money(currency, minor).majorUnits().toPlainString() + " " + currency.code();
+        return UiText.money(new Money(currency, minor));
     }
 
     private static void unavailable(FinanceMenuSupport.Audience audience) {
-        audience.reply("finance_credit", List.of("Refresh your credit facility or issuer branch and review the request again."),
-                "Credit request unavailable", List.of());
+        audience.decline("finance_credit", List.of(UiText.t("ui.finance.creditmenus.80")),UiText.t("ui.finance.creditmenus.79"), List.of());
     }
 }

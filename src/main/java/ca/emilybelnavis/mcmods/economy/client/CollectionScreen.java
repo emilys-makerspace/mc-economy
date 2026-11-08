@@ -1,5 +1,7 @@
 package ca.emilybelnavis.mcmods.economy.client;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
+
 import ca.emilybelnavis.mcmods.economy.collection.*;
 import java.util.*;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,6 +14,10 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
 /** Two-panel collection folio with server-offered choices and explicit payment review. */
 public final class CollectionScreen extends AbstractContainerScreen<CollectionMenu> {
+    private static String ui(String key, Object... args) {
+        return UiTextClient.render(UiText.t(key, args));
+    }
+
     private long renderedRevision=-1;
     private String draft="";
     private EditBox amount;
@@ -24,17 +30,18 @@ public final class CollectionScreen extends AbstractContainerScreen<CollectionMe
         int row=0;
         for(var choice:menu.choices()){
             if(choice.action().equals("exit"))continue;
-            var button=addRenderableWidget(new FinanceButton(leftPos+10,topPos+40+row*22,122,19,Component.literal((choice.selected()?"✓ ":"")+choice.label()),b->{
+            var button=addRenderableWidget(new FinanceButton(leftPos+10,topPos+40+row*22,122,19,UiTextClient.component((choice.selected()?"✓ ":"")+choice.label()),b->{
                 String value=choice.action().equals("preview_partial")?(amount==null?draft:amount.getValue()):choice.value();
                 CollectionNetwork.action(menu,choice.action(),value);
             }));
             button.active=!menu.busy()||choice.action().equals("retry");row++;
         }
         if(menu.choices().stream().anyMatch(c->c.action().equals("preview_partial"))){
-            amount=new EditBox(font,leftPos+145,topPos+139,181,18,Component.literal("Payment in contract currency"));
+            amount=new EditBox(font,leftPos+145,topPos+139,181,18,UiTextClient.component(ui("ui.client.contract_payment")));
+            amount.setTooltip(net.minecraft.client.gui.components.Tooltip.create(UiTextClient.component(UiText.t("ui.client.numeric_convention"))));
             amount.setMaxLength(22);amount.setValue(draft);amount.setEditable(!menu.busy());addRenderableWidget(amount);
         }
-        addRenderableWidget(new FinanceButton(leftPos+10,topPos+204,122,18,Component.literal("Exit"),b->CollectionNetwork.action(menu,"exit","")));
+        addRenderableWidget(new FinanceButton(leftPos+10,topPos+204,122,18,UiTextClient.component(ui("ui.client.exit")),b->CollectionNetwork.action(menu,"exit","")));
     }
     protected void containerTick(){super.containerTick();if(renderedRevision!=menu.revision())rebuild();}
     protected void renderBg(GuiGraphics g,float partialTick,int mouseX,int mouseY){
@@ -45,15 +52,15 @@ public final class CollectionScreen extends AbstractContainerScreen<CollectionMe
         g.fill(leftPos+140,topPos+188,leftPos+334,topPos+224,0xff24373d);
     }
     protected void renderLabels(GuiGraphics g,int mouseX,int mouseY){
-        g.drawString(font,"WAYSTONE COLLECTIONS",10,11,0xffdfc795,false);
-        g.drawString(font,"Private debtor dialogue",10,23,0xff9fb9be,false);
+        g.drawString(font,ui("ui.client.collection_title"),10,11,0xffdfc795,false);
+        g.drawString(font,ui("ui.client.private_dialogue"),10,23,0xff9fb9be,false);
         int y=40,rows=0;
-        for(String line:menu.lines())for(var wrapped:font.split(Component.literal(line),182)){
+        for(String line:menu.lines())for(var wrapped:font.split(UiTextClient.component(line),182)){
             if(rows++>=15)break;g.drawString(font,wrapped,146,y,0xffd9e4e6,false);y+=9;
         }
-        if(amount!=null)g.drawString(font,"Contract-currency amount",145,127,0xffdfc795,false);
+        if(amount!=null)g.drawString(font,ui("ui.client.contract_amount"),145,127,0xffdfc795,false);
         int statusY=193,count=0;
-        for(var line:font.split(Component.literal(menu.status()),182)){
+        for(var line:font.split(UiTextClient.component(menu.status()),182)){
             if(count++>=3)break;g.drawString(font,line,145,statusY,0xffc5d8d9,false);statusY+=9;
         }
     }

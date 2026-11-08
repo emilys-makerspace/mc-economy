@@ -1,5 +1,7 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
+
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.account.AccountLifecycle;
@@ -7,6 +9,7 @@ import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
 import ca.emilybelnavis.mcmods.economy.api.*;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.banking.BankingMenu;
+import ca.emilybelnavis.mcmods.economy.banking.BankingOperation;
 import ca.emilybelnavis.mcmods.economy.banking.BankingNetwork;
 import ca.emilybelnavis.mcmods.economy.banking.BankingController;
 import ca.emilybelnavis.mcmods.economy.banking.BankingSaves;
@@ -72,7 +75,7 @@ public final class BankingAccounts {
         var state = STATES.computeIfAbsent(menu, ignored -> new State());
         var audience = new Audience(player, menu, menu.session(), menu.revision());
         if (Set.of("setup", "account_open", "account_close_preview", "account_close_confirm").contains(action) && audience.menu().access()!=BankingMenu.Access.KIOSK) {
-            reply(audience, menu.page(), List.of("Account opening and closure require a bank branch.", "Visit the account institution's branded kiosk."), "Branch service unavailable");
+            reply(audience, menu.page(), List.of(UiText.t("ui.bank.account_opening_and_closure_require_a_bank_bra.a96252"), UiText.t("ui.bank.visit_the_account_institution_s_branded_kiosk.548bb1")), UiText.t("ui.bank.branch_service_unavailable.ecd8a5"));
             return;
         }
         try {
@@ -106,7 +109,7 @@ public final class BankingAccounts {
                     audience.menu().setBusy(true);
                     ca.emilybelnavis.mcmods.economy.terminal.KioskUpgradeController.request(audience.player(),
                             new net.minecraft.core.BlockPos(audience.menu().anchor().x(),audience.menu().anchor().y(),audience.menu().anchor().z()),
-                            message->{if(audience.player().server.getPlayerList().getPlayer(audience.player().getUUID())==audience.player())audience.player().displayClientMessage(net.minecraft.network.chat.Component.literal(message),false);});
+                            message->{if(audience.player().server.getPlayerList().getPlayer(audience.player().getUUID())==audience.player())audience.player().displayClientMessage(UiText.component(audience.player(), message),false);});
                     audience.player().closeContainer();
                 }
                 case "settings" -> settings(audience, services);
@@ -115,7 +118,7 @@ public final class BankingAccounts {
                 default -> { }
             }
         } catch (IllegalArgumentException | IllegalStateException | ArithmeticException invalid) {
-            reply(audience, menu.page(), List.of("The request was not submitted. Check the values and current terminal."), "Invalid banking request");
+            decline(audience, menu.page(), List.of(UiText.t("ui.bank.the_request_was_not_submitted_check_the_values.ab9e34")), UiText.t("ui.bank.invalid_banking_request.299654"));
         }
     }
     private static void creditProfile(Audience audience,ServerServices services,PartyAuthorization.Grant grant) {
@@ -125,23 +128,23 @@ public final class BankingAccounts {
             if(error!=null || found.isEmpty()){unavailable(audience,"credit_profile");return;}
             var view=found.orElseThrow();var lines=new ArrayList<String>();
             if(view.profile().isEmpty()) {
-                lines.add("Credit is not established.");
-                lines.add("A debit card, login or failed application does not create a credit profile.");
-                lines.add("A first actual credit-card issuance establishes credit.");
+                lines.add(UiText.t("ui.bank.credit_is_not_established.295f70"));
+                lines.add(UiText.t("ui.bank.a_debit_card_login_or_failed_application_does_.410d32"));
+                lines.add(UiText.t("ui.bank.a_first_actual_credit_card_issuance_establishe.0d2196"));
             } else {
                 var profile=view.profile().orElseThrow();
-                lines.add("Saved credit score: "+profile.score()+" (300–900)");
-                lines.add("First credit issuance: "+java.time.Instant.ofEpochMilli(profile.firstIssuedAt()));
+                lines.add(UiText.t("ui.bank.saved_credit_score.0f65f3")+profile.score()+" (300–900)");
+                lines.add(UiText.t("ui.bank.first_credit_issuance.8ef672")+java.time.Instant.ofEpochMilli(profile.firstIssuedAt()));
                 view.latest().ifPresent(history->{
                     var c=history.components();
-                    lines.add("Baseline: "+c.baseline()+"; payment history: "+signed(c.payment()));
-                    lines.add("Utilization: "+signed(c.utilization())+"; credit age: "+signed(c.age()));
-                    lines.add("Inquiries: -"+c.inquiry()+"; defaults: -"+c.defaults());
-                    lines.add("Recorded at: "+java.time.Instant.ofEpochMilli(history.boundary()));
+                    lines.add(UiText.t("ui.bank.baseline.63e8dd")+c.baseline()+UiText.t("ui.bank.5e1bd6cc79")+signed(c.payment()));
+                    lines.add(UiText.t("ui.bank.utilization.0c883c")+signed(c.utilization())+UiText.t("ui.bank.8177d78cda")+signed(c.age()));
+                    lines.add(UiText.t("ui.bank.inquiries.aa5930")+c.inquiry()+"; defaults: -"+c.defaults());
+                    lines.add(UiText.t("ui.bank.recorded_at.0a1781")+java.time.Instant.ofEpochMilli(history.boundary()));
                 });
             }
-            lines.add("Scheduled score updates await the reporting service.");
-            reply(audience,"credit_profile",lines,"Credit profile",List.of(new BankingNetwork.Choice("credit_history","","Score history",false),new BankingNetwork.Choice("credit_facilities","","Credit facilities",false)));
+            lines.add(UiText.t("ui.bank.scheduled_score_updates_await_the_reporting_se.8729f7"));
+            reply(audience,"credit_profile",lines,UiText.t("ui.bank.credit_profile.a973eb"),List.of(new BankingNetwork.Choice("credit_history","",UiText.t("ui.bank.score_history.db246b"),false),new BankingNetwork.Choice("credit_facilities","",UiText.t("ui.bank.credit_facilities.bf6b7f"),false)));
         });
     }
     private static String signed(int value){return (value>=0?"+":"")+value;}
@@ -154,14 +157,14 @@ public final class BankingAccounts {
             var page=found.orElseThrow();state.creditNext=page.nextCursor();
             var lines=new ArrayList<String>();
             for(var entry:page.entries()) {
-                lines.add(java.time.Instant.ofEpochMilli(entry.boundary())+" — score "+entry.score());
+                lines.add(java.time.Instant.ofEpochMilli(entry.boundary())+UiText.t("ui.bank.score.2011c7")+entry.score());
                 var c=entry.components();
-                lines.add("Payment "+signed(c.payment())+", utilization "+signed(c.utilization())+", age "+signed(c.age())+", inquiries -"+c.inquiry()+", defaults -"+c.defaults());
+                lines.add(UiText.t("ui.bank.payment.68dc81")+signed(c.payment())+UiText.t("ui.bank.utilization.e9789c")+signed(c.utilization())+UiText.t("ui.bank.age.678f7b")+signed(c.age())+UiText.t("ui.bank.inquiries.ccd0e0")+c.inquiry()+UiText.t("ui.bank.defaults.ed3d5a")+c.defaults());
             }
-            if(lines.isEmpty())lines.add("No credit history. Debit issuance does not establish credit.");
-            var choices=new ArrayList<BankingNetwork.Choice>();choices.add(new BankingNetwork.Choice("credit_profile","","Back to profile",false));
-            if(state.creditNext!=null)choices.add(new BankingNetwork.Choice("credit_next","","Next history page",false));
-            reply(audience,"credit_history",lines,"Saved credit history",choices);
+            if(lines.isEmpty())lines.add(UiText.t("ui.bank.no_credit_history_debit_issuance_does_not_esta.faa985"));
+            var choices=new ArrayList<BankingNetwork.Choice>();choices.add(new BankingNetwork.Choice("credit_profile","",UiText.t("ui.bank.back_to_profile.ca6ecc"),false));
+            if(state.creditNext!=null)choices.add(new BankingNetwork.Choice("credit_next","",UiText.t("ui.bank.next_history_page.11cf83"),false));
+            reply(audience,"credit_history",lines,UiText.t("ui.bank.saved_credit_history.e605a4"),choices);
         });
     }
 
@@ -178,8 +181,8 @@ public final class BankingAccounts {
                 var bank=InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(view.issuer()));
                 choices.add(new BankingNetwork.Choice("credit_facility",view.id().toString(),bank.name()+" · "+view.network()+" · "+view.currency().code(),false));
             }
-            if(state.creditFacilityNext!=null)choices.add(new BankingNetwork.Choice("credit_facilities_next","","Next facilities",false));
-            reply(audience,"credit_facilities",List.of(choices.isEmpty()?"You have no credit facilities.":"Select a facility to view balances and statements."),"Credit facilities",choices);
+            if(state.creditFacilityNext!=null)choices.add(new BankingNetwork.Choice("credit_facilities_next","",UiText.t("ui.bank.next_facilities.a66ebf"),false));
+            reply(audience,"credit_facilities",List.of(choices.isEmpty()?UiText.t("ui.bank.you_have_no_credit_facilities.2ad383"):UiText.t("ui.bank.select_a_facility_to_view_balances_and_stateme.42f9b7")),UiText.t("ui.bank.credit_facilities.bf6b7f"),choices);
         });
     }
     private static void creditFacility(Audience audience,ServerServices services,PartyAuthorization.Grant grant,State state,String value) {
@@ -189,9 +192,9 @@ public final class BankingAccounts {
             if(!audience.live())return;
             if(error!=null || found.isEmpty()){unavailable(audience,"credit_facility");return;}
             state.creditFacility=id;state.creditCurrency=found.orElseThrow().currency();state.creditStatementNext=null;
-            reply(audience,"credit_facility",CreditReport.owner(found.orElseThrow()),"Credit facility",List.of(
-                    new BankingNetwork.Choice("credit_facilities","","Back to facilities",false),
-                    new BankingNetwork.Choice("credit_statements","","Statements",false)));
+            reply(audience,"credit_facility",CreditReport.owner(found.orElseThrow()),UiText.t("ui.bank.credit_facility.09a380"),List.of(
+                    new BankingNetwork.Choice("credit_facilities","",UiText.t("ui.bank.back_to_facilities.c87eb8"),false),
+                    new BankingNetwork.Choice("credit_statements","",UiText.t("ui.bank.statements.5653ce"),false)));
         });
     }
     private static void creditStatements(Audience audience,ServerServices services,PartyAuthorization.Grant grant,State state,boolean next) {
@@ -204,11 +207,11 @@ public final class BankingAccounts {
             var page=found.orElseThrow();state.creditStatementNext=page.nextClosedAt();
             var lines=new ArrayList<String>();
             for(var statement:page.statements())lines.addAll(CreditReport.statement(statement,state.creditCurrency));
-            if(lines.isEmpty())lines.add("No statements have closed for this facility.");
+            if(lines.isEmpty())lines.add(UiText.t("ui.bank.no_statements_have_closed_for_this_facility.129ab9"));
             var choices=new ArrayList<BankingNetwork.Choice>();
-            choices.add(new BankingNetwork.Choice("credit_facility",state.creditFacility.toString(),"Back to facility",false));
-            if(state.creditStatementNext!=null)choices.add(new BankingNetwork.Choice("credit_statements_next","","Next statements",false));
-            reply(audience,"credit_statements",lines,"Frozen statements",choices);
+            choices.add(new BankingNetwork.Choice("credit_facility",state.creditFacility.toString(),UiText.t("ui.bank.back_to_facility.17429a"),false));
+            if(state.creditStatementNext!=null)choices.add(new BankingNetwork.Choice("credit_statements_next","",UiText.t("ui.bank.next_statements.5030fd"),false));
+            reply(audience,"credit_statements",lines,UiText.t("ui.bank.frozen_statements.27414c"),choices);
         });
     }
 
@@ -218,7 +221,7 @@ public final class BankingAccounts {
             if(!audience.live())return;
             if(error!=null || found.isEmpty()){unavailable(audience,"cards");return;}
             state.offered=offeredAccounts(found.orElseThrow().accounts());
-            if(state.offered.isEmpty()){reply(audience,"cards",List.of("Open and assign an account at its bank kiosk first."),"No issued debit account",List.of());return;}
+            if(state.offered.isEmpty()){reply(audience,"cards",List.of(UiText.t("ui.bank.open_and_assign_an_account_at_its_bank_kiosk_f.79b3c2")),UiText.t("ui.bank.no_issued_debit_account.b1983d"),List.of());return;}
             var id=selected.isBlank()?state.offered.keySet().iterator().next():UUID.fromString(selected);
             var account=state.offered.get(id);if(account==null){unavailable(audience,"cards");return;}
             state.cardAccount=account.id();
@@ -229,28 +232,28 @@ public final class BankingAccounts {
                 var token=result.getValue().filter(t->provider!=null && t.providerEpoch()==provider.debitEpoch() && t.issuer().key().equals(provider.bankKey())).orElse(null);
                 state.cardToken=token;
                 var choices=new ArrayList<BankingNetwork.Choice>();
-                for(var a:state.offered.values())choices.add(new BankingNetwork.Choice("card_select",a.id().value().toString(),a.currency().code()+(a.primary()?" primary":" account"),a.id().equals(account.id())));
-                var lines=new ArrayList<String>();lines.add("Debit card for "+account.currency().code()+" account");
-                if(provider==null || provider.legacy() && provider.bankKey().equals(BankProviders.UNASSIGNED_PROVIDER))lines.set(0,"Unassigned account: visit a bank kiosk before issuance.");
+                for(var a:state.offered.values())choices.add(new BankingNetwork.Choice("card_select",a.id().value().toString(),a.currency().code()+(a.primary()?UiText.t("ui.bank.primary.4d9273"):UiText.t("ui.bank.account.6f9a89")),a.id().equals(account.id())));
+                var lines=new ArrayList<String>();lines.add(UiText.t("ui.bank.debit_card_for.73be22")+account.currency().code()+UiText.t("ui.bank.account.6f9a89"));
+                if(provider==null || provider.legacy() && provider.bankKey().equals(BankProviders.UNASSIGNED_PROVIDER))lines.set(0,UiText.t("ui.bank.unassigned_account_visit_a_bank_kiosk_before_i.c15e45"));
                 else {
                     lines.add(InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(provider.bankKey())).name());
                     if(token!=null) {
-                        lines.add("Status: "+(System.currentTimeMillis()>=token.expiresAt()?"EXPIRED":token.status()));
-                        lines.add("Expires UTC: "+java.time.Instant.ofEpochMilli(token.expiresAt()));
+                        lines.add(UiText.t("ui.bank.status.f8c824")+(System.currentTimeMillis()>=token.expiresAt()?display("EXPIRED"):display(token.status())));
+                        lines.add(UiText.t("ui.bank.expires_utc.7c2031")+java.time.Instant.ofEpochMilli(token.expiresAt()));
                         if(token.status()==ca.emilybelnavis.mcmods.economy.card.IssuedCards.Status.ACTIVE && System.currentTimeMillis()<token.expiresAt())
-                            choices.add(new BankingNetwork.Choice("card_lost",account.id().value().toString(),"Report card lost (free)",false));
-                    } else lines.add("First debit card: free. No credit or score is created.");
+                            choices.add(new BankingNetwork.Choice("card_lost",account.id().value().toString(),UiText.t("ui.bank.report_card_lost_free.124722"),false));
+                    } else lines.add(UiText.t("ui.bank.first_debit_card_free_no_credit_or_score_is_cr.04d8e7"));
                     String issuerName=InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(provider.bankKey())).name();
-                    lines.set(0,token==null?issuerName+" — first debit card free":issuerName+" — "+ca.emilybelnavis.mcmods.economy.card.IssuedCards.effectiveStatus(token,System.currentTimeMillis())
+                    lines.set(0,token==null?issuerName+UiText.t("ui.bank.first_debit_card_free.337b7b"):issuerName+" — "+ca.emilybelnavis.mcmods.economy.card.IssuedCards.effectiveStatus(token,System.currentTimeMillis())
                             +" — "+java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneOffset.UTC).format(java.time.Instant.ofEpochMilli(token.expiresAt())));
                     boolean issuerKiosk=audience.menu().access()==BankingMenu.Access.KIOSK && view.terminal()!=null && view.terminal().binding()!=null
                             && view.terminal().binding().bound() && view.terminal().binding().institution().key().equals(provider.bankKey());
-                    if(issuerKiosk)choices.add(new BankingNetwork.Choice("card_preview",account.id().value().toString(),token==null?"Review free issuance":"Review replacement / renewal",false));
-                    else lines.add("Issuance and replacement require this issuer's kiosk.");
+                    if(issuerKiosk)choices.add(new BankingNetwork.Choice("card_preview",account.id().value().toString(),token==null?UiText.t("ui.bank.review_free_issuance.e5773f"):UiText.t("ui.bank.review_replacement_renewal.05cafb"),false));
+                    else lines.add(UiText.t("ui.bank.issuance_and_replacement_require_this_issuer_s.281182"));
                 }
-                lines.add("Use Collect items for committed card deliveries.");
-                choices.add(new BankingNetwork.Choice("claims","","Collect issued cards / protected items",false));
-                reply(audience,"cards",lines,"Issued debit cards",choices);
+                lines.add(UiText.t("ui.bank.use_collect_items_for_committed_card_deliverie.e451bc"));
+                choices.add(new BankingNetwork.Choice("claims","",UiText.t("ui.bank.collect_issued_cards_protected_items.a6dc94"),false));
+                reply(audience,"cards",lines,UiText.t("ui.bank.issued_debit_cards.366689"),choices);
             });
         });
     }
@@ -278,8 +281,8 @@ public final class BankingAccounts {
         var old=state.cardToken;
         boolean paid=old!=null && !ca.emilybelnavis.mcmods.economy.card.IssuedCards.freeRenewal(old,System.currentTimeMillis());
         if(paid && parts.length==1) {
-            var choices=state.offered.values().stream().map(a->new BankingNetwork.Choice("card_preview",value+"|"+a.id().value(),"Pay from "+a.currency().code()+" account",false)).toList();
-            reply(audience,"card_funding",List.of("Replacement costs 25 in the world's currency.","Choose a funding account, then review the combined debit and FX fee."),"Choose funding account",choices);return;
+            var choices=state.offered.values().stream().map(a->new BankingNetwork.Choice("card_preview",value+"|"+a.id().value(),UiText.t("ui.bank.pay_from.bc4706")+a.currency().code()+UiText.t("ui.bank.account.6f9a89"),false)).toList();
+            reply(audience,"card_funding",List.of(UiText.t("ui.bank.replacement_costs_25_in_the_world_s_currency.5b16d6"),UiText.t("ui.bank.choose_a_funding_account_then_review_the_combi.94dd8d")),UiText.t("ui.bank.choose_funding_account.4990d2"),choices);return;
         }
         audience.menu().setBusy(true);
         var funding=paid?new AccountId(UUID.fromString(parts[1])):null;
@@ -290,24 +293,24 @@ public final class BankingAccounts {
             var view=found.orElseThrow();
             if(view.provider()==null || view.terminal()==null || view.terminal().binding()==null || !view.terminal().binding().bound()
                     || !view.provider().bankKey().equals(view.terminal().binding().institution().key())) {
-                reply(audience,"cards",List.of("Visit the card account's issuing bank kiosk."),"Wrong issuer kiosk",List.of());return;
+                reply(audience,"cards",List.of(UiText.t("ui.bank.visit_the_card_account_s_issuing_bank_kiosk.698d7b")),UiText.t("ui.bank.wrong_issuer_kiosk.5efdfa"),List.of());return;
             }
             java.util.concurrent.CompletionStage<ca.emilybelnavis.mcmods.economy.card.IssuedCards.FeeQuote> quoted=paid
                     ?services.ledger().quoteCardReplacement(grant,state.cardAccount,funding):java.util.concurrent.CompletableFuture.completedFuture(null);
             quoted.whenComplete((fee,failure)->{
                 if(!audience.live())return;
-                if(failure!=null){reply(audience,"cards",List.of("A fresh fee preview is unavailable. No card was revoked or charged."),"Fee quote unavailable",List.of());return;}
+                if(failure!=null){reply(audience,"cards",List.of(UiText.t("ui.bank.a_fresh_fee_preview_is_unavailable_no_card_was.e20e86")),UiText.t("ui.bank.fee_quote_unavailable.54b645"),List.of());return;}
                 state.cardBranch=view;state.cardFee=fee;
-                var lines=new ArrayList<String>();lines.add(old==null?"Issue the first debit token for this account?":"Replace the current token and revoke all its copies?");
-                lines.add("Issuer: "+InstitutionCatalog.require(view.terminal().binding().institution()).name());
-                lines.add(fee==null?"Fee: free":"Combined account debit: "+money(new Money(fee.currency(),fee.debitMinor())));
+                var lines=new ArrayList<String>();lines.add(old==null?UiText.t("ui.bank.issue_the_first_debit_token_for_this_account.34b558"):UiText.t("ui.bank.replace_the_current_token_and_revoke_all_its_c.46fd23"));
+                lines.add(UiText.t("ui.bank.issuer.25666b")+InstitutionCatalog.require(view.terminal().binding().institution()).name());
+                lines.add(fee==null?UiText.t("ui.bank.fee_free.858439"):UiText.t("ui.bank.combined_account_debit.9f317c")+money(new Money(fee.currency(),fee.debitMinor())));
                 if(fee!=null) {
                     var amounts=fee.capture().split("\\|",-1);
-                    lines.add("Replacement principal: "+money(new Money(fee.currency(),Long.parseLong(amounts[4]))));
-                    lines.add("FX fee: "+money(new Money(fee.currency(),Long.parseLong(amounts[5]))));
+                    lines.add(UiText.t("ui.bank.replacement_principal.da035b")+money(new Money(fee.currency(),Long.parseLong(amounts[4]))));
+                    lines.add(UiText.t("ui.bank.fx_fee.a7b895")+money(new Money(fee.currency(),Long.parseLong(amounts[5]))));
                 }
-                lines.add("Expiry: five financial years from successful issuance.");lines.add("Physical delivery uses Collect items; uncertain delivery never charges again.");
-                reply(audience,"card_review",lines,"Confirm debit card",List.of(new BankingNetwork.Choice("card_confirm","","Confirm issuance",false)));
+                lines.add(UiText.t("ui.bank.expiry_five_financial_years_from_successful_is.128bef"));lines.add(UiText.t("ui.bank.b3d4e43b26"));
+                reply(audience,"card_review",lines,UiText.t("ui.bank.confirm_debit_card.52f9a8"),List.of(new BankingNetwork.Choice("card_confirm","",UiText.t("ui.bank.confirm_issuance.e24f3e"),false)));
                 state.cardPreviewRevision=audience.menu().revision();
             });
         });
@@ -324,26 +327,26 @@ public final class BankingAccounts {
             }
             var context=result.getKey().orElseThrow(); var terminal=context.terminal();
             if (terminal==null || terminal.binding()==null || !terminal.binding().bound()) {
-                reply(audience,"branch",List.of("This kiosk has no bank binding.","Owner: sneak-right-click with an empty hand to configure it."),"Bank selection required",List.of()); return;
+                reply(audience,"branch",List.of(UiText.t("ui.bank.this_kiosk_has_no_bank_binding.7b9080"),UiText.t("ui.bank.owner_sneak_right_click_with_an_empty_hand_to_.2fa93f")),UiText.t("ui.bank.bank_selection_required.bb007a"),List.of()); return;
             }
             var bank=InstitutionCatalog.require(terminal.binding().institution());
             state.offered=offeredAccounts(result.getValue().orElseThrow().accounts());
             var choices=new ArrayList<BankingNetwork.Choice>();
-            choices.add(new BankingNetwork.Choice("branch_open","",context.primary()==null?"Open primary account":"Open "+bank.baseCurrency().code()+" account",false));
+            choices.add(new BankingNetwork.Choice("branch_open","",context.primary()==null?UiText.t("ui.bank.open_primary_account.77c8a5"):UiText.t("ui.bank.open.79d37e")+bank.baseCurrency().code()+UiText.t("ui.bank.account.6f9a89"),false));
             for(var account:state.offered.values()) {
-                String id=account.id().value().toString(); String label=account.currency().code()+(account.primary()?" primary":" account");
-                choices.add(new BankingNetwork.Choice("branch_assign",id,"Assign "+label+" here",false));
-                choices.add(new BankingNetwork.Choice("branch_switch",id,"Switch provider: "+label,false));
-                choices.add(new BankingNetwork.Choice("branch_accept",id,"Confirm switch here: "+label,false));
-                if(!account.primary())choices.add(new BankingNetwork.Choice("branch_close",id,"Close "+label,false));
+                String id=account.id().value().toString(); String label=account.currency().code()+(account.primary()?UiText.t("ui.bank.primary.4d9273"):UiText.t("ui.bank.account.6f9a89"));
+                choices.add(new BankingNetwork.Choice("branch_assign",id,UiText.t("ui.bank.assign.f1e181")+label+UiText.t("ui.bank.here.658ef1"),false));
+                choices.add(new BankingNetwork.Choice("branch_switch",id,UiText.t("ui.bank.switch_provider.20489a")+label,false));
+                choices.add(new BankingNetwork.Choice("branch_accept",id,UiText.t("ui.bank.confirm_switch_here.30c477")+label,false));
+                if(!account.primary())choices.add(new BankingNetwork.Choice("branch_close",id,UiText.t("ui.bank.close.0ed4eb")+label,false));
             }
-            choices.add(new BankingNetwork.Choice("cards","","Issued debit cards",false));
-            choices.add(new BankingNetwork.Choice("credit_profile","","Credit profile",false));
-            choices.add(new BankingNetwork.Choice("credit_facilities","","Credit facilities",false));
-            choices.add(new BankingNetwork.Choice("finance_home", "", "Bank and credit services", false));
-            choices.add(new BankingNetwork.Choice("branch_products","","Cards and applications",false));
-            reply(audience,"branch",List.of(bank.name()+" — "+bank.baseCurrency().code(),"Four open accounts total, including primary.",
-                    "Assignment and closure require the account's bank. Switching requires both banks."),"Branch services",choices);
+            choices.add(new BankingNetwork.Choice("cards","",UiText.t("ui.bank.issued_debit_cards.366689"),false));
+            choices.add(new BankingNetwork.Choice("credit_profile","",UiText.t("ui.bank.credit_profile.a973eb"),false));
+            choices.add(new BankingNetwork.Choice("credit_facilities","",UiText.t("ui.bank.credit_facilities.bf6b7f"),false));
+            choices.add(new BankingNetwork.Choice("finance_home", "", UiText.t("ui.bank.bank_and_credit_services.c9cdbc"), false));
+            choices.add(new BankingNetwork.Choice("branch_products","",UiText.t("ui.bank.cards_and_applications.9a6881"),false));
+            reply(audience,"branch",List.of(bank.name()+" — "+bank.baseCurrency().code(),UiText.t("ui.bank.four_open_accounts_total_including_primary.838b03"),
+                    UiText.t("ui.bank.assignment_and_closure_require_the_account_s_b.92bca9")),UiText.t("ui.bank.branch_services.f326c8"),choices);
         });
     }
     private static boolean offered(Audience audience,String action,String value) {
@@ -362,14 +365,14 @@ public final class BankingAccounts {
     private static void branchAction(Audience audience,ServerServices services,PartyAuthorization.Grant grant,State state,String action,String value) {
         if(audience.menu().access()!=BankingMenu.Access.KIOSK || !offered(audience,action,value))throw new IllegalArgumentException("Choose an offered branch action");
         if(action.equals("branch_products")) {
-            reply(audience,"branch_products",List.of("Issuer applications and card services require this live branch.",
-                    "Review current terms before confirming. Trading and collateral lending are unavailable."),"Branch services",List.of(
-                    new BankingNetwork.Choice("cards", "", "Issued debit cards", false),
-                    new BankingNetwork.Choice("finance_credit_apply", "", "Credit application", false),
-                    new BankingNetwork.Choice("finance_credit_cards", "", "Credit tokens and replacement", false),
-                    new BankingNetwork.Choice("finance_credit_raise", "", "Credit limit increase", false),
-                    new BankingNetwork.Choice("finance_loan_apply", "", "Loan application", false),
-                    new BankingNetwork.Choice("finance_home", "", "All financial services", false)));return;
+            reply(audience,"branch_products",List.of(UiText.t("ui.bank.issuer_applications_and_card_services_require_.32e657"),
+                    UiText.t("ui.bank.review_current_terms_before_confirming_trading.44dfaa")),UiText.t("ui.bank.branch_services.f326c8"),List.of(
+                    new BankingNetwork.Choice("cards", "", UiText.t("ui.bank.issued_debit_cards.366689"), false),
+                    new BankingNetwork.Choice("finance_credit_apply", "", UiText.t("ui.bank.credit_application.41a360"), false),
+                    new BankingNetwork.Choice("finance_credit_cards", "", UiText.t("ui.bank.credit_tokens_and_replacement.5a0324"), false),
+                    new BankingNetwork.Choice("finance_credit_raise", "", UiText.t("ui.bank.credit_limit_increase.7e1b58"), false),
+                    new BankingNetwork.Choice("finance_loan_apply", "", UiText.t("ui.bank.loan_application.ff2850"), false),
+                    new BankingNetwork.Choice("finance_home", "", UiText.t("ui.bank.all_financial_services.56fd6c"), false)));return;
         }
         String[] fields=value.split("\\|",-1);
         AccountId selected=action.equals("branch_open")?null:new AccountId(UUID.fromString(fields[0]));
@@ -391,8 +394,8 @@ public final class BankingAccounts {
                 if(action.equals("branch_switch") && fields.length==1) {
                     if(view.account()==null || view.provider()==null || !view.provider().bankKey().equals(bank.id().key()))throw new IllegalArgumentException("Visit the source bank");
                     var choices=InstitutionCatalog.banks().stream().filter(b->b.baseCurrency()==view.account().currency() && !b.id().equals(bank.id()))
-                            .map(b->new BankingNetwork.Choice("branch_switch",value+"|"+b.id().key(),"Switch to "+b.name(),false)).toList();
-                    reply(audience,"branch_targets",List.of("Authorize one target bank. Then visit that target within seven financial days."),"Choose target bank",choices);return;
+                            .map(b->new BankingNetwork.Choice("branch_switch",value+"|"+b.id().key(),UiText.t("ui.bank.switch_to.16f98e")+b.name(),false)).toList();
+                    reply(audience,"branch_targets",List.of(UiText.t("ui.bank.authorize_one_target_bank_then_visit_that_targ.e51d98")),UiText.t("ui.bank.choose_target_bank.12c2be"),choices);return;
                 }
                 var branchAction=switch(action) {
                     case "branch_open"->view.primary()==null?BranchAdmission.Action.PRIMARY:BranchAdmission.Action.SECONDARY;
@@ -410,7 +413,7 @@ public final class BankingAccounts {
                 var intent=new Journal.Intent(operation,attempt,grant.actor(),kind,request.request(),null,null);
                 start(audience,services,grant,state,intent,fresh->services.bankLifecycle(fresh,operation,attempt,request,null),"branch");
             } catch(IllegalArgumentException | IllegalStateException invalid) {
-                reply(audience,"branch",List.of("Visit the correct bank and refresh the account before trying again."),"Branch admission unavailable",List.of());
+                reply(audience,"branch",List.of(UiText.t("ui.bank.visit_the_correct_bank_and_refresh_the_account.92cc6f")),UiText.t("ui.bank.branch_admission_unavailable.8a32d7"),List.of());
             }
         });
     }
@@ -452,9 +455,9 @@ public final class BankingAccounts {
             state.offered = offeredAccounts(found.orElseThrow().accounts());
             state.accountCursor = null;
             var choices = accountChoices(state, "history");
-            if (choices.isEmpty() && audience.menu().access()==BankingMenu.Access.KIOSK) choices.add(new BankingNetwork.Choice("manage_accounts", "", "Visit branch services", false));
-            else choices.add(new BankingNetwork.Choice("manage_accounts", "", "Manage account", false));
-            reply(audience, "accounts", List.of(), choices.size() == 1 && state.offered.isEmpty() ? "Visit a bank kiosk to open your primary account." : "Choose an account to view its transactions.", choices);
+            if (choices.isEmpty() && audience.menu().access()==BankingMenu.Access.KIOSK) choices.add(new BankingNetwork.Choice("manage_accounts", "", UiText.t("ui.bank.visit_branch_services.d0b87b"), false));
+            else choices.add(new BankingNetwork.Choice("manage_accounts", "", UiText.t("ui.bank.manage_account.acacec"), false));
+            reply(audience, "accounts", List.of(), choices.size() == 1 && state.offered.isEmpty() ? UiText.t("ui.bank.visit_a_bank_kiosk_to_open_your_primary_accoun.c0625a") : UiText.t("ui.bank.choose_an_account_to_view_its_transactions.f30613"), choices);
         });
     }
     static Set<EconomyCurrency> availableCurrencies(List<AccountIdentity> accounts) {
@@ -493,7 +496,7 @@ public final class BankingAccounts {
             state.openCurrencies = Set.of();
             for (var currency : EconomyCurrency.all()) if (state.openCurrencies.contains(currency))
                 rows.add(new BankingNetwork.Choice("account_open", currency.code(), currency.code(), false));
-            String status = "Visit the account institution's branch kiosk for lifecycle changes. Account limit: 4.";
+            String status = UiText.t("ui.bank.visit_the_account_institution_s_branch_kiosk_f.6c01d6");
             reply(audience, "manage", List.of(), status, rows);
             return;
         }
@@ -502,7 +505,7 @@ public final class BankingAccounts {
             if (!audience.live()) return;
             if (error != null || funds.isEmpty()) { unavailable(audience, "manage"); return; }
             var balance = funds.orElseThrow();
-            String label = account.currency().code() + (account.primary() ? " primary" : " account") + " — " + money(balance.posted());
+            String label = account.currency().code() + (account.primary() ? UiText.t("ui.bank.primary.4d9273") : UiText.t("ui.bank.account.6f9a89")) + " — " + money(balance.posted());
             rows.add(new BankingNetwork.Choice("account_close_preview", account.id().value().toString(), label,
                     false));
             manageBalances(audience, services, grant, state, snapshot, accounts, index + 1, rows);
@@ -517,7 +520,7 @@ public final class BankingAccounts {
     private static List<BankingNetwork.Choice> accountChoices(State state, String page) {
         var choices = new ArrayList<BankingNetwork.Choice>();
         for (var account : state.offered.values()) choices.add(new BankingNetwork.Choice("account_select",
-                account.id().value() + "|" + page, account.currency().code() + (account.primary() ? " primary account" : " account"), account.id().equals(state.selected)));
+                account.id().value() + "|" + page, account.currency().code() + (account.primary() ? UiText.t("ui.bank.primary_account.fa2f5b") : UiText.t("ui.bank.account.6f9a89")), account.id().equals(state.selected)));
         return choices;
     }
     /** Offers only authenticated owner accounts; the selected account determines the transaction currency. */
@@ -538,13 +541,13 @@ public final class BankingAccounts {
                 if (accountError != null || found.isEmpty()) { unavailable(audience, page); return; }
                 state.offered = offeredAccounts(found.orElseThrow().accounts());
                 var display = new ArrayList<String>();
-                display.add("Selected: " + context.account().currency().code() + " account");
+                display.add(UiText.t("ui.bank.selected.ae3c35") + context.account().currency().code() + UiText.t("ui.bank.account.6f9a89"));
                 display.addAll(lines);
                 if(context.terminal()!=null && context.terminal().binding()!=null && context.terminal().binding().bound())
-                    display.add("Terminal cash currency: "+context.terminal().binding().nativeCurrency().code()+"; account currency: "+context.account().currency().code());
+                    display.add(UiText.t("ui.bank.terminal_cash_currency.3ece81")+context.terminal().binding().nativeCurrency().code()+UiText.t("ui.bank.2a342dcae1")+context.account().currency().code());
                 String pageStatus = page.equals("deposit") && context.terminal() != null && context.terminal().kind() == TerminalPolicy.Kind.ATM
                         && !context.terminal().settings().mode().deposits()
-                        ? "Deposits disabled on this ATM. Its owner can enable them." : status;
+                        ? UiText.t("ui.bank.deposits_disabled_on_this_atm_its_owner_can_en.49b7ec") : status;
                 reply(audience, page, display, pageStatus, accountChoices(state, page));
             });
         });
@@ -575,12 +578,12 @@ public final class BankingAccounts {
             if (!audience.live()) return;
             if (error != null || found.isEmpty() || found.orElseThrow().status() != AccountIdentity.Status.OPEN) { unavailable(audience, page); return; }
             if (!BankingController.canChangeAccount(audience.menu())) {
-                reply(audience, audience.menu().page(), audience.menu().lines(), "Resolve the current cash transaction first."); return;
+                reply(audience, audience.menu().page(), audience.menu().lines(), UiText.t("ui.bank.resolve_the_current_cash_transaction_first.06997f")); return;
             }
             state.selected = selected.id(); state.historyCursor = null; state.exchange = null; state.quote = null; state.closure = null;
             audience.menu().setBusy(false);
             switch (page) {
-                case "history" -> history(audience, services, grant, state, false);
+                case "history" -> BankingHistory.action(audience.player(), audience.menu(), "history", "");
                 case "fx" -> fx(audience, services, grant, state);
                 default -> BankingController.action(audience.player(), audience.menu(), page, "");
             }
@@ -594,7 +597,7 @@ public final class BankingAccounts {
         services.ledger().bankingContext(new PlayerId(audience.player().getUUID()), audience.menu().anchor(), null).whenComplete((context, error) -> {
             if (!audience.live()) return;
             if (error != null || context.account() == null || context.terminal() == null || context.terminal().kind() != TerminalPolicy.Kind.TELLER) {
-                reply(audience, "manage", List.of(), "Open your first account from My accounts, then visit a teller."); return;
+                reply(audience, "manage", List.of(), UiText.t("ui.bank.open_your_first_account_from_my_accounts_then_.9ec171")); return;
             }
             var open = new AccountLifecycle.Open(currency, context.account().revision());
             var operation = new OperationId(UUID.randomUUID()); var attempt = new RequestId(UUID.randomUUID());
@@ -604,7 +607,7 @@ public final class BankingAccounts {
         });
     }
     private static void history(Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state, boolean next) {
-        if (next && state.historyCursor == null) { reply(audience, "history", audience.menu().lines(), "End of history"); return; }
+        if (next && state.historyCursor == null) { reply(audience, "history", audience.menu().lines(), UiText.t("ui.bank.end_of_history.72eaf9")); return; }
         if (!next) state.historyCursor = null;
         audience.menu().setBusy(true);
         services.ledger().bankingContext(new PlayerId(audience.player().getUUID()), audience.menu().anchor(), state.selected).whenComplete((context, contextError) -> {
@@ -618,14 +621,14 @@ public final class BankingAccounts {
                     if (error != null || found.isEmpty()) { unavailable(audience, "history"); return; }
                     var page = found.orElseThrow(); state.historyCursor = page.nextCursor();
                     var lines = new ArrayList<String>();
-                    lines.add("Transaction History");
-                    lines.add("Balance: " + money(new Money(funds.orElseThrow().currency(), funds.orElseThrow().availableMinorUnits())));
+                    lines.add(UiText.t("ui.bank.transaction_history.4ed32a"));
+                    lines.add(UiText.t("ui.bank.balance.c0edd5") + money(new Money(funds.orElseThrow().currency(), funds.orElseThrow().availableMinorUnits())));
                     for (var entry : page.entries()) {
                         lines.add("#" + entry.sequence().value() + " " + money(entry.amount()));
-                        lines.add("Transaction " + entry.transactionId().value());
+                        lines.add(UiText.t("ui.bank.transaction.caaf7d") + entry.transactionId().value());
                     }
-                    if (page.entries().isEmpty()) lines.add("No transactions yet.");
-                    reply(audience, "history", lines, state.historyCursor == null ? "All entries shown" : "More history available", List.of());
+                    if (page.entries().isEmpty()) lines.add(UiText.t("ui.bank.no_transactions_yet.f794b6"));
+                    reply(audience, "history", lines, state.historyCursor == null ? UiText.t("ui.bank.all_entries_shown.a072e6") : UiText.t("ui.bank.more_history_available.210d3c"), List.of());
                 });
             });
         });
@@ -661,8 +664,8 @@ public final class BankingAccounts {
                 state.closureTerminalRevision = context.terminal().revision();
                 if (funds.postedMinorUnits() == 0) {
                     showClosure(audience, state, new FundedClosure.Instruction(close, null),
-                            List.of("Close your " + source.currency().code() + " account?", "The account is empty.",
-                                    "Its transaction history will be preserved.", "Closing it frees one of your four account slots."));
+                            List.of(UiText.t("ui.bank.close_your.94469f") + source.currency().code() + UiText.t("ui.bank.account.c9af10"), UiText.t("ui.bank.the_account_is_empty.d94936"),
+                                    UiText.t("ui.bank.its_transaction_history_will_be_preserved.903543"), UiText.t("ui.bank.closing_it_frees_one_of_your_four_account_slot.a1cd5e")));
                 } else services.ledger().quoteClosure(grant, new RequestId(UUID.randomUUID()),
                         new FxQuotes.Pair(source.currency(), destination.currency()), funds.posted())
                         .whenComplete((quote, quoteError) -> {
@@ -670,18 +673,18 @@ public final class BankingAccounts {
                             if (quoteError != null) { unavailable(audience, "manage"); return; }
                             long credited = displayCredit(quote, true);
                             showClosure(audience, state, new FundedClosure.Instruction(close, quote.id()),
-                                    List.of("Close your " + source.currency().code() + " account?",
-                                            "Transfer balance: " + money(funds.posted()),
-                                            "To primary: " + money(new Money(destination.currency(), credited)),
-                                            "Fee: " + money(quote.fee()), "History is preserved. Confirm before the quote expires."));
+                                    List.of(UiText.t("ui.bank.close_your.94469f") + source.currency().code() + UiText.t("ui.bank.account.c9af10"),
+                                            UiText.t("ui.bank.transfer_balance.65d5ee") + money(funds.posted()),
+                                            UiText.t("ui.bank.to_primary.0a1146") + money(new Money(destination.currency(), credited)),
+                                            UiText.t("ui.bank.fee.1069ca") + money(quote.fee()), UiText.t("ui.bank.history_is_preserved_confirm_before_the_quote_.a2cd12")));
                         });
             });
         });
     }
     private static void showClosure(Audience audience, State state, FundedClosure.Instruction closure, List<String> lines) {
         state.closure = closure;
-        reply(audience, "close", lines, "Review account closure", List.of(
-                new BankingNetwork.Choice("account_close_confirm", "", "Confirm closure", false)));
+        reply(audience, "close", lines, UiText.t("ui.bank.review_account_closure.011421"), List.of(
+                new BankingNetwork.Choice("account_close_confirm", "", UiText.t("ui.bank.confirm_closure.8648b3"), false)));
         state.closureRevision = audience.menu().revision();
     }
     private static void closeConfirm(Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state) {
@@ -714,13 +717,13 @@ public final class BankingAccounts {
                 int destinations = 0;
                 for (var account : state.offered.values()) {
                     if (account.currency() == context.account().currency()) continue;
-                    choices.add(new BankingNetwork.Choice("destination", account.id().value().toString(), account.currency().code() + " account", false));
+                    choices.add(new BankingNetwork.Choice("destination", account.id().value().toString(), account.currency().code() + UiText.t("ui.bank.account.6f9a89"), false));
                     destinations++;
                 }
                 var lines = destinations == 0
-                        ? List.of("Open another currency account at its bank kiosk to exchange money.")
-                        : List.of("From: " + context.account().currency().code() + " account", "Choose a destination account and enter the amount to exchange.", "Review the amount received and fee before confirming.");
-                reply(audience, "fx", lines, destinations == 0 ? "Another currency account is needed" : "Choose accounts and amount", choices);
+                        ? List.of(UiText.t("ui.bank.open_another_currency_account_at_its_bank_kios.744d86"))
+                        : List.of(UiText.t("ui.bank.from.b4f579") + context.account().currency().code() + UiText.t("ui.bank.account.6f9a89"), UiText.t("ui.bank.choose_a_destination_account_and_enter_the_amo.7f6126"), UiText.t("ui.bank.review_the_amount_received_and_fee_before_conf.5f1c9a"));
+                reply(audience, "fx", lines, destinations == 0 ? UiText.t("ui.bank.another_currency_account_is_needed.5b4fc8") : UiText.t("ui.bank.choose_accounts_and_amount.55dec0"), choices);
             });
         });
     }
@@ -752,7 +755,7 @@ public final class BankingAccounts {
             if (!audience.live()) return;
             if (error != null || context.account() == null) { unavailable(audience, "fx"); return; }
             if(!audience.menu().remote() && (context.terminal()==null || context.terminal().binding()==null || !context.terminal().binding().bound())) {
-                reply(audience,"fx",List.of("The terminal must be bound to a bank before a new exchange."),"Bank selection required",List.of());return;
+                reply(audience,"fx",List.of(UiText.t("ui.bank.the_terminal_must_be_bound_to_a_bank_before_a_.44d5a6")),UiText.t("ui.bank.bank_selection_required.bb007a"),List.of());return;
             }
             state.fxTerminal=context.terminal();
             var source = context.account();
@@ -772,10 +775,19 @@ public final class BankingAccounts {
                         state.exchange = new FxSettlement.Exchange(quote.id(), new PlayerId(audience.player().getUUID()),
                                 new SameCurrency.Revision(source.id(), source.revision()), new SameCurrency.Revision(destination.id(), destination.revision()));
                         long credited = displayCredit(quote, false);
-                        reply(audience, "fx", List.of("Debit " + money(quote.debit()), "Credit " + money(new Money(quote.credit().currency(), credited)),
-                                "Fee " + money(quote.fee()), "Quote expires " + quote.expires(), "Choose Confirm exchange before this quote expires."), "Exchange preview");
+                        var choices = new ArrayList<>(audience.menu().choices().stream()
+                                .filter(c -> !BankingOperation.confirmation(c.action())).toList());
+                        choices.add(new BankingNetwork.Choice("exchange_confirm", "", UiText.t("ui.bank.confirm_exchange.cc7363"), false));
+                        audience.menu().setBusy(false);
+                        audience.menu().publish("fx", List.of(UiText.t("ui.bank.debit.eaafe5") + money(quote.debit()), UiText.t("ui.bank.credit.d42d88") + money(new Money(quote.credit().currency(), credited)),
+                                UiText.t("ui.bank.fee.0cfb2a") + money(quote.fee()), UiText.t("ui.bank.quote_expires.9a6460") + quote.expires(), UiText.t("ui.bank.choose_confirm_exchange_before_this_quote_expi.c434a6")),
+                                UiText.t("ui.bank.exchange_preview.34fe4d"), choices, new BankingOperation.View(BankingOperation.State.REVIEW,
+                                        "screen.economy.operation.review", List.of(
+                                            new BankingOperation.Argument(BankingOperation.ArgumentKind.MONEY, quote.debit().currency().code(), quote.debit().minorUnits()),
+                                            new BankingOperation.Argument(BankingOperation.ArgumentKind.MONEY, quote.fee().currency().code(), quote.fee().minorUnits())),
+                                        null, null, null, quote.id(), quote.expires().toEpochMilli()), null);
                     });
-                } catch (IllegalArgumentException | ArithmeticException invalid) { reply(audience, "fx", List.of("Choose two open accounts and a positive amount. CHF pairs accept exact cents; other pairs require whole units."), "Invalid exchange"); }
+                } catch (IllegalArgumentException | ArithmeticException invalid) { reply(audience, "fx", List.of(UiText.t("ui.bank.fx_amount_help")), UiText.t("ui.bank.invalid_exchange.065986")); }
             });
         });
     }
@@ -796,7 +808,7 @@ public final class BankingAccounts {
         if(audience.menu().access()!=BankingMenu.Access.ADMIN || !offered(audience,action,value))throw new IllegalArgumentException("Brand selection unavailable");
         if(action.equals("brand_preview") && value.isEmpty()) {
             var choices=InstitutionCatalog.banks().stream().map(bank->new BankingNetwork.Choice("brand_preview",bank.id().key(),bank.name()+" ("+bank.baseCurrency().code()+")",false)).toList();
-            reply(audience,"brands",List.of(),"Choose a bank",choices);return;
+            reply(audience,"brands",List.of(),UiText.t("ui.bank.choose_a_bank.5cade1"),choices);return;
         }
         audience.menu().setBusy(true);boolean operator=audience.player().hasPermissions(2);
         services.ledger().terminalSettings(grant.actor(),(actor,reads)->operator,audience.menu().anchor()).whenComplete((found,error)->{
@@ -806,12 +818,12 @@ public final class BankingAccounts {
             if(action.equals("brand_preview")) {
                 var bank=InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(value));
                 state.pendingBrand=bank.id().key();state.brandRevision=current.revision();
-                reply(audience,"brand_review",List.of("Bind this machine to "+bank.name()+"?","Native currency: "+bank.baseCurrency().code(),
-                        "Existing settings are retained as legacy metadata.","Cash service will be disabled. Enable native cash settings separately.",
-                        "Pending cash/custody work must finish before binding."),"Confirm native-currency change",List.of(new BankingNetwork.Choice("brand_confirm",bank.id().key(),"Confirm bank binding",false)));return;
+                reply(audience,"brand_review",List.of(UiText.t("ui.bank.bind_this_machine_to.24936f")+bank.name()+"?",UiText.t("ui.bank.native_currency.16da54")+bank.baseCurrency().code(),
+                        UiText.t("ui.bank.existing_settings_are_retained_as_legacy_metad.d5f15b"),UiText.t("ui.bank.cash_service_will_be_disabled_enable_native_ca.69457f"),
+                        UiText.t("ui.bank.pending_cash_custody_work_must_finish_before_b.eb817b")),UiText.t("ui.bank.confirm_native_currency_change.c1bff9"),List.of(new BankingNetwork.Choice("brand_confirm",bank.id().key(),UiText.t("ui.bank.confirm_bank_binding.48478d"),false)));return;
             }
             if(state.pendingBrand==null || !state.pendingBrand.equals(value) || state.brandRevision!=current.revision()) {
-                reply(audience,"settings",List.of("The terminal changed. Review the bank again."),"Stale binding preview",List.of());return;
+                reply(audience,"settings",List.of(UiText.t("ui.bank.the_terminal_changed_review_the_bank_again.324a1d")),UiText.t("ui.bank.stale_binding_preview.ac6fcc"),List.of());return;
             }
             var request=TerminalBanking.bindRequest(current.anchor(),current.generation(),current.revision(),new InstitutionCatalog.InstitutionId(state.pendingBrand),true);
             var operation=new OperationId(UUID.randomUUID());var attempt=new RequestId(UUID.randomUUID());
@@ -828,33 +840,33 @@ public final class BankingAccounts {
         var actor = new PlayerId(audience.player().getUUID()); boolean operator = audience.player().hasPermissions(2);
         services.ledger().terminalSettings(actor, (who, reads) -> operator, audience.menu().anchor()).whenComplete((found, error) -> {
             if (!audience.live()) return;
-            if (error != null || found.isEmpty()) { reply(audience, "settings", List.of("Only this terminal's owner or an operator may edit its settings."), "Owner access required"); return; }
+            if (error != null || found.isEmpty()) { reply(audience, "settings", List.of(UiText.t("ui.bank.only_this_terminal_s_owner_or_an_operator_may_.2d039a")), UiText.t("ui.bank.owner_access_required.a11bd4")); return; }
             var terminal = found.orElseThrow();
             if (!terminal.generation().equals(audience.menu().generation()) || !terminal.active()) {
-                reply(audience, "settings", List.of("Reopen this terminal to see its current settings."), "Terminal changed", List.of()); return;
+                reply(audience, "settings", List.of(UiText.t("ui.bank.reopen_this_terminal_to_see_its_current_settin.470c89")), UiText.t("ui.bank.terminal_changed.420747"), List.of()); return;
             }
             var binding=terminal.binding();
             boolean bound=binding!=null && binding.bound();
-            String identity=bound?InstitutionCatalog.require(binding.institution()).name()+" — "+binding.nativeCurrency().code():"UNBOUND_BANK — bank selection required";
+            String identity=bound?InstitutionCatalog.require(binding.institution()).name()+" — "+binding.nativeCurrency().code():UiText.t("ui.bank.unbound_bank_bank_selection_required.0d05f5");
             var lines=new ArrayList<String>();lines.add(identity);
-            lines.add("Generation: "+terminal.generation());lines.add("Revision: "+terminal.revision()+"; kind: "+terminal.kind());
-            lines.add("Migration: "+(bound?binding.migrationState():"UNBOUND_BANK"));
-            lines.add("Cash: "+terminal.settings().mode()+"; native denominations only.");
+            lines.add(UiText.t("ui.bank.generation.33e7ab")+terminal.generation());lines.add(UiText.t("ui.bank.revision.80ccf1")+terminal.revision()+"; kind: "+terminal.kind());
+            lines.add(UiText.t("ui.bank.migration.98ee3c")+(bound?binding.migrationState():"UNBOUND_BANK"));
+            lines.add(UiText.t("ui.bank.cash.f016dc")+deliveryLabel(terminal.settings().mode())+UiText.t("ui.bank.f9f879217a"));
             var controls=new ArrayList<BankingNetwork.Choice>();
-            if(terminal.kind()!=TerminalPolicy.Kind.REGISTER)controls.add(new BankingNetwork.Choice("brand_preview","","Select bank brand",false));
+            if(terminal.kind()!=TerminalPolicy.Kind.REGISTER)controls.add(new BankingNetwork.Choice("brand_preview","",UiText.t("ui.bank.select_bank_brand.73c40b"),false));
             if(bound && terminal.kind()!=TerminalPolicy.Kind.KIOSK && terminal.kind()!=TerminalPolicy.Kind.REGISTER) {
                 String form=terminal.settings().mode().name()+";"+binding.nativeCurrency().code()+";all";
-                controls.add(new BankingNetwork.Choice("configure",form,"Save native-currency settings",true));
+                controls.add(new BankingNetwork.Choice("configure",form,UiText.t("ui.bank.save_native_currency_settings.220f48"),true));
             }
             var position=new net.minecraft.core.BlockPos(terminal.anchor().x(),terminal.anchor().y(),terminal.anchor().z());
             var physical=audience.player().serverLevel().getBlockState(position);
             if(terminal.kind()==TerminalPolicy.Kind.KIOSK&&physical.getBlock() instanceof ca.emilybelnavis.mcmods.economy.terminal.BranchKioskBlock
                     &&!physical.getValue(ca.emilybelnavis.mcmods.economy.terminal.BranchKioskBlock.WIDE)){
-                lines.add("Legacy narrow kiosk. Upgrade is free and needs a clear, supported extra column.");
-                controls.add(new BankingNetwork.Choice("kiosk_upgrade","","Upgrade kiosk",false));
+                lines.add(UiText.t("ui.bank.legacy_narrow_kiosk_upgrade_is_free_and_needs_.7c7536"));
+                controls.add(new BankingNetwork.Choice("kiosk_upgrade","",UiText.t("ui.bank.upgrade_kiosk.242437"),false));
             }
             if(audience.player().serverLevel().getBlockEntity(position) instanceof ca.emilybelnavis.mcmods.economy.terminal.TerminalBlockEntity entity)entity.applyPolicy(terminal);
-            reply(audience,"settings",lines,"Owner/operator configuration",controls);
+            reply(audience,"settings",lines,UiText.t("ui.bank.owner_operator_configuration.c2d446"),controls);
         });
     }
     private static void configure(Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state, String value) {
@@ -863,7 +875,7 @@ public final class BankingAccounts {
         audience.menu().setBusy(true);
         services.ledger().terminalSettings(actor, (who, reads) -> operator, audience.menu().anchor()).whenComplete((found, error) -> {
             if (!audience.live()) return;
-            if (error != null || found.isEmpty()) { reply(audience, "settings", List.of("Only the owner or an operator may edit settings."), "Owner access required"); return; }
+            if (error != null || found.isEmpty()) { reply(audience, "settings", List.of(UiText.t("ui.bank.only_the_owner_or_an_operator_may_edit_setting.9e0d86")), UiText.t("ui.bank.owner_access_required.a11bd4")); return; }
             try {
                 var current = found.orElseThrow();
                 if (!current.generation().equals(audience.menu().generation())) throw new IllegalArgumentException("Placement changed");
@@ -880,7 +892,7 @@ public final class BankingAccounts {
                             (who, reads) -> currentOperator, null).submit(intent);
                 }, "settings");
             } catch (IllegalArgumentException invalid) { reply(audience, "settings",
-                    List.of("Enter BOTH CAD, DEPOSIT CAD, WITHDRAW CAD, or OFF."), "Check the setting and try again"); }
+                    List.of(UiText.t("ui.bank.enter_both_cad_deposit_cad_withdraw_cad_or_off.77aa77")), UiText.t("ui.bank.check_the_setting_and_try_again.74e64e")); }
         });
     }
     static TerminalPolicy.Settings parseSettings(String value, TerminalPolicy.Kind kind) {
@@ -935,7 +947,7 @@ public final class BankingAccounts {
                               Journal.Intent intent, Function<PartyAuthorization.Grant, JournalService.Submission> submit, String page) {
         if (!audience.live()) return;
         if (audience.player().getPersistentData().contains(PENDING)) {
-            reply(audience, page, List.of("A previous banking operation needs its original outcome checked. Choose Retry banking."), "Previous operation unresolved"); return;
+            reply(audience, page, List.of(UiText.t("ui.bank.a_previous_banking_operation_needs_its_origina.40e4b0")), UiText.t("ui.bank.previous_operation_unresolved.fde0de")); return;
         }
         var tag = new CompoundTag();
         tag.putUUID("world", grant.target().world().value()); tag.putUUID("actor", audience.player().getUUID());
@@ -951,15 +963,17 @@ public final class BankingAccounts {
         boolean reachedSubmission = false;
         try {
             BankingSaves.player(audience.player(), grant.target().world(), intent.operationId().value());
+            audience.menu().processing(intent.operationId().value(), intent.requestId().value());
+            var completionAudience = new Audience(audience.player(), audience.menu(), audience.session(), audience.menu().revision());
             reachedSubmission = true;
             // The same original operation and canonical request are retained if admission or publication is uncertain.
-            submit.apply(grant).completion().whenComplete((delivery, error) -> finish(audience, grant.target().world(), state, intent, page,
+            submit.apply(grant).completion().whenComplete((delivery, error) -> finish(completionAudience, grant.target().world(), state, intent, page,
                     error == null ? delivery.outcome() : null));
         } catch (Exception unavailable) {
             if (!reachedSubmission) {
                 audience.player().getPersistentData().remove(PENDING); state.retry = null;
-                reply(audience, page, List.of("The request was not submitted because its save could not be verified."), "Banking save unavailable");
-            } else reply(audience, page, List.of("Your original operation is retained. Choose Retry banking to check it."), "Banking admission unavailable");
+                reply(audience, page, List.of(UiText.t("ui.bank.the_request_was_not_submitted_because_its_save.b19980")), UiText.t("ui.bank.banking_save_unavailable.9b1e6c"));
+            } else reply(new Audience(audience.player(), audience.menu(), audience.session(), audience.menu().revision()), page, List.of(UiText.t("ui.bank.your_original_operation_is_retained_choose_ret.07c849")), UiText.t("ui.bank.banking_admission_unavailable.e0c6bd"));
         }
     }
     private static Journal.Intent pending(ServerPlayer player, WorldId world) {
@@ -982,7 +996,7 @@ public final class BankingAccounts {
     }
     private static void retry(Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state) {
         if (!audience.player().getPersistentData().contains(PENDING)) {
-            reply(audience, audience.menu().page(), List.of("There is no unresolved banking operation."), "Nothing to retry"); return;
+            reply(audience, audience.menu().page(), List.of(UiText.t("ui.bank.there_is_no_unresolved_banking_operation.7f45fe")), UiText.t("ui.bank.nothing_to_retry.def91a")); return;
         }
         var intent = pending(audience.player(), grant.target().world());
         audience.menu().setBusy(true);
@@ -991,19 +1005,16 @@ public final class BankingAccounts {
             if (error != null) { finish(audience, world, state, intent, audience.menu().page(), null); return; }
             if (found.isPresent()) { finish(audience, world, state, intent, audience.menu().page(), found.orElseThrow()); return; }
             if (!audience.live()) return;
-            if (state.retry == null || intent.kind().equals(ca.emilybelnavis.mcmods.economy.autopay.Autopay.CONFIGURE) || intent.kind().equals(ca.emilybelnavis.mcmods.economy.debt.DebtPayments.PAY) || intent.kind().service().equals("economy:credit") || intent.kind().service().equals("economy:loans") || (intent.kind().service().equals("economy:providers") || intent.kind().service().equals("economy:cards")) || Set.of(AccountCatalog.INITIALIZE_PRIMARY, AccountLifecycle.OPEN, AccountLifecycle.CLOSE).contains(intent.kind())) {
-                audience.player().getPersistentData().put("economy_banking_last_absent", audience.player().getPersistentData().getCompound(PENDING).copy());
-                audience.player().getPersistentData().remove(PENDING);
-                reply(audience, audience.menu().page(), List.of("Operation " + intent.operationId().value(),
-                        "The ordered original-outcome lookup confirms no committed result. No replacement operation was submitted.",
-                        "You may prepare a fresh request."), "Original operation was not committed");
-                return;
-            }
-            try {
-                BankingSaves.player(audience.player(), world, intent.operationId().value());
-                state.retry.apply(grant).completion().whenComplete((delivery, submitError) -> finish(audience, world, state, intent,
-                        audience.menu().page(), submitError == null ? delivery.outcome() : null));
-            } catch (Exception unavailable) { finish(audience, world, state, intent, audience.menu().page(), null); }
+            audience.player().getPersistentData().put("economy_banking_last_absent", audience.player().getPersistentData().getCompound(PENDING).copy());
+            audience.player().getPersistentData().remove(PENDING);
+            state.retry = null;
+            try { BankingSaves.player(audience.player(), world, intent.operationId().value()); }
+            catch (Exception ignored) { /* Retained saved marker safely replays the same lookup. */ }
+            audience.menu().setBusy(false);
+            audience.menu().publish(audience.menu().page(), List.of(UiText.t("ui.bank.operation.7811f5") + intent.operationId().value(),
+                    UiText.t("ui.bank.the_ordered_original_outcome_lookup_confirms_n.596e24"),
+                    UiText.t("ui.bank.prepare_a_fresh_request_and_review_current_ter.488eaf")), UiText.t("ui.bank.original_operation_was_not_committed.e8bcf8"), List.of(),
+                    BankingOperation.View.original(BankingOperation.State.EXPIRED_STALE, intent.operationId().value(), intent.requestId().value(), null), null);
         });
     }
     private static void finish(Audience audience, WorldId world, State state, Journal.Intent intent, String page, Journal.Outcome outcome) {
@@ -1023,25 +1034,27 @@ public final class BankingAccounts {
         if (!audience.live()) return;
         var lines = new ArrayList<String>();
         if (outcome != null && outcome.status() == Journal.Status.COMMITTED) lines.add(switch (page) {
-            case "setup" -> "Your primary account is ready.";
-            case "manage" -> "Your account is ready.";
-            case "accounts" -> "Your account is ready.";
-            case "close" -> "Your account was closed. Its history is preserved.";
-            case "fx" -> "Your exchange is complete.";
-            case "settings" -> "The terminal settings were saved.";
-            case "cards" -> intent.kind().equals(ca.emilybelnavis.mcmods.economy.card.IssuedCards.ISSUE)?"Your card issuance committed. Use Collect items to receive it.":"The token is revoked; every copy is invalid.";
+            case "setup" -> UiText.t("ui.bank.your_primary_account_is_ready.11212e");
+            case "manage" -> UiText.t("ui.bank.your_account_is_ready.abcd4b");
+            case "accounts" -> UiText.t("ui.bank.your_account_is_ready.abcd4b");
+            case "close" -> UiText.t("ui.bank.your_account_was_closed_its_history_is_preserv.c8c94f");
+            case "fx" -> UiText.t("ui.bank.your_exchange_is_complete.759dbc");
+            case "settings" -> UiText.t("ui.bank.the_terminal_settings_were_saved.0371d0");
+            case "cards" -> intent.kind().equals(ca.emilybelnavis.mcmods.economy.card.IssuedCards.ISSUE)?UiText.t("ui.bank.your_card_issuance_committed_use_collect_items.9d1fa9"):UiText.t("ui.bank.token_revoked_help");
             default -> "Done.";
         });
         else if (outcome != null && outcome.status() == Journal.Status.DURABLY_REJECTED)
             lines.add(failureMessage(outcome.result().code()));
-        lines.add("Operation " + intent.operationId().value());
+        lines.add(UiText.t("ui.bank.operation.7811f5") + intent.operationId().value());
         if (outcome != null) lines.add(outcome.result().code().replace('_', ' ').toLowerCase(Locale.ROOT));
-        if (!terminal) lines.add("Keep the original operation. Choose Retry banking before another mutation.");
-        String resultStatus = !terminal ? "Banking outcome needs checking"
+        if (!terminal) lines.add(UiText.t("ui.bank.keep_the_original_operation_choose_retry_banki.adc7ba"));
+        String resultStatus = !terminal ? UiText.t("ui.bank.banking_outcome_needs_checking.df6a34")
                 : outcome.status() == Journal.Status.DURABLY_REJECTED ? failureMessage(outcome.result().code())
-                : (intent.kind().equals(AccountLifecycle.CLOSE) || intent.kind().equals(BankProviders.CLOSE)) ? "Account closed. An account slot is now available." : "Banking operation resolved";
-        if (page.equals("close")) reply(audience, page, lines, resultStatus, List.of());
-        else reply(audience, page, lines, resultStatus);
+                : (intent.kind().equals(AccountLifecycle.CLOSE) || intent.kind().equals(BankProviders.CLOSE)) ? UiText.t("ui.bank.account_closed_an_account_slot_is_now_availabl.bff8b6") : UiText.t("ui.bank.banking_operation_resolved.8b3bf3");
+        audience.menu().setBusy(false);
+        var view = outcome == null ? BankingOperation.View.original(BankingOperation.State.OUTCOME_UNCERTAIN,
+                intent.operationId().value(), intent.requestId().value(), null) : BankingOperation.outcome(outcome);
+        audience.menu().publish(page, lines, resultStatus, List.of(), view, null);
         if (outcome != null && outcome.status() == Journal.Status.COMMITTED
                 && (intent.kind().equals(TerminalPolicy.Action.CONFIGURE.kind()) || intent.kind().equals(TerminalBanking.BIND)))
             action(audience.player(), audience.menu(), "settings", "");
@@ -1056,17 +1069,17 @@ public final class BankingAccounts {
     }
     static String failureMessage(String code) {
         return switch (code) {
-            case "PRICING_QUOTE_STALE", "FX_PRICING_REQUIRED", "FX_PROVIDER_STALE" -> "Account service or pricing changed. Review a fresh quote.";
-            case "YIELD_SETTLEMENT_REQUIRED", "YIELD_FUNDING_UNAVAILABLE" -> "Earned deposit yield must be settled before closure. Existing funds remain available.";
-            case "BRANCH_REQUIRED" -> "Visit the account institution's branded branch kiosk.";
-            case "BANK_CAP_REACHED" -> "Limit: 4 open accounts. A bank branch is required for closure.";
-            case "BANK_CURRENCY_EXISTS" -> "You already have an open account in this currency.";
-            case "ACCOUNT_PROTECTED" -> "Your primary and world-currency accounts cannot be closed.";
-            case "ACTIVE_HOLD", "RESTRICTED_FUNDS" -> "This account has reserved or restricted funds. Resolve them before closing.";
-            case "UNRESOLVED_OBLIGATION" -> "Resolve pending payments, refunds or item deliveries before closing.";
-            case "FX_QUOTE_STALE", "FX_QUOTE_CONSUMED", "FX_CLOSURE_AMOUNT", "ACCOUNT_STALE", "DESTINATION_STALE" -> "The account or quote changed. Review the closure or exchange again.";
-            case "PRIMARY_REQUIRED" -> "Open your first account from My accounts.";
-            default -> "Request declined. Refresh your accounts and review your choices.";
+            case "PRICING_QUOTE_STALE", "FX_PRICING_REQUIRED", "FX_PROVIDER_STALE" -> UiText.t("ui.bank.account_service_or_pricing_changed_review_a_fr.1a880a");
+            case "YIELD_SETTLEMENT_REQUIRED", "YIELD_FUNDING_UNAVAILABLE" -> UiText.t("ui.bank.earned_deposit_yield_must_be_settled_before_cl.16a68f");
+            case "BRANCH_REQUIRED" -> UiText.t("ui.bank.visit_the_account_institution_s_branded_branch.4e6008");
+            case "BANK_CAP_REACHED" -> UiText.t("ui.bank.limit_4_open_accounts_a_bank_branch_is_require.040bdf");
+            case "BANK_CURRENCY_EXISTS" -> UiText.t("ui.bank.you_already_have_an_open_account_in_this_curre.eaedc1");
+            case "ACCOUNT_PROTECTED" -> UiText.t("ui.bank.your_primary_and_world_currency_accounts_canno.2615f6");
+            case "ACTIVE_HOLD", "RESTRICTED_FUNDS" -> UiText.t("ui.bank.this_account_has_reserved_or_restricted_funds_.8c75d2");
+            case "UNRESOLVED_OBLIGATION" -> UiText.t("ui.bank.resolve_pending_payments_refunds_or_item_deliv.388d51");
+            case "FX_QUOTE_STALE", "FX_QUOTE_CONSUMED", "FX_CLOSURE_AMOUNT", "ACCOUNT_STALE", "DESTINATION_STALE" -> UiText.t("ui.bank.the_account_or_quote_changed_review_the_closur.37a26a");
+            case "PRIMARY_REQUIRED" -> UiText.t("ui.bank.open_your_first_account_from_my_accounts.899393");
+            default -> UiText.t("ui.bank.request_declined_refresh_your_accounts_and_rev.634994");
         };
     }
 
@@ -1080,16 +1093,66 @@ public final class BankingAccounts {
         audience.menu().setBusy(false);
         audience.menu().publish(page, lines, status, choices);
     }
-    private static void unavailable(Audience audience, String page) {
-        reply(audience, page, List.of("The account or terminal is unavailable. Refresh My accounts and try again."), "Banking view unavailable", List.of());
+    private static void decline(Audience audience, String page, List<String> lines, String status) {
+        if (!audience.live()) return;
+        audience.menu().setBusy(false);
+        audience.menu().publish(page, lines, status, List.of(), BankingOperation.View.of(BankingOperation.State.DECLINED,
+                "screen.economy.operation.declined"), null);
     }
-    private static String money(Money value) { return value.majorUnits().toPlainString() + " " + value.currency().code(); }
+    private static void unavailable(Audience audience, String page) {
+        decline(audience, page, List.of(UiText.t("ui.bank.the_account_or_terminal_is_unavailable_refresh.4345b6")), UiText.t("ui.bank.banking_view_unavailable.d7a528"));
+    }
+    private static String money(Money value) { return UiText.money(value); }
     private static String friendlyMode(TerminalPolicy.Mode mode) {
         return switch (mode) {
-            case BOTH -> "deposits and withdrawals";
-            case DEPOSIT -> "deposits only";
-            case WITHDRAW -> "withdrawals only";
+            case BOTH -> UiText.t("ui.bank.deposits_and_withdrawals.d92934");
+            case DEPOSIT -> UiText.t("ui.bank.deposits_only.5f9506");
+            case WITHDRAW -> UiText.t("ui.bank.withdrawals_only.2c3fe2");
             case DISABLED -> "off";
         };
     }
+    private static String display(Object value) { return switch (String.valueOf(value)) {
+        case "ALL" -> UiText.t("ui.bank.state.all");
+        case "TRANSFER" -> UiText.t("ui.bank.state.transfer");
+        case "FX" -> UiText.t("ui.bank.state.fx");
+        case "CASH" -> UiText.t("ui.bank.state.cash");
+        case "PAYMENT" -> UiText.t("ui.bank.state.payment");
+        case "CREDIT" -> UiText.t("ui.bank.state.credit");
+        case "LOAN" -> UiText.t("ui.bank.state.loan");
+        case "COLLECTION" -> UiText.t("ui.bank.state.collection");
+        case "OTHER" -> UiText.t("ui.bank.state.other");
+        case "KNOWN" -> UiText.t("ui.bank.state.known");
+        case "NOT_RECORDED" -> UiText.t("ui.bank.state.not_recorded");
+        case "UNAVAILABLE" -> UiText.t("ui.bank.state.unavailable");
+        case "PRIVATE" -> UiText.t("ui.bank.state.private");
+        case "CAPTURED" -> UiText.t("ui.bank.state.captured");
+        case "AVAILABLE" -> UiText.t("ui.bank.state.available");
+        case "PROVENANCE_UNAVAILABLE" -> UiText.t("ui.bank.state.provenance_unavailable");
+        case "CURRENCY_UNAVAILABLE" -> UiText.t("ui.bank.state.currency_unavailable");
+        case "MISSING_PUBLICATION" -> UiText.t("ui.bank.state.missing_publication");
+        case "EFFECTIVE" -> UiText.t("ui.bank.state.effective");
+        case "DAILY" -> UiText.t("ui.bank.state.daily");
+        case "OPEN" -> UiText.t("ui.bank.state.open");
+        case "CLOSED" -> UiText.t("ui.bank.state.closed");
+        case "EXPIRED" -> UiText.t("ui.bank.state.expired");
+        case "ACTIVE" -> UiText.t("ui.bank.state.active");
+        case "REVOKED" -> UiText.t("ui.bank.state.revoked");
+        default -> String.valueOf(value);
+    }; }
+    private static String deliveryLabel(Object value) { return switch (String.valueOf(value)) {
+        case "BOTH" -> UiText.t("ui.bank.state.both");
+        case "DEPOSIT" -> UiText.t("ui.bank.state.deposit");
+        case "WITHDRAW" -> UiText.t("ui.bank.state.withdraw");
+        case "DISABLED" -> UiText.t("ui.bank.state.disabled");
+        case "RESERVED" -> UiText.t("ui.bank.state.reserved");
+        case "WITNESSED" -> UiText.t("ui.bank.state.witnessed");
+        case "COMMITTED" -> UiText.t("ui.bank.state.committed");
+        case "DELIVERING" -> UiText.t("ui.bank.state.delivering");
+        case "ACKNOWLEDGED" -> UiText.t("ui.bank.state.acknowledged");
+        case "CLAIM" -> UiText.t("ui.bank.state.claim");
+        case "QUARANTINED" -> UiText.t("ui.bank.state.quarantined");
+        case "DELIVERED" -> UiText.t("ui.bank.state.delivered");
+        case "COMPENSATED" -> UiText.t("ui.bank.state.compensated");
+        default -> String.valueOf(value);
+    }; }
 }
