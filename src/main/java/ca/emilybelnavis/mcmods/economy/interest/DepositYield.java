@@ -383,7 +383,7 @@ public final class DepositYield {
             }
             var fx=FxService.latest(reads);
             if(fx!=null) {
-                var instant=fx.day().atStartOfDay(ZoneOffset.UTC).toInstant();
+                var instant=Instant.ofEpochMilli(FxService.effectiveMillis(reads,fx.updateId()));
                 if(Instant.ofEpochMilli(now).isBefore(instant) || Instant.ofEpochMilli(now).isAfter(instant.plus(Duration.ofHours(48))))fx=null;
             }
             var payment=YieldPosting.prepare(overlay(reads,deltas),world,s.owner(),s.bank(),s.currency(),0,amount,destination,fx);

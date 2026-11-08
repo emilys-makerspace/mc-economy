@@ -11,6 +11,15 @@ import java.util.*;
 public final class CreditEvents {
     private static final String TYPES="record_type IN('economy:a6/credit-facility','economy:a6/credit-statement','economy:a6/credit-daily-witness','economy:a6/credit-payment-allocation')";
     public static final String INDEX="CREATE INDEX credit_event_feed ON journal_records(sequence,position) WHERE "+TYPES;
+    // Keep the cursor on the ordered feed instead of sorting matches from the general record-type index.
+    static final String QUERY="""
+            SELECT r.sequence,r.position,r.record_type,r.record_version,r.payload,t.world_id,t.transaction_id,
+                   t.operation_id,t.audit_utc,t.economic_update_id,t.correction_of
+            FROM journal_records r INDEXED BY credit_event_feed
+            JOIN journal_transactions t ON t.sequence=r.sequence
+            WHERE r.%s AND r.sequence<=? AND (r.sequence,r.position)>(?,?)
+            ORDER BY r.sequence,r.position LIMIT ?
+            """.formatted(TYPES);
     private CreditEvents() {}
     public record Cursor(WorldId world,long sequence,int position,long frontier){
         public Cursor {Objects.requireNonNull(world);if(sequence<0||frontier<sequence||position< -1||position>63||sequence==0&&position!=-1)throw new IllegalArgumentException("Credit event cursor");}
@@ -34,8 +43,8 @@ public final class CreditEvents {
     public static Page read(JournalEngine.ReadView reads,Cursor cursor,int limit){
         Objects.requireNonNull(cursor);if(limit<1||limit>16)throw new IllegalArgumentException("Credit event page bounds");
         if(!cursor.world().equals(world(reads))||cursor.frontier()>CreditDiagnostics.frontier(reads))throw new IllegalArgumentException("Credit event world/frontier");
-        var rows=reads.query("SELECT r.sequence,r.position,r.record_type,r.record_version,r.payload,t.world_id,t.transaction_id,t.operation_id,t.audit_utc,t.economic_update_id,t.correction_of FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE r."+TYPES+" AND r.sequence<=? AND (r.sequence>? OR (r.sequence=? AND r.position>?)) ORDER BY r.sequence,r.position LIMIT ?",
-            List.of(Long.toString(cursor.frontier()),Long.toString(cursor.sequence()),Long.toString(cursor.sequence()),Integer.toString(cursor.position()),Integer.toString(limit+1)),limit+1);
+        var rows=reads.query(QUERY,List.of(Long.toString(cursor.frontier()),Long.toString(cursor.sequence()),
+                Integer.toString(cursor.position()),Integer.toString(limit+1)),limit+1);
         var events=rows.stream().limit(limit).map(CreditEvents::event).toList();
         for(var e:events)if(!e.envelope().world().equals(cursor.world()))throw new IllegalArgumentException("Credit event envelope world");
         var end=events.isEmpty()?cursor:new Cursor(cursor.world(),events.getLast().envelope().sequence(),events.getLast().envelope().position(),cursor.frontier());

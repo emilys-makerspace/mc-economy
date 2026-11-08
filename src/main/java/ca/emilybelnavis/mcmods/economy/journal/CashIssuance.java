@@ -2,6 +2,7 @@ package ca.emilybelnavis.mcmods.economy.journal;
 
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.storage.FoundationStore;
+import ca.emilybelnavis.mcmods.economy.trade.custody.NpcDeliveries;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -19,6 +20,9 @@ public final class CashIssuance {
     public static final int MAX_ISSUED = 4096;
     private static final SystemActorId RECOVERY = new SystemActorId(
             UUID.fromString("f28dcb59-cc47-4f5c-8eb7-4ce3fb7c3d75"));
+    // Protected payouts stay active, so advance past them between bounded startup batches.
+    private static final Map<FoundationStore, String> RECONCILIATION_CURSORS =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     public enum State { ACTIVE, QUARANTINED }
     public enum Action {
@@ -205,6 +209,45 @@ public final class CashIssuance {
         return commit(Action.ISSUE, List.copyOf(lots), financial);
     }
 
+    /** NPC input consumption: exclude only this witnessed original custody's exact locked quantity. */
+    public static Decision composeRedemption(WorldId world, List<Claim> claims, UUID ownCustody,
+                                              Commit financial, ReadView reads) {
+        Objects.requireNonNull(financial); Objects.requireNonNull(ownCustody);
+        if (claims.isEmpty() || claims.size() > MAX_STACKS) return reject("CASH_STACK_COUNT");
+        var custody = Custody.find(reads, null, ownCustody, true).orElse(null);
+        if (custody == null || custody.state() != Custody.State.WITNESSED) return reject("CASH_CUSTODY");
+        var quantities = new LinkedHashMap<UUID, Integer>();
+        var identities = new HashMap<UUID, String>();
+        for (var claim : claims) {
+            if (!world.equals(claim.world())) return reject("CASH_WORLD");
+            String previous = identities.putIfAbsent(claim.lot(), claim.item());
+            if (previous != null && !previous.equals(claim.item())) return reject("CASH_UNRECOGNIZED");
+            quantities.merge(claim.lot(), claim.count(), Math::addExact);
+        }
+        var own = reads.query("SELECT lot_id,count FROM custody_cash_reservations WHERE custody_id=? AND state='ACTIVE' ORDER BY lot_id LIMIT 25",
+                List.of(ownCustody.toString()), 25);
+        if (own.size() != quantities.size() || own.size() > 24) return reject("CASH_RESERVATION");
+        var changed = new ArrayList<Lot>();
+        for (var row : own) {
+            var id = UUID.fromString(row.get("lot_id"));
+            int quantity = Integer.parseInt(row.get("count"));
+            if (!Objects.equals(quantities.get(id), quantity)) return reject("CASH_RESERVATION");
+            var lot = find(reads, world, id).orElse(null);
+            if (lot == null || !lot.item().equals(identities.get(id))) return reject("CASH_UNRECOGNIZED");
+            if (lot.state() != State.ACTIVE) return decline("CASH_QUARANTINED");
+            long other = Math.subtractExact(reserved(reads, id, null), quantity);
+            if (quantity > lot.remaining() - other) return reject("CASH_QUANTITY");
+            changed.add(new Lot(world, id, lot.item(), lot.issued(), lot.remaining() - quantity,
+                    lot.state(), Math.addExact(lot.revision(), 1), "npc-custody:" + ownCustody));
+        }
+        var decision = commit(Action.REDEEM, changed, financial);
+        if (!(decision instanceof Commit accepted)) return decision;
+        return new Commit(accepted.records(), accepted.result(), tx -> {
+            accepted.projections().apply(tx);
+            tx.execute("UPDATE custody_cash_reservations SET state='RELEASED' WHERE custody_id=? AND state='ACTIVE'", List.of(ownCustody.toString()));
+        });
+    }
+
     /** Confirmed loss compensation retires the protected original quantity atomically. */
     static Decision retireClaim(ReadView reads, UUID custody, Commit compensation) {
         var rows = reads.query("""
@@ -244,29 +287,37 @@ public final class CashIssuance {
                 List.of(world.value().toString(), lot.toString()), 1).stream().map(CashIssuance::read).findFirst();
     }
 
-    /** Startup quarantine covers outstanding restored lots before any redemption can be admitted. */
+    /** Inspect outstanding restored lots before any redemption can be admitted. */
     public static boolean reconcileBatch(FoundationStore store) {
         var world = store.snapshot().worldId();
+        String after = RECONCILIATION_CURSORS.getOrDefault(store, "");
         var rows = store.transaction(tx -> tx.query("""
-                SELECT lot_id,revision FROM cash_issuance WHERE state='ACTIVE' AND remaining>0
+                SELECT * FROM cash_issuance WHERE state='ACTIVE' AND remaining>0 AND lot_id>?
                 ORDER BY lot_id LIMIT 16
-                """, List.of(), 16));
+                """, List.of(after), 16));
         var action = Action.QUARANTINE;
         var engine = new JournalEngine(store, (actor, kind) -> actor.equals(RECOVERY) && kind.equals(action.kind()),
                 Map.of(action.kind(), registration(action, world,
                         (a, intent, lots, reads) -> intent.actor().equals(RECOVERY),
                         (a, intent, lots, evidence, reads) -> false, null)));
         for (var row : rows) {
-            var id = UUID.fromString(row.get("lot_id"));
-            var operation = UUID.nameUUIDFromBytes(("economy:cash-reconcile:" + id + ":" + row.get("revision"))
+            var lot = read(row);
+            if (store.<Boolean>transaction(tx -> NpcDeliveries.protectsCash(tx::query, lot))) continue;
+            var id = lot.id();
+            var operation = UUID.nameUUIDFromBytes(("economy:cash-reconcile:" + id + ":" + lot.revision())
                     .getBytes(StandardCharsets.UTF_8));
             var result = engine.submit(new Intent(new OperationId(operation), new RequestId(UUID.randomUUID()), RECOVERY,
                     action.kind(), reconcileRequest(id, "startup-unknown", "restored quantities require verified custody evidence"),
                     null, null));
             if (result.status() != Status.COMMITTED) throw new IllegalStateException("Cash reconciliation failed");
         }
-        return store.transaction(tx -> tx.query(
-                "SELECT lot_id FROM cash_issuance WHERE state='ACTIVE' AND remaining>0 LIMIT 1", List.of(), 1).isEmpty());
+        String cursor = rows.isEmpty() ? after : rows.getLast().get("lot_id");
+        boolean complete = store.transaction(tx -> tx.query("""
+                SELECT lot_id FROM cash_issuance WHERE state='ACTIVE' AND remaining>0 AND lot_id>? LIMIT 1
+                """, List.of(cursor), 1).isEmpty());
+        if (complete) RECONCILIATION_CURSORS.remove(store);
+        else RECONCILIATION_CURSORS.put(store, cursor);
+        return complete;
     }
 
     private static Decision commit(Action action, List<Lot> changed, Commit base) {

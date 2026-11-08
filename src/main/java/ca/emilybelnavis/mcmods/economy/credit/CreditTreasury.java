@@ -17,7 +17,7 @@ public final class CreditTreasury {
     public static FxFacts.Publication publication(JournalEngine.ReadView reads,long now) {
         var fx=ca.emilybelnavis.mcmods.economy.fx.FxService.latest(reads);
         if(fx==null)return null;
-        long age=now-fx.day().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+        long age=Math.subtractExact(now,ca.emilybelnavis.mcmods.economy.fx.FxService.effectiveMillis(reads,fx.updateId()));
         return age>=0 && age<=172_800_000L?fx:null;
     }
     public static JournalEngine.Decision reserve(JournalEngine.ReadView reads,WorldId world,

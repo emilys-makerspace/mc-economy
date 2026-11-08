@@ -102,7 +102,7 @@ class LoanEventsTest {
             });
             assertTrue(sizes.stream().allMatch(size -> size <= 17));
             try (var connection = DriverManager.getConnection("jdbc:sqlite:file:" + path.resolve("economy/economy.sqlite") + "?mode=ro");
-                 var statement = connection.prepareStatement("EXPLAIN QUERY PLAN SELECT r.sequence,r.position,t.operation_id FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE r.record_type IN('economy:a6/loan','economy:a6/loan-installment') AND r.sequence<=? AND (r.sequence,r.position)>(?,?) ORDER BY r.sequence,r.position LIMIT ?")) {
+                 var statement = connection.prepareStatement("EXPLAIN QUERY PLAN " + LoanEvents.QUERY)) {
                 statement.setLong(1, cursor.frontier());
                 statement.setLong(2, 0);
                 statement.setInt(3, -1);

@@ -2,6 +2,7 @@ package ca.emilybelnavis.mcmods.economy.journal;
 
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.storage.FoundationStore;
+import ca.emilybelnavis.mcmods.economy.trade.custody.NpcDeliveries;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -370,6 +371,7 @@ public final class Custody {
         for(var row:rows) {
             var id=UUID.fromString(row.get("id"));
             var current=store.transaction(tx->raw(tx::query,id).orElseThrow());
+            if (store.<Boolean>transaction(tx->NpcDeliveries.isClaimable(tx::query,current))) continue;
             boolean card=store.transaction(tx->verifiedCard.test(current,tx::query));
             if(card && (current.state()==State.DELIVERED || current.state()==State.CLAIM
                     && current.evidence().kind()==EvidenceKind.UNDELIVERED

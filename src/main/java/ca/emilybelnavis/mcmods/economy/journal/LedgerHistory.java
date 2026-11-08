@@ -18,13 +18,13 @@ public final class LedgerHistory {
     public static final int MAX_PAGE_SIZE = 63;
     static final String QUERY = """
             SELECT r.sequence,r.position,r.payload,t.transaction_id,(
-                SELECT d.payload FROM journal_records d
+                SELECT d.payload FROM journal_records d INDEXED BY ledger_rebase_latest
                 WHERE d.record_type='economy:rebase' AND d.record_version=1 AND d.sequence<=r.sequence
                 ORDER BY d.sequence DESC LIMIT 1
             ) AS denomination
             FROM journal_records r
             JOIN journal_transactions t ON t.sequence=r.sequence
-            WHERE r.record_type='economy:posting' AND r.record_version IN (1,2,3) AND substr(r.payload,1,36)=?
+            WHERE r.record_type='economy:posting' AND r.record_version IN (1,2,3,4) AND substr(r.payload,1,36)=?
               AND (r.sequence,r.position)>(?,?) AND t.world_id=?
             ORDER BY r.sequence,r.position LIMIT ?
             """;

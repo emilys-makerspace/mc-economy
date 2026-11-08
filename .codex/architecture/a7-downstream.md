@@ -29,7 +29,7 @@ Use original journal operation identity for uncertain outcomes, retain captured 
 
 ## A8 economic simulation
 
-Consume current effective/versioned prime policy through `BankingIntegration.prime`, retaining effective history for backlog and captured fixed-loan terms. Register a separately approved scheduler/provider adapter through the existing foundation. Village presence and staffing supply access presentation. Existing monetary sources and authoritative institution/account policies govern finance.
+Consume current effective/versioned prime policy through `BankingIntegration.prime`, retaining effective history for backlog and captured fixed-loan terms. [A8 planning](a8-planning.md) targets activity-driven macroeconomics, currency-specific prime/20-minute FX and monetary villager commerce. [Technical revision 1](a8-shared-contracts.md) and the package queue are prepared but unselected; the delivered API still exposes global prime. Register separately selected scheduler/provider adapters through the existing foundation. Village/slot-0 identities supply the planned village-market currency anchor; ordinary villager membership requires its own adapter, not banker staffing authority. Existing institution/account services remain authoritative.
 
 ## A9 reference item valuation
 

@@ -59,6 +59,35 @@ public final class DeadlineDispatcher {
         }
     }
 
+    /** Exact persisted child identity shared with domain source writers. */
+    public static UUID childOperation(WorldId world,Event event,String target) {
+        return stable("operation|"+world.value()+"|"+event.id()+"|target|"+target);
+    }
+    /** Validate an already proposed next event against this live installed registry. */
+    public Successor proposedSuccessor(JournalEngine.ReadView reads,String providerId,Event event) {
+        var provider=Objects.requireNonNull(providers.get(providerId),"Successor implementation is not installed");
+        if(!(provider instanceof ca.emilybelnavis.mcmods.economy.simulation.macro.MacroProvider)||!event.equals(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroProvider.event(store.snapshot().worldId(),event.effectiveMillis()))||active(providerId,reads::query)!=null||completed(providerId,reads::query)!=null
+                ||!providerId.equals(event.provider())||event.stage()!=0||event.version()!=scheduledVersion(reads::query,providerId,event.effectiveMillis())
+                ||!provider.versions().containsKey(event.version()))throw new IllegalArgumentException("Prospective successor registry conflict");
+        return new Successor(store.snapshot().worldId(),event,fingerprint(provider));
+    }
+    public record Successor(WorldId world,Event event,String implementations) {}
+    /** Live registry proof used only when reserving a prospective fixed-system handover. */
+    public Successor successorAt(String providerId,long effectiveMillis) {
+        var provider=Objects.requireNonNull(providers.get(providerId),"Successor implementation is not installed");
+        return store.transaction(tx->{
+            if(active(providerId,tx::query)!=null)throw new IllegalArgumentException("Successor has an in-flight event");
+            long origin=number(tx.query("SELECT origin_ms FROM financial_calendar WHERE singleton=1",List.of(),1).getFirst(),"origin_ms");
+            var previous=completed(providerId,tx::query);var event=provider.next(tx::query,origin,previous);
+            if(event==null||!providerId.equals(event.provider())||event.effectiveMillis()!=effectiveMillis||event.stage()!=0
+                    ||!provider.versions().containsKey(event.version())||event.version()!=scheduledVersion(tx::query,providerId,effectiveMillis))throw new IllegalArgumentException("Installed successor must next publish at takeover stage zero");
+            return new Successor(store.snapshot().worldId(),event,fingerprint(provider));
+        });
+    }
+    public static Map<String,String> implementations(Collection<Provider> providers) {
+        var result=new TreeMap<String,String>();for(var provider:providers)if(result.put(provider.id(),fingerprint(provider))!=null)throw new IllegalArgumentException("Duplicate successor");return Map.copyOf(result);
+    }
+
     public static RecordCatalog register(RecordCatalog catalog) {
         return catalog.with(new RecordCatalog.Key(ACTIVATION, 1), DeadlineDispatcher::validateActivation)
                 .with(new RecordCatalog.Key(PROGRESS, 1), payload -> validateProgressType(payload, false))
@@ -99,6 +128,7 @@ public final class DeadlineDispatcher {
                 }
                 validateSchedule(tx::query, provider);
             }
+            validateRetirementSuccessors(tx::query,providers.values());
             var calendar = tx.query("SELECT * FROM financial_calendar", List.of(), 1).getFirst();
             if (!"1".equals(calendar.get("version"))) throw failure("Unsupported financial calendar version");
             if (tx.query("SELECT payload FROM journal_records WHERE record_type IN ('economy:a6/calendar-activation','economy:a6/deadline-progress','economy:a6/deadline-completion','economy:a6/policy-effective') AND record_type=? AND record_version=1 AND payload=? LIMIT 1",
@@ -191,6 +221,7 @@ public final class DeadlineDispatcher {
     }
 
     private Event next(EconomicClock.Queries reads) {
+        validateRetirementSuccessors(reads,providers.values());
         long origin = number(reads.query("SELECT origin_ms FROM financial_calendar", List.of(), 1).getFirst(), "origin_ms");
         Event earliest = null;
         for (var provider : providers.values()) {
@@ -281,6 +312,23 @@ public final class DeadlineDispatcher {
             Provider provider = registry.get(row.get("provider"));
             if (provider == null || !retains(provider, row.get("implementations"))) throw failure("Missing or changed historical deadline provider");
             validateSchedule(reads, provider);
+        }
+        validateRetirementSuccessors(reads,installed);
+    }
+
+    private static void validateRetirementSuccessors(EconomicClock.Queries reads,Collection<Provider> installed) {
+        if(reads.query("SELECT name FROM sqlite_schema WHERE type='table' AND name='fixed_system_retirements'",List.of(),1).isEmpty())return;
+        var registry=new HashMap<String,Provider>();for(var provider:installed)registry.put(provider.id(),provider);
+        for(var row:reads.query("SELECT payload FROM fixed_system_retirements ORDER BY system_id",List.of(),64)) {
+            var receipt=FixedRetirements.decode(row.get("payload"));var provider=registry.get(receipt.successor());
+            if(provider==null||!FixedRetirements.retains(fingerprint(provider),receipt.successorImplementations()))throw failure("Retired system's successor is not installed");
+            var persisted=reads.query("SELECT event_id,provider,effective_ms,stage,version FROM financial_deadline_events WHERE event_id=?",List.of(receipt.successorEvent().toString()),1);
+            Event expected=new Event(receipt.successorEvent(),receipt.successor(),receipt.takeoverMillis(),0,receipt.successorVersion());
+            if(!persisted.isEmpty()){if(!event(persisted.getFirst()).equals(expected))throw failure("Retirement successor event changed");continue;}
+            var state=reads.query("SELECT * FROM financial_deadline_providers WHERE provider=?",List.of(provider.id()),1);if(state.isEmpty())throw failure("Retirement successor checkpoint missing");
+            var previous=state.getFirst();Event completed=previous.get("completed_event")==null?null:new Event(UUID.fromString(previous.get("completed_event")),provider.id(),number(previous,"completed_ms"),Integer.parseInt(previous.get("completed_stage")),Integer.parseInt(previous.get("completed_version")));
+            long origin=number(reads.query("SELECT origin_ms FROM financial_calendar WHERE singleton=1",List.of(),1).getFirst(),"origin_ms");
+            if(!expected.equals(provider.next(reads,origin,completed)))throw failure("Reserved successor event is missing or changed");
         }
     }
 
@@ -387,6 +435,10 @@ public final class DeadlineDispatcher {
         var intent = intent("policy|" + provider + "|" + effectiveMillis, Map.of("provider", provider, "version", Integer.toString(version), "effective", Long.toString(effectiveMillis)), "economy:a6/calendar/policy");
         var journal = engine("economy:a6/calendar/policy", (request, reads) -> {
             var row = reads.query("SELECT * FROM financial_calendar", List.of(), 1).getFirst();
+            for(var retirement:reads.query("SELECT payload FROM fixed_system_retirements ORDER BY system_id",List.of(),64)) {
+                var captured=FixedRetirements.decode(retirement.get("payload"));
+                if(captured.successor().equals(provider)&&effectiveMillis<=captured.takeoverMillis())throw new IllegalArgumentException("Reserved successor policy cannot change before takeover");
+            }
             if (effectiveMillis <= Math.max(now(), Math.max(number(row, "observed_wall_ms"), number(row, "last_effective_ms")))) throw new IllegalArgumentException("Policy boundary must be strictly future");
             var versions = reads.query("SELECT effective_ms FROM financial_deadline_versions WHERE provider=? ORDER BY effective_ms", List.of(provider), 16);
             if (versions.size() >= 16 || versions.stream().anyMatch(v -> Long.parseLong(v.get("effective_ms")) == effectiveMillis)) throw new IllegalArgumentException("Policy schedule bound/conflict");

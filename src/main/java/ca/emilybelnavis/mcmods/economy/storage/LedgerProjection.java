@@ -60,6 +60,8 @@ public final class LedgerProjection {
 
     public static void validatePostingV3(String payload) { decode(payload, 3); }
 
+    public static void validatePostingV4(String payload) { decode(payload, 4); }
+
     private static Posting decode(String payload, int version) {
         String[] fields = payload.split("\\|", -1);
         if (fields.length != 5) throw new IllegalArgumentException("Invalid posting fields");
@@ -68,6 +70,9 @@ public final class LedgerProjection {
         var currency = EconomyCurrency.valueOf(fields[2]);
         long units = Long.parseLong(fields[3]);
         var authority = PostingBatch.Authority.valueOf(fields[4]);
+        if (version < 4 && role == PostingBatch.Role.NPC_BRIDGE) throw new IllegalArgumentException("Posting version");
+        if (version == 4 && (role == PostingBatch.Role.FEE || authority == PostingBatch.Authority.CAPITAL_ISSUE
+                || !payload.equals(account+"|"+role+"|"+currency+"|"+units+"|"+authority))) throw new IllegalArgumentException("NPC posting format");
         if (version < 3 && (role == PostingBatch.Role.INSTITUTION_CASH || role == PostingBatch.Role.INSTITUTION_CLAIM || authority == PostingBatch.Authority.CAPITAL_ISSUE)) throw new IllegalArgumentException("Posting version");
         if (units == 0 || version == 1 && (currency == EconomyCurrency.CHF || units % currency.minorUnitsPerMajor() != 0)) {
             throw new IllegalArgumentException("Invalid posting amount");
@@ -98,7 +103,7 @@ public final class LedgerProjection {
                     }
                     position = Integer.parseInt(row.get("position"));
                     int version = Integer.parseInt(row.get("record_version"));
-                    if (version != 1 && version != 2 && version != 3) {
+                    if (version != 1 && version != 2 && version != 3 && version != 4) {
                         throw new StorageException(StorageException.Kind.SCHEMA, "Unsupported ledger posting version");
                     }
                     var posting = decode(row.get("payload"), version);

@@ -261,7 +261,7 @@ public final class DebtFinance {
         return new Loans.Contract(old.world(), old.id(), old.owner(), old.lender(), old.product(), old.currency(),
             old.originalPrincipalMinor(), old.years(), old.apr(), old.primeApr(), old.primeVersion(), old.capturedScore(),
             old.profileRevision(), old.tier(), old.policyVersion(), old.denominationRevision(), old.fxPublication(), old.worldCurrency(),
-            old.anchor(), old.scheduleHash(), Math.addExact(old.revision(), 1), status, state);
+            old.anchor(), old.scheduleHash(), Math.addExact(old.revision(), 1), status, state,old.primePolicyId(),old.primePolicyRevision());
     }
 
     private static void recognize(List<FinancialAccounts.Account> accounts, List<PostingBatch.Leg> legs, WorldId world,

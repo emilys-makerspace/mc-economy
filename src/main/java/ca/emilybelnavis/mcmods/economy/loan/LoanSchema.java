@@ -22,5 +22,6 @@ public final class LoanSchema {
         for(int i=0;i<NAMES.size();i++)try(var q=connection.prepareStatement("SELECT sql FROM sqlite_schema WHERE name=?")){
             q.setString(1,NAMES.get(i));try(var r=q.executeQuery()){if(!r.next()||!statements().get(i).equals(r.getString(1)))throw new StorageException(StorageException.Kind.SCHEMA,"Missing or changed loan schema");}
         }
+        LoanPrimeBindings.validate(connection);
     }
 }

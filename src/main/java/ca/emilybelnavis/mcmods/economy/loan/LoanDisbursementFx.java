@@ -20,7 +20,7 @@ public final class LoanDisbursementFx {
     public record Quote(UUID id,Loans.Application application,FxFacts.Publication fx,ServicePricing.Quote pricing,
             EconomyCurrency destinationCurrency,long destinationLedgerRevision,long creditedMinor,long feeFundingMinor,long capturedAt,long expiresAt){
         public Quote{Objects.requireNonNull(id);Objects.requireNonNull(application);Objects.requireNonNull(fx);Objects.requireNonNull(pricing);Objects.requireNonNull(destinationCurrency);if(destinationLedgerRevision<0||creditedMinor<=feeFundingMinor||feeFundingMinor<0||capturedAt<0||expiresAt<=capturedAt)throw new IllegalArgumentException("Loan disbursement quote");}
-        public Journal.CanonicalRequest canonical(){var fields=new TreeMap<>(application.request().fields());fields.put("disbursement_fx",id.toString());fields.put("disbursement_pricing",pricing.id().toString());fields.put("destination_currency",destinationCurrency.name());fields.put("destination_ledger",Long.toString(destinationLedgerRevision));fields.put("destination_credit",Long.toString(creditedMinor));fields.put("fx_fee_funding",Long.toString(feeFundingMinor));fields.put("disbursement_captured",Long.toString(capturedAt));fields.put("disbursement_expires",Long.toString(expiresAt));return new Journal.CanonicalRequest(1,fields);}
+        public Journal.CanonicalRequest canonical(){var fields=new TreeMap<>(application.request().fields());fields.put("disbursement_fx",id.toString());fields.put("disbursement_pricing",pricing.id().toString());fields.put("destination_currency",destinationCurrency.name());fields.put("destination_ledger",Long.toString(destinationLedgerRevision));fields.put("destination_credit",Long.toString(creditedMinor));fields.put("fx_fee_funding",Long.toString(feeFundingMinor));fields.put("disbursement_captured",Long.toString(capturedAt));fields.put("disbursement_expires",Long.toString(expiresAt));return new Journal.CanonicalRequest(application.request().version(),fields);}
     }
     private LoanDisbursementFx() {}
     public static Quote capture(JournalEngine.ReadView reads,PartyRef owner,Loans.Application application,ServicePricing book,long now){
@@ -37,7 +37,7 @@ public final class LoanDisbursementFx {
     }
     public static JournalEngine.Registration application(PartyRef owner,Quote quote,BankProviders.TierEligibility tiers,Loans.InputSource inputs,ServicePricing pricing,LongSupplier clock){
         var core=Loans.application(owner,quote.application(),tiers,inputs,clock,(intent,reads,request,lender,now)->plan(reads,owner,quote,pricing,lender,now));
-        return new JournalEngine.Registration(1,(intent,reads)->{
+        return new JournalEngine.Registration(quote.canonical().version(),(intent,reads)->{
             if(!intent.kind().equals(Loans.APPLY)||!intent.request().equals(quote.canonical()))return new JournalEngine.Reject(new Journal.Result(1,"LOAN_DISBURSEMENT_REQUEST",""));
             var adapted=new Journal.Intent(intent.operationId(),intent.requestId(),intent.actor(),intent.kind(),quote.application().request(),intent.economicUpdateId(),intent.correctionOf());
             try{return core.handler().prepare(adapted,reads);}

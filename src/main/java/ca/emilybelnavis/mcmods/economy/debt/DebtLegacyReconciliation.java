@@ -136,7 +136,7 @@ public final class DebtLegacyReconciliation {
             List.of(fact, identity, Long.toString(state.frontier()), Long.toString(state.sequence()), Integer.toString(state.position())), 1);
         if (rows.isEmpty()) return null;
         var row = rows.getFirst();
-        if (!row.get("record_version").equals("1")) fail("DEBT_LEGACY_SOURCE_VERSION_UNAVAILABLE");
+        if (!row.get("record_version").equals("1") && !(state.kind()==Kind.LOAN && row.get("record_version").equals("2"))) fail("DEBT_LEGACY_SOURCE_VERSION_UNAVAILABLE");
         var snapshot = snapshot(state.kind(), row.get("payload"));
         long at = snapshot.savedAt();
         var siblings = reads.query("SELECT record_type,record_version,payload FROM journal_records WHERE sequence=? ORDER BY position LIMIT 64", List.of(row.get("sequence")), 64);

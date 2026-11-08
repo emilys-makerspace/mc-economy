@@ -1,0 +1,35 @@
+# A9 shared package contract — approved revision 1
+
+**All A9 drafts approved 2026-11-07; implementation is not selected.** Gameplay policies are settled in [planning](../../.codex/architecture/a9-planning.md). [Shared technical revision 1](../../.codex/architecture/a9-shared-contracts.md) records approved engineering contracts. [Catalog](../../.codex/architecture/a9-item-catalog.md) and [per-item inventory](../../.codex/architecture/a9-item-catalog.csv) record approved catalog amounts and revised log/meat/disc calibration. [Enchantment premium amounts](../../.codex/architecture/a9-enchantment-premiums.md) and composition rules are approved.
+
+## Shared interfaces and behavior
+
+- Source precedence: explicit server override, explicit base, supported cheapest fully known acyclic recipe derivation, unavailable. Exact internal rationals; one captured FX publication; immutable source/config/recipe/provider identities. Unknown inputs are never zero.
+- Publish HALF_UP unit prices to the currency's minor unit, at least one minor unit per priced item. Quantity totals use published unit amounts. Free water is an explicit input exception. No new fractional-price carry.
+- Complete vanilla item coverage: explicitly price noncraftables by acquisition difficulty; derive supported craftables; classify variants and operator-only items. Operator-only items remain unpriced. Mod items have no built-in or automatic recipe values without contribution API registration.
+- Ordinary shaped/shapeless, stonecutting and standard cooking are supported; defer dynamic/special, smithing and ordinary returned-container/byproduct recipes without adapters. Raw metals/meats/fish equal 75% of processed counterparts; apply the explicit processing difference once, not downstream. General cooking estimates exclude fuel/time/XP beyond that calibrated processing value.
+- Brewing adapter: prior per-potion cost + shared ingredient/3 + blaze powder/60 per standard step. Water free, bottles once, no labour/time fees. Exact potion effect/strength/duration/form identity; record the dragon-breath bottle remainder without salvage credit.
+- Variants: add approved compatible enchantment premiums; deduct 25% per distinct vanilla curse on combined value before proportional durability. Books use book value plus stored premiums. Names add nothing. Containers equal their individually valued shell plus contents; bound recursion and count each shell once.
+- Typed authenticated API/SPI: bounded cached/asynchronous reads and immutable contribution data, provider revisions and atomic conflict rejection. No arbitrary callbacks on storage workers or settlement authority granted by reference values.
+- Atomic reload publication through existing lifecycle/storage; bounded immutable manifests and caches; preserve original outcomes. No second financial database or scheduler.
+- Trader original principal replacement retains demand/recovery, reputation, spreads, complete cohorts, assignment, stock/restock, capacity/custody, explicit FX and progression. Use a new versioned rounded-unit pricing path. Disable post-rounding spread violations rather than changing approved rounding/minimums.
+- New source-neutral account/cash quote facts and authoritative prospective source epochs invalidate old uncommitted quotes before effects. Resolve committed originals first. Retain old codecs, outcomes and carry history; record carry retirement without reuse, deletion or monetary payout. No historical balances/activity/windows/rates/loans are revalued.
+- Unsupported listings remain disabled without player-facing explanations. Typed reasons/provenance stay available to API/operator diagnostics.
+
+No commodity backing, guaranteed redemption, financial qualification, automatic listing discovery, specific integration mod, new product or unrelated B-series execution. Preserve existing code, worlds, backups and historical journal data.
+
+## Package boundaries and handoff
+
+Follow [the queue](EXECUTION.md): A9-01 source/interface checkpoint; A9-02 exact configuration/snapshots; A9-03-01 ordinary recipes; A9-03-02 brewing; A9-03-03 variants/containers; A9-04 public API and valuation acceptance; A9-05 durable source transition; A9-06 trader activation. A9-03 is an overview, not selectable. Implement only an explicitly selected package after prerequisite evidence, verify and hand off before dependents. Approval of a policy or draft does not execute a package.
+
+A9-01 confirms pinned-source feasibility, exact signatures and numerical/coverage witnesses. Routine defaults may be adapted for demonstrated feasibility while preserving settled gameplay; report a concrete incompatibility rather than silently dropping a selected capability. Catalog prices are approved with the requested revisions; they are not implemented runtime data.
+
+## Verification scope
+
+All packages/subtasks inherit [VERIFICATION.md](../../.codex/VERIFICATION.md). Planning uses diff/link/inventory/arithmetic review only; no Gradle/tests/game. Later implementation uses at most one focused named-test invocation when useful. Completion or phase boundaries do not automatically require tests or a full suite. Reuse real-service/SQLite fixtures and unchanged evidence.
+
+Ordinary runnable delivery uses Java 21 and runs `./gradlew build -x test`, `./gradlew help --task runClient` and `./gradlew runClient --dry-run` once. Preserve Minecraft 1.21.1, NeoForge 21.1.252, registered main source set, required development runtime dependencies and working client/server tasks. One owner runs Gradle/game sequentially. Necessary runtime witnesses use disposable fixtures; never player worlds or backups.
+
+## Catalog price approval and revisions
+
+The user approved all other catalog prices and requested these revisions: easy oak/birch/spruce/acacia logs CAD 2, dark oak CAD 4, jungle/mangrove CAD 6, cherry CAD 8; all sticks use the canonical two-oak-planks/four-sticks reference (CAD 0.25), including bamboo-origin sticks. Per-species raw meat/fish anchors and cooked /0.75 amounts are in the catalog; pork=porkchop, lamb=mutton. Discs use a CAD 45 common creeper-drop base and higher acquisition bands, with disc 5 derived from nine unchanged CAD 40 fragments. Species products inherit wood costs, generic sticks do not. These revisions supersede earlier uniform wood/meat/disc values without changing historical outcomes. Price approval does not select an implementation package.

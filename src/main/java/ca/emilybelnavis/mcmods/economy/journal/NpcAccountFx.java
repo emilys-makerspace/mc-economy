@@ -1,0 +1,183 @@
+package ca.emilybelnavis.mcmods.economy.journal;
+
+import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
+import ca.emilybelnavis.mcmods.economy.api.*;
+import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
+import ca.emilybelnavis.mcmods.economy.credit.CreditTreasury;
+import ca.emilybelnavis.mcmods.economy.fx.*;
+import ca.emilybelnavis.mcmods.economy.institution.*;
+import ca.emilybelnavis.mcmods.economy.pricing.ServicePricing;
+import ca.emilybelnavis.mcmods.economy.trade.pricing.Pricing;
+import java.time.*;
+import java.util.*;
+import static ca.emilybelnavis.mcmods.economy.journal.PostingBatch.Role.*;
+
+/**
+ * Worker-confined, issuer-bound NPC account FX. Produces typed groups for one NPC overlay;
+ * it never writes a ledger balance or grants account/trader authority by itself.
+ */
+public final class NpcAccountFx {
+    public record Quote(FxQuotes.Quote conversion,ServicePricing.Quote pricing,AccountIdentity account,
+                        BankProviders.Binding supplier,Pricing.Side side,Money goodsGross,
+                        Instant issuedAt,Instant expiresAt) {
+        public Quote {
+            Objects.requireNonNull(conversion);Objects.requireNonNull(pricing);Objects.requireNonNull(account);
+            Objects.requireNonNull(supplier);Objects.requireNonNull(side);Objects.requireNonNull(goodsGross);
+            Objects.requireNonNull(issuedAt);Objects.requireNonNull(expiresAt);
+            if(goodsGross.minorUnits()<=0 || !expiresAt.isAfter(issuedAt) || expiresAt.isAfter(issuedAt.plusSeconds(30)))
+                throw new IllegalArgumentException("NPC FX quote lifetime/amount");
+        }
+    }
+    public record Plan(FxQuotes.Quote conversion,ServicePricing.Quote pricing,BankProviders.Binding supplier,
+                       List<NpcSettlement.Group> groups,List<FinancialAccounts.Account> accounts,
+                       List<Journal.Record> facts,JournalEngine.Projection registrations) {
+        public Plan {
+            Objects.requireNonNull(conversion);Objects.requireNonNull(pricing);Objects.requireNonNull(supplier);
+            groups=List.copyOf(groups);accounts=List.copyOf(accounts);facts=List.copyOf(facts);Objects.requireNonNull(registrations);
+        }
+    }
+    private final FxQuotes conversions;
+    private final ServicePricing pricing;
+    private final Map<UUID,Quote> issued=new HashMap<>();
+    public NpcAccountFx(FxQuotes conversions,ServicePricing pricing) {
+        this.conversions=Objects.requireNonNull(conversions);this.pricing=Objects.requireNonNull(pricing);
+    }
+
+    /** The selected account/owner come from trusted authenticated admission, never a packet. */
+    public Quote issue(JournalEngine.ReadView reads,WorldId world,PlayerId owner,AccountIdentity selected,
+                       Pricing.Side side,Money goodsGross,Instant now,Instant tradeExpiry) {
+        Objects.requireNonNull(side);Objects.requireNonNull(goodsGross);Objects.requireNonNull(now);Objects.requireNonNull(tradeExpiry);
+        AccountIdentity account=current(reads,world,owner,selected);
+        if(goodsGross.minorUnits()<=0 || goodsGross.currency()==account.currency())throw new IllegalArgumentException("NPC_FOREIGN_FX_REQUIRED");
+        BankProviders.Binding supplier=supplier(reads,world,account);
+        var bank=new InstitutionCatalog.InstitutionId(supplier.bankKey());
+        var publication=publication(reads,now);
+        Instant expires=earlier(tradeExpiry,now.plusSeconds(30));
+        // Retain the installed 48-hour policy, measured from the authoritative original snapshot time.
+        expires=earlier(expires,Instant.ofEpochMilli(FxService.effectiveMillis(reads,publication.updateId())).plus(Duration.ofHours(48)));
+        if(!expires.isAfter(now))throw new IllegalArgumentException("NPC_FX_EXPIRED");
+        issued.values().removeIf(q->!now.isBefore(q.expiresAt()));
+        if(issued.size()>=1024)throw new IllegalStateException("NPC_FX_QUOTE_OVERLOAD");
+        FxQuotes.Quote conversion;ServicePricing.Quote priced;
+        if(side==Pricing.Side.BUY) {
+            conversion=conversions.issue(owner,new FxQuotes.Pair(account.currency(),goodsGross.currency()),FxQuotes.Side.EXACT_CREDIT,
+                    goodsGross,FxService.snapshot(reads,publication.updateId()),now,Duration.between(now,expires));
+            priced=pricing.quote(reads,world,owner,bank,ServicePricing.Service.FX,conversion.debit(),now,expires);
+        } else {
+            priced=pricing.quote(reads,world,owner,bank,ServicePricing.Service.FX,goodsGross,now,expires);
+            long net=Math.subtractExact(goodsGross.minorUnits(),priced.fee().minorUnits());
+            if(net<=0)throw new IllegalArgumentException("NPC_FX_NET_ZERO");
+            conversion=conversions.issue(owner,new FxQuotes.Pair(goodsGross.currency(),account.currency()),FxQuotes.Side.EXACT_DEBIT,
+                    new Money(goodsGross.currency(),net),FxService.snapshot(reads,publication.updateId()),now,Duration.between(now,expires));
+        }
+        if(!conversion.world().equals(world) || !conversion.actor().equals(owner))throw new IllegalArgumentException("NPC_FX_BOOK_WORLD");
+        if(conversion.debit().minorUnits()<=0 || conversion.credit().minorUnits()<=0)throw new IllegalArgumentException("NPC_FX_ZERO_PRINCIPAL");
+        if(side==Pricing.Side.BUY)Math.addExact(conversion.debit().minorUnits(),priced.fee().minorUnits());
+        var quote=new Quote(conversion,priced,account,supplier,side,goodsGross,now,
+                earlier(expires,earlier(conversion.expires(),priced.expires())));
+        issued.put(conversion.id(),quote);return quote;
+    }
+
+    /** Call after original financial lookup, inside authoritative worker preparation. */
+    public Quote requireFresh(JournalEngine.ReadView reads,Quote quote,WorldId world,PlayerId owner,Instant now) {
+        Objects.requireNonNull(now);
+        if(quote==null || !quote.equals(issued.get(quote.conversion().id())) || now.isBefore(quote.issuedAt())
+                || !now.isBefore(quote.expiresAt()))throw new IllegalArgumentException("NPC_FX_QUOTE_STALE");
+        var account=current(reads,world,owner,quote.account());var binding=supplier(reads,world,account);
+        if(!binding.equals(quote.supplier()))throw new IllegalArgumentException("NPC_FX_PROVIDER_STALE");
+        var publication=publication(reads,now);
+        var conversion=conversions.requireFresh(quote.conversion().id(),owner,world,FxService.snapshot(reads,publication.updateId()),1,now);
+        var priced=pricing.requireFresh(quote.pricing(),reads,world,owner,now);
+        if(!conversion.equals(quote.conversion()) || conversion.pricing()!=null || conversion.fee().minorUnits()!=0
+                || !priced.institution().key().equals(binding.bankKey()) || priced.service()!=ServicePricing.Service.FX
+                || !priced.fee().equals(ServicePricing.fee(priced.principal(),ServicePricing.Service.FX,priced.tier())))
+            throw new IllegalArgumentException("NPC_FX_PRICING_STALE");
+        if(!reads.query("SELECT quote_id FROM ledger_fx_quotes WHERE quote_id=?",List.of(conversion.id().toString()),1).isEmpty())
+            throw new IllegalArgumentException("NPC_FX_QUOTE_CONSUMED");
+        if(quote.side()==Pricing.Side.BUY) {
+            if(conversion.side()!=FxQuotes.Side.EXACT_CREDIT || conversion.pair().source()!=account.currency()
+                    || conversion.pair().target()!=quote.goodsGross().currency() || !conversion.credit().equals(quote.goodsGross())
+                    || !conversion.requested().equals(quote.goodsGross()) || !priced.principal().equals(conversion.debit()))
+                throw new IllegalArgumentException("NPC_FX_PRINCIPAL_STALE");
+        } else {
+            long net=Math.subtractExact(quote.goodsGross().minorUnits(),priced.fee().minorUnits());
+            if(net<=0 || conversion.side()!=FxQuotes.Side.EXACT_DEBIT || conversion.pair().source()!=quote.goodsGross().currency()
+                    || conversion.pair().target()!=account.currency() || !priced.principal().equals(quote.goodsGross())
+                    || !conversion.debit().equals(new Money(quote.goodsGross().currency(),net))
+                    || !conversion.requested().equals(conversion.debit()))throw new IllegalArgumentException("NPC_FX_PRINCIPAL_STALE");
+        }
+        return quote;
+    }
+
+    /** Returns group order relative to the goods leg: BUY before retirement; SELL after gross issue. */
+    public Plan prepare(JournalEngine.ReadView reads,Quote quoted,WorldId world,PlayerId owner,Instant now) {
+        var quote=requireFresh(reads,quoted,world,owner,now);var conversion=quote.conversion();
+        var groups=new ArrayList<NpcSettlement.Group>();var accounts=new ArrayList<FinancialAccounts.Account>();
+        var facts=new ArrayList<Journal.Record>();var from=conversion.pair().source();var to=conversion.pair().target();
+        long debit=conversion.debit().minorUnits(),credit=conversion.credit().minorUnits(),fee=quote.pricing().fee().minorUnits();
+        var bank=new InstitutionCatalog.InstitutionId(quote.supplier().bankKey());
+        var depositor=new InstitutionCatalog.InstitutionId("economy:depositor/"+owner.value());
+        if(fee>0) {
+            var cash=FinancialAccounts.account(world,bank,FinancialAccounts.Role.CASH,from);
+            var income=FinancialAccounts.account(world,bank,FinancialAccounts.Role.INCOME,from);
+            var expense=FinancialAccounts.account(world,depositor,FinancialAccounts.Role.EXPENSE,from);
+            accounts.addAll(List.of(cash,income,expense));
+            UUID payer=quote.side()==Pricing.Side.BUY?quote.account().id().value():NpcSettlement.bridge(world,from);
+            var payerRole=quote.side()==Pricing.Side.BUY?ACCOUNT:NPC_BRIDGE;
+            groups.add(new NpcSettlement.Group(PostingBatch.Authority.TRANSFER,List.of(
+                    leg(payer,payerRole,from,-fee),leg(cash.id(),INSTITUTION_CASH,from,fee))));
+            groups.add(new NpcSettlement.Group(PostingBatch.Authority.TRANSFER,List.of(
+                    leg(expense.id(),INSTITUTION_CLAIM,from,fee),leg(income.id(),INSTITUTION_CLAIM,from,-fee))));
+            for(var account:accounts)if(FinancialAccounts.find(reads,account.id()).isEmpty())facts.add(new Journal.Record(InstitutionCapital.ACCOUNT,1,
+                    account.id()+"|"+world.value()+"|"+account.owner().key()+"|"+account.role()+"|"+account.currency()));
+        }
+        UUID source=quote.side()==Pricing.Side.BUY?quote.account().id().value():NpcSettlement.bridge(world,from);
+        UUID target=quote.side()==Pricing.Side.BUY?NpcSettlement.bridge(world,to):quote.account().id().value();
+        groups.add(new NpcSettlement.Group(PostingBatch.Authority.FX,List.of(
+                leg(source,quote.side()==Pricing.Side.BUY?ACCOUNT:NPC_BRIDGE,from,-debit),
+                leg(Settlement.clearingAccount(from),CLEARING,from,debit),
+                leg(Settlement.clearingAccount(to),CLEARING,to,-credit),
+                leg(target,quote.side()==Pricing.Side.BUY?NPC_BRIDGE:ACCOUNT,to,credit))));
+        // Generic FxSettlement facts would misstate SELL gross-fee semantics and duplicate
+        // activity. The owning NPC receipt names the actual conversion principal instead.
+        facts.add(ServicePricing.fact(quote.pricing()));
+        return new Plan(conversion,quote.pricing(),quote.supplier(),groups,accounts,facts,tx->{
+            if(fee>0) {
+                tx.execute("INSERT OR IGNORE INTO institution_parties VALUES(?,?,?,?,?,'INTERNAL',1)",List.of(world.value().toString(),depositor.key(),
+                        new InstitutionCatalog.SystemActor(world,depositor).actorId().value().toString(),"Depositor accounting",from.name()));
+                for(var account:accounts)FinancialAccounts.register(tx,account);
+            }
+            tx.execute("INSERT INTO ledger_fx_quotes(quote_id) VALUES(?)",List.of(conversion.id().toString()));
+        });
+    }
+
+    private static AccountIdentity current(JournalEngine.ReadView reads,WorldId world,PlayerId owner,AccountIdentity expected) {
+        Objects.requireNonNull(expected);
+        var party=new PartyRef(world,new PartyRef.Player(owner));
+        var account=AccountCatalog.find(reads,party,expected.id()).orElseThrow(()->new IllegalArgumentException("NPC_ACCOUNT_UNAVAILABLE"));
+        if(!expected.equals(account) || account.purpose()!=AccountIdentity.Purpose.BANK || account.status()!=AccountIdentity.Status.OPEN
+                || !account.owner().equals(party))throw new IllegalArgumentException("NPC_ACCOUNT_STALE");
+        return account;
+    }
+    private static BankProviders.Binding supplier(JournalEngine.ReadView reads,WorldId world,AccountIdentity account) {
+        if(!account.owner().world().equals(world) || !(account.owner().owner() instanceof PartyRef.Player))
+            throw new IllegalArgumentException("NPC_FX_ISSUER_OWNER");
+        var binding=BankProviders.find(reads,account.owner(),account.id()).orElseThrow(()->new IllegalArgumentException("NPC_FX_ISSUER_REQUIRED"));
+        if(!binding.account().equals(account.id()))throw new IllegalArgumentException("NPC_FX_ISSUER_ACCOUNT");
+        if(binding.bankKey().equals(BankProviders.UNASSIGNED_PROVIDER))throw new IllegalArgumentException("NPC_FX_ISSUER_REQUIRED");
+        var bank=InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(binding.bankKey()));
+        if(!bank.enabled() || !bank.customerBank() || bank.baseCurrency()!=account.currency()
+                || !bank.capabilities().contains(InstitutionCatalog.Capability.BANK_ACCOUNT))throw new IllegalArgumentException("NPC_FX_ISSUER_UNAVAILABLE");
+        var states=reads.query("SELECT enabled FROM institution_parties WHERE world_id=? AND institution_key=?",List.of(world.value().toString(),binding.bankKey()),1);
+        if(states.size()!=1 || !states.getFirst().get("enabled").equals("1"))throw new IllegalArgumentException("NPC_FX_ISSUER_DISABLED_OR_MISSING");
+        return binding;
+    }
+    private static FxFacts.Publication publication(JournalEngine.ReadView reads,Instant now) {
+        var publication=CreditTreasury.publication(reads,now.toEpochMilli());
+        if(publication==null)throw new IllegalArgumentException("NPC_FX_PUBLICATION_STALE");return publication;
+    }
+    private static Instant earlier(Instant a,Instant b){return a.isBefore(b)?a:b;}
+    private static PostingBatch.Leg leg(UUID account,PostingBatch.Role role,EconomyCurrency currency,long minor) {
+        return new PostingBatch.Leg(account,role,currency,new Money(currency,minor));
+    }
+}

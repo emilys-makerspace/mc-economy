@@ -1,6 +1,8 @@
 modLoader="javafml"
 loaderVersion="[4,)"
 license="All Rights Reserved"
+[[mixins]]
+config="economy.mixins.json"
 [[mods]]
 modId="economy"
 version="0.3.0-alpha"

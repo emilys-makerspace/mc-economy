@@ -71,6 +71,20 @@ public final class FxQuotes {
         return quote;
     }
 
+    /** Live exact-time source; the Publication overload remains for explicitly legacy fixtures. */
+    public Quote issue(PlayerId actor,Pair pair,Side side,Money requested,EffectiveFxSnapshot snapshot,Instant now,Duration lifetime){
+        if(lifetime==null||lifetime.isNegative()||lifetime.isZero()||lifetime.compareTo(Duration.ofSeconds(60))>0)throw new IllegalArgumentException("FX_INVALID_QUOTE");
+        requireEffective(snapshot,now);if(!world.equals(snapshot.world()))throw new IllegalArgumentException("FX_WORLD");
+        Instant maximum=Instant.ofEpochMilli(snapshot.effectiveMillis()).plus(Duration.ofHours(48));
+        Duration bounded=Duration.between(now,now.plus(lifetime).isBefore(maximum)?now.plus(lifetime):maximum);
+        return issue(actor,pair,side,requested,snapshot.publication(),now,bounded);
+    }
+    public Quote requireFresh(UUID id,PlayerId actor,WorldId requestWorld,EffectiveFxSnapshot snapshot,int pricing,Instant now){
+        requireEffective(snapshot,now);if(!requestWorld.equals(snapshot.world())||!world.equals(snapshot.world()))throw new IllegalArgumentException("FX_WORLD");
+        return requireFresh(id,actor,requestWorld,snapshot.publication(),pricing,now);
+    }
+    private static void requireEffective(EffectiveFxSnapshot snapshot,Instant now){if(snapshot==null)throw new IllegalStateException("FX_UNINITIALIZED");Instant at=Instant.ofEpochMilli(snapshot.effectiveMillis());if(now.isBefore(at)||!now.isBefore(at.plus(Duration.ofHours(48))))throw new IllegalArgumentException("FX_SOURCE_STALE");}
+
     public Quote price(Quote original, ca.emilybelnavis.mcmods.economy.pricing.ServicePricing.Quote pricing) {
         if (!original.equals(quotes.get(original.id())) || !pricing.principal().equals(original.debit()))
             throw new IllegalArgumentException("FX_PRICING_PRINCIPAL");

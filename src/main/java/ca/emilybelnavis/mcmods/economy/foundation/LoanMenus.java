@@ -204,7 +204,11 @@ public final class LoanMenus {
         state.application = null;
         audience.menu().setBusy(true);
         services.ledger().branchContext(grant, audience.menu().anchor(), destination.id())
-                .thenCombine(services.ledger().loanContext(grant), Map::entry).thenCompose(result -> {
+                .thenCompose(branch -> {
+                    var current=branch.orElseThrow();
+                    return (product==CreditUnderwriting.Product.SUBPRIME_LOAN?services.ledger().loanContext(grant):services.ledger().loanContext(grant,bank(current).baseCurrency()))
+                            .thenApply(context->Map.entry(branch,context));
+                }).thenCompose(result -> {
             if (!audience.live()) throw new IllegalStateException("Replaced audience");
             var branch = result.getKey().orElseThrow();
             var context = result.getValue().orElseThrow();
@@ -217,7 +221,7 @@ public final class LoanMenus {
                 var terms = new CreditUnderwriting.LoanRequest(context.profile().isPresent(), context.profile().map(p -> p.score()).orElse(650),
                         context.denomination().currency(), product, product == CreditUnderwriting.Product.BANK_LOAN && bank.tier2() && context.tier().available() && context.tier().eligible(), context.tier().available() && context.tier().eligible(),
                         context.inputs().complete(), blocked, exposure, principal, years,
-                        product == CreditUnderwriting.Product.SUBPRIME_LOAN ? BigDecimal.ZERO : context.prime().orElseThrow().primeApr());
+                        product == CreditUnderwriting.Product.SUBPRIME_LOAN ? BigDecimal.ZERO : context.currencyPrime().orElseThrow().primeApr());
                 var offer = CreditUnderwriting.loanForFacility(terms, new Money(currency, principal), context.inputs().fx());
                 return Optional.of(Map.entry(branch, Map.entry(context, offer)));
             });
@@ -239,8 +243,10 @@ public final class LoanMenus {
                 var request = new Loans.Application(proof, UUID.randomUUID(), UUID.randomUUID(), product,
                         offer.requestedNative().currency(), offer.requestedNative().minorUnits(), years, destination.id(), destination.revision(),
                         context.profile().map(p -> p.revision()).orElse(0L), context.tier().revision(),
-                        product == CreditUnderwriting.Product.SUBPRIME_LOAN ? 0 : context.prime().orElseThrow().version(),
-                        context.inputs().fx().publication(), context.calendarOrigin(), Loans.RateMode.FIXED, false);
+                        product == CreditUnderwriting.Product.SUBPRIME_LOAN ? 0 : context.currencyPrime().orElseThrow().legacyVersion(),
+                        context.inputs().fx().publication(), context.calendarOrigin(), Loans.RateMode.FIXED, false,
+                        product==CreditUnderwriting.Product.BANK_LOAN&&context.currencyPrime().orElseThrow().currencySpecific()?context.currencyPrime().orElseThrow().id():null,
+                        product==CreditUnderwriting.Product.BANK_LOAN&&context.currencyPrime().orElseThrow().currencySpecific()?context.currencyPrime().orElseThrow().revision():0);
                 if (destination.currency() == request.currency()) {
                     publishOffer(audience, state, new ApplicationPreview(branch, context, offer, request, null, expiresAt));
                 } else {
@@ -286,7 +292,7 @@ public final class LoanMenus {
             var old = preview.request();
             var proof = FinanceMenuSupport.branch(audience, grant, preview.branch(), BranchAdmission.Action.LOAN_APPLY, null);
             var request = new Loans.Application(proof, old.application(), old.loan(), old.product(), old.currency(), old.principalMinor(), old.years(), old.destination(), old.destinationRevision(),
-                    old.profileRevision(), old.tierRevision(), old.primeVersion(), old.fxPublication(), old.calendarOrigin(), old.rateMode(), old.secured());
+                    old.profileRevision(), old.tierRevision(), old.primeVersion(), old.fxPublication(), old.calendarOrigin(), old.rateMode(), old.secured(),old.primePolicyId(),old.primePolicyRevision());
             FinanceMenuSupport.submit(audience, services, grant, Loans.APPLY, request.request(),
                     (operation, attempt) -> services.ledger().applyLoan(grant, operation, attempt, request));
         }
