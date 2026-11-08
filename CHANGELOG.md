@@ -6,6 +6,7 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ### A9-06 — Opt-in reference-price trading
 
+- Fixed valuation refresh failing with 18–63 activated market/item scopes.
 - Added operator coverage review and explicit prospective trader activation, keeping existing market/currency assignments and original receipts.
 - Added exact native item valuation linkage, published unit/total review, and rounded-gap admission without new fractional carry or an emerald-price multiplier.
 - Unsupported listings are omitted in activated scopes. Native required-component buybacks remain unsupported; work limits and component rules can refuse other listings.

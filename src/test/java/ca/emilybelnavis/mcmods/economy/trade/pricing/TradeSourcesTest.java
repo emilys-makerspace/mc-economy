@@ -92,6 +92,46 @@ class TradeSourcesTest {
         } finally {reopened.close();}
     }
 
+    @Test void publicationRefreshesAll63SupportedScopesAndRejectsOverflowExplicitly() throws Exception {
+        var store=new SqliteStorage();store.initialize(path.toRealPath());
+        try {
+            var trader=UUID.randomUUID();var position=new MarketFacts.Position("minecraft:overworld",0,64,0);
+            MarketFacts.Binding binding=null;
+            for(int n=0;n<100;n++) {
+                var resolved=MarketStore.resolve(store,trader,position,position,EconomyCurrency.CAD,true);
+                if(!resolved.pending()){binding=resolved.binding();break;}
+            }
+            assertNotNull(binding);UUID market=binding.market();
+            var saved=publishValuation(store);var manifest=ValuationData.decode(saved.payload());
+            var actor=new SystemActorId(UUID.randomUUID());var originals=new ArrayList<SourceRef>();
+            for(int n=0;n<63;n++) {
+                var source=new SourceRef(store.snapshot().worldId(),market,TradeCatalog.digest("refresh-scope-"+n),
+                    UUID.randomUUID(),1,UUID.randomUUID(),saved.id(),manifest.configHash(),manifest.inputs().recipeHash(),
+                    manifest.providerHash(),ReferencePricing.VERSION,ReferencePricing.ROUNDING,UUID.randomUUID());
+                assertEquals(Journal.Status.COMMITTED,TradeSources.transition(store,source,null,UUID.randomUUID(),actor).status());
+                originals.add(source);
+            }
+            var reloaded=publishValuation(store,"11");
+            var publication=store.transaction(tx->tx.query("SELECT operation_id FROM valuation_manifests WHERE id=?",List.of(reloaded.id().toString()),1)).getFirst().get("operation_id");
+            var events=store.transaction(tx->tx.query("SELECT operation_id,sequence FROM trade_source_events WHERE operation_id=?",List.of(publication),64));
+            assertEquals(63,events.size());
+            assertTrue(events.stream().allMatch(events.getFirst()::equals),"All scopes refresh in the publication transaction");
+            for(var original:originals) {
+                var refreshed=store.transaction(tx->TradeSources.current(tx::query,market,original.item()));
+                assertEquals(reloaded.id(),refreshed.valuationManifest());
+                assertEquals(2,refreshed.revision());assertNotEquals(original.epoch(),refreshed.epoch());
+            }
+            var currentManifest=ValuationData.decode(reloaded.payload());
+            var overflow=new SourceRef(store.snapshot().worldId(),market,TradeCatalog.digest("refresh-overflow"),
+                UUID.randomUUID(),1,UUID.randomUUID(),reloaded.id(),currentManifest.configHash(),currentManifest.inputs().recipeHash(),
+                currentManifest.providerHash(),ReferencePricing.VERSION,ReferencePricing.ROUNDING,UUID.randomUUID());
+            assertEquals(Journal.Status.COMMITTED,TradeSources.transition(store,overflow,null,UUID.randomUUID(),actor).status());
+            var failure=assertThrows(IllegalArgumentException.class,()->store.transaction(tx->
+                TradeSources.prepareRefresh(tx::query,UUID.randomUUID(),currentManifest,UUID.randomUUID(),1)));
+            assertEquals("Atomic source refresh scope limit",failure.getMessage());
+        } finally {store.close();}
+    }
+
     @Test void nearestUnitRoundingRefusesCheapGapAndMultipliesPublishedUnitsWithoutCarry() {
         String item=TradeCatalog.digest("rounding-fixture");
         var key=new Pricing.Key(UUID.randomUUID(),item,UUID.randomUUID(),Pricing.Side.BUY,UUID.randomUUID());

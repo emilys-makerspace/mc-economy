@@ -87,7 +87,7 @@ public final class TradeSources {
     }
     /** Compose with valuation publication for already enabled scopes; never activates a new scope. */
     public static List<JournalEngine.Commit> prepareRefresh(JournalEngine.ReadView reads,UUID manifestId,ValuationData.Manifest manifest,UUID operation,long now){
-        var rows=reads.query("SELECT payload FROM trade_source_active ORDER BY market_id,item LIMIT 64",List.of(),17);
+        var rows=reads.query("SELECT payload FROM trade_source_active ORDER BY market_id,item LIMIT 64",List.of(),64);
         if(rows.size()>63)throw new IllegalArgumentException("Atomic source refresh scope limit");
         var commits=new ArrayList<JournalEngine.Commit>();
         for(var row:rows){var old=decodeBoundary(row.get("payload")).next();
