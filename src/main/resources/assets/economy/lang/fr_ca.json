@@ -1709,5 +1709,7 @@
   "ui.common.choose_question": "Choisissez une question.",
   "ui.common.choose_question_or_bank": "Choisissez une question ou ouvrez les services bancaires.",
   "ui.common.loading_cases": "Chargement des dossiers de recouvrement…",
-  "screen.economy.operation.review_unavailable": "Examen complet indisponible"
+  "screen.economy.operation.review_unavailable": "Examen complet indisponible",
+  "screen.economy.scroll_up": "Faire défiler vers le haut (Page préc.)",
+  "screen.economy.scroll_down": "Faire défiler vers le bas (Page suiv.)"
 }

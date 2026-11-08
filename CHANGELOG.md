@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-08
 
+### A10-03 — Small-window and GUI-scale usability
+
+- Added responsive banker, trader and collection folios with complete text/status scrolling, paged choices and reserved payment-input space.
+- Added visible banking scroll controls, keyboard scrolling and focusable status help; credit actions stay within the terminal.
+- Preserved harmless drafts and navigation across resize while refusing controls retained from an older server revision. Layouts support a minimum 320×240 logical viewport.
+
 ### A10-02-03 — Core localization and explanations
 
 - Added UK English, Canadian French and French translations for core banking, dashboard, history, financial reviews, automatic-payment consent and optional banker/collection explanations.

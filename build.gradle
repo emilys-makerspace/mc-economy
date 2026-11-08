@@ -418,3 +418,17 @@ if (providers.gradleProperty('bankingHistoryProbe').isPresent()) {
         }
     }
 }
+
+if (providers.gradleProperty('layoutProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.layoutProbe', 'true'
+        systemProperty 'economy.layoutSupplement', providers.gradleProperty('layoutSupplement').isPresent().toString()
+        systemProperty 'economy.layoutStartCase', providers.gradleProperty('layoutStartCase').getOrElse('0')
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'layout-failed.txt').exists() || !new File(root, 'layout-passed.txt').exists())
+                throw new GradleException('Native finite layout witness did not pass')
+        }
+    }
+}

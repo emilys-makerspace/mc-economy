@@ -64,7 +64,10 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         return menu.choices().stream().filter(choice -> Set.of("retry", "bank_retry").contains(choice.action())).toList();
     }
     private Button button(int x, int y, int width, Component label, Runnable press) {
-        var result = addRenderableWidget(new FinanceButton(leftPos + x, topPos + y, width, 18, label, ignored -> press.run()));
+        long offeredRevision = menu.revision();
+        var result = addRenderableWidget(new FinanceButton(leftPos + x, topPos + y, width, 18, label, ignored -> {
+            if (offeredRevision == menu.revision()) press.run();
+        }));
         result.active = !blocked();
         result.setTooltip(Tooltip.create(label));
         return result;
@@ -102,6 +105,15 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         }
         menu.setDepositSlotsVisible(chooser.isEmpty() && !blocked());
         clearWidgets(); input = null; primary = null; primaryAction = "";
+        var up = button(212, 32, 44, Component.literal("▲"), () -> scrollBy(-1));
+        var down = button(262, 32, 44, Component.literal("▼"), () -> scrollBy(1));
+        up.active = down.active = true;
+        up.setTooltip(Tooltip.create(text("scroll_up")));
+        down.setTooltip(Tooltip.create(text("scroll_down")));
+        if (!menu.page().equals("deposit")) {
+            var status = button(10, 212, 296, Component.literal(statusText()), () -> {});
+            status.active = true;
+        }
         if (menu.operation().state() == BankingOperation.State.PROCESSING) return;
         if (needsRetry()) {
             int index = 0;
@@ -184,9 +196,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 button(10,188,144,UiTextClient.component(ui("ui.client.back_profile")),()->send("credit_profile",""));
             }
             case "credit_profile", "credit_history", "credit_facility", "credit_statements" -> {
-                int control=0;for(var choice:menu.choices()) {
-                    var c=choice;button(10+control++*152,188,144,UiTextClient.component(c.label()),()->send(c.action(),c.value()));
-                }
+                button(10,188,296,UiTextClient.component(ui("ui.client.actions")),()->openChooser("finance_choices"));
             }
             case "brand_review", "card_review" -> {
                 for (var choice : menu.choices()) {
@@ -456,7 +466,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             g.drawString(font, font.plainSubstrByWidth(label, 296), input.getX() - leftPos, input.getY() - topPos - 10, MUTED, false);
         }
         if (deposit) g.drawString(font, Component.translatable("container.inventory"), 12, 134, MUTED, false);
-        drawLines(g, List.of(statusText()), deposit ? 184 : 10, deposit ? 144 : 212, deposit ? 122 : 296, deposit ? (needsRetry() ? 164 : 182) : 232);
+        if (deposit) drawLines(g, List.of(statusText()), 184, 144, 122, needsRetry() ? 164 : 182);
     }
     private String statusText() {
         Object[] arguments = menu.operation().args().stream().map(argument -> switch (argument.kind()) {
@@ -483,8 +493,6 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         for (int i = start; i < Math.min(wrapped.size(), start + visible); i++) g.drawString(font, wrapped.get(i), x, y + (i - start) * 10, TEXT, false);
         g.flush();
         g.disableScissor();
-        if (body && wrapped.size() > visible && (menu.page().equals("home") || menu.page().startsWith("history_") || menu.page().startsWith("finance_") || menu.page().equals("credit_advance")))
-            g.drawString(font, text("scroll_more"), 160, input == null ? 176 : 170, MUTED, false);
     }
     private void scrollbar(GuiGraphics g, int count) {
         if (count <= 6) return;
@@ -497,15 +505,30 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             g.renderComponentTooltip(font, List.of(UiTextClient.component(statusText())), mouseX, mouseY);
     }
     @Override public void removed() { menu.setDepositSlotsVisible(true); super.removed(); }
+    private void scrollBy(int amount) {
+        // Use the same bounded row/body path as the wheel; preserve keyboard focus on rebuilt controls.
+        var focused = getFocused();
+        Component message = focused instanceof Button b ? b.getMessage() : null;
+        mouseScrolled(leftPos + 200, topPos + 100, 0, -amount);
+        if (message != null) children().stream().filter(Button.class::isInstance).map(Button.class::cast)
+                .filter(b -> b.getMessage().equals(message)).findFirst().ifPresent(this::setFocused);
+    }
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_DOWN || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_UP) {
+            scrollBy(keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_DOWN ? 5 : -5);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
     @Override public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
         if (mouseX >= leftPos + 8 && mouseX < leftPos + 308 && mouseY >= topPos + 72 && mouseY < topPos + 184) {
             if (menu.page().equals("withdraw_mix")) {
-                scroll = Math.clamp(scroll + (vertical > 0 ? -1 : 1), 0, Math.max(0, choices("withdraw_mix_change").size() - 5));
+                scroll = Math.clamp(scroll - (int) vertical, 0, Math.max(0, choices("withdraw_mix_change").size() - 5));
                 rebuild();
             } else if (!chooser.isEmpty() || Set.of("accounts", "claims", "branch", "branch_targets", "brands", "branch_products", "cards", "card_funding", "credit_facilities", "payments", "history_filters", "history").contains(menu.page())) {
                 int count = chooser.isEmpty() ? (menu.page().equals("history") ? choices("history_detail").size() : menu.choices().size()) : choices(chooser).size();
-                scroll = Math.clamp(scroll + (vertical > 0 ? -1 : 1), 0, Math.max(0, count - 6)); rebuild();
-            } else if (!menu.page().equals("deposit") || mouseX >= leftPos + 164) scroll = Math.max(0, scroll + (vertical > 0 ? -1 : 1));
+                scroll = Math.clamp(scroll - (int) vertical, 0, Math.max(0, count - 6)); rebuild();
+            } else if (!menu.page().equals("deposit") || mouseX >= leftPos + 164) scroll = Math.max(0, scroll - (int) vertical);
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);

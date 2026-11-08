@@ -1,5 +1,7 @@
 # A10 technical contract — revision 1
 
+A10-02-03 and A10-03 delivery: [core localization](../../.codex/architecture/core-localization.md) and [core layout](../../.codex/architecture/core-layout.md) implement covered locale messages and complete scrolling/paged layouts at the actual320×240 logical minimum. [Native evidence](../../.codex/verification/A10-03.md) records dimensions, input routing and presentation-fixture limits. Later network/API/operations work remains separately selectable; older baseline descriptions below retain their historical scope.
+
 A10-02-02 delivery: [wire10/schema53 owner history](../../.codex/architecture/owner-history.md) installs the filtered/captured-detail design. A single general atomic post-commit projection hook replaces the proposed runtime catch-up, without per-handler changes or menu bootstrap. The legacy cursor and publication-family meanings remain unchanged. Full localization/layout/network/API/operations still require separate selections.
 
 Implementation progress: [A10-02-01](../../.codex/A10-02-01.md) installs the bounded dashboard, structured state and banking wire9 in its [recorded scope](../../.codex/architecture/banking-dashboard.md). Version8/source-gap statements below describe the approved design baseline; later history/localization/layout/network/API/operations remain separate selections. Any further delivered codec change requires a new transport version.

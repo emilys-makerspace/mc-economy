@@ -1709,5 +1709,7 @@
   "ui.common.choose_question": "Choose a question.",
   "ui.common.choose_question_or_bank": "Choose a question or open banking.",
   "ui.common.loading_cases": "Loading collection cases…",
-  "screen.economy.operation.review_unavailable": "Complete review unavailable"
+  "screen.economy.operation.review_unavailable": "Complete review unavailable",
+  "screen.economy.scroll_up": "Scroll up (Page Up)",
+  "screen.economy.scroll_down": "Scroll down (Page Down)"
 }

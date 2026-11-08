@@ -45,6 +45,8 @@ Accounts are limited to four per player, with one per currency. Creative cards a
 
 Core banking, history, financial reviews and banker explanations support English (UK), French (Canada) and French (France), selected through Minecraft's language setting. Displayed amounts use that language's number formatting and retain their currency code. Enter amounts with ASCII digits, a decimal point and no grouping separators (for example `12.50`); commas and grouped numbers are rejected. UTC date filters and command syntax keep their documented format.
 
+Banking, banker, trader and collection menus support a minimum 320×240 logical GUI viewport. Use the visible arrows or Page Up/Page Down to read long terms, and Tab to reach controls. Dialogue choices have separate pages and full-label tooltips. Resizing preserves drafts; changed server terms require a fresh review.
+
 ## Villager trading and economic rates
 
 Right-click a villager or wandering trader to choose an offer, quantity and payment rail. Select a specific account, or select the currency of the cash you want to present. Review the quote and confirm it; foreign trades show conversion costs and fees. Goods, secondary ingredients, stock and inventory capacity are checked again before checkout. Retained outputs appear under **Claims**. Interrupted or uncertain deliveries remain protected for reconciliation rather than being paid or delivered again.

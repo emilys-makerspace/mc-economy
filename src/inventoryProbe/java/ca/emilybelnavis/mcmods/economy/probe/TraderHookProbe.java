@@ -21,14 +21,30 @@ public final class TraderHookProbe {
         var root=server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
         require(root.getFileName().toString().matches("economy-trader-hooks-[0-9a-f-]{36}"),"unique disposable world");
         var level=server.overworld();var player=server.getPlayerList().getPlayers().getFirst();
-        var villager=new Villager(EntityType.VILLAGER,level);villager.setNoAi(true);villager.setPos(player.position());
-        var offer=new MerchantOffer(new ItemCost(Items.EMERALD,1),new ItemStack(Items.BREAD,6),12,2,0);
-        var offers=villager.getOffers();offers.clear();offers.add(offer);villager.setTradingPlayer(player);
-        var nativeMenu=new MerchantMenu(77,player.getInventory(),villager);
-        nativeMenu.getSlot(0).set(new ItemStack(Items.EMERALD));
-        require(nativeMenu.getSlot(2).hasItem(),"unowned native catalog still works");
-        var capture=NativeCatalog.capture(villager,1);require(capture.available(),"actual native capture: "+capture.reason());
-        require(capture.capture().offers().getFirst().goodsCount()==6&&capture.capture().offers().getFirst().originalMaxUses()==12,"original native count/stock");
+        // Production claims untagged native traders too. Exercise the vanilla control with
+        // monetary trading explicitly disabled, then restore the original mode in this tick.
+        boolean monetaryTrading=TradeRuntime.enabled(server);
+        Villager villager;
+        MerchantOffer offer;
+        MerchantMenu nativeMenu;
+        TradeRuntime.configure(server,false);
+        try {
+            villager=new Villager(EntityType.VILLAGER,level);villager.setNoAi(true);villager.setPos(player.position());
+            offer=new MerchantOffer(new ItemCost(Items.EMERALD,1),new ItemStack(Items.BREAD,6),12,2,0);
+            var offers=villager.getOffers();offers.clear();offers.add(offer);villager.setTradingPlayer(player);
+            nativeMenu=new MerchantMenu(77,player.getInventory(),villager);
+            nativeMenu.getSlot(0).set(new ItemStack(Items.EMERALD));
+            require(!TradeHooks.owned(villager),"disabled monetary trading leaves the untagged vanilla control unowned");
+            require(ItemStack.matches(new ItemStack(Items.BREAD,6),nativeMenu.getSlot(2).getItem()),"unowned native catalog still works");
+            var capture=NativeCatalog.capture(villager,1);require(capture.available(),"actual native capture: "+capture.reason());
+            require(capture.capture().offers().getFirst().goodsCount()==6&&capture.capture().offers().getFirst().originalMaxUses()==12,"original native count/stock");
+        } finally {
+            TradeRuntime.configure(server,monetaryTrading);
+        }
+        if(monetaryTrading) {
+            require(!villager.getPersistentData().getBoolean(TradeHooks.OWNED)&&TradeHooks.owned(villager),"enabled monetary trading claims an untagged native trader");
+            require(nativeMenu.getSlot(2).getItem().isEmpty(),"production ownership hides a previously prepared native result");
+        }
         villager.getPersistentData().putBoolean(TradeHooks.OWNED,true);
         int before=player.getInventory().countItem(Items.BREAD),uses=offer.getUses(),xp=villager.getVillagerXp();
         require(!nativeMenu.getSlot(2).mayPickup(player),"owned inherited pickup blocked");
@@ -47,7 +63,7 @@ public final class TraderHookProbe {
         require(offer.getUses()==exhausted+1&&villager.getVillagerXp()==xp+offer.getXp(),"single explicit native progression path");
         var wandering=new WanderingTrader(EntityType.WANDERING_TRADER,level);wandering.getPersistentData().putBoolean(TradeHooks.OWNED,true);
         require(TradeHooks.owned(wandering),"wandering ownership uses same gate");
-        result="PASS actual owned native result, quickmove, direct extraction, menu, restock and progression gates; unowned native control; detached catalog counts";
+        result="PASS actual owned native result, quickmove, direct extraction, menu, restock and progression gates; explicit disabled-mode native control; restored production ownership; detached catalog counts";
         return true;
     }
     private static void require(boolean condition,String detail){if(!condition)throw new IllegalStateException(detail);}
