@@ -12,6 +12,7 @@ public final class ValuationData {
     public static final String ALGORITHM = "economy:base-values/v1";
     public static final String RECIPE_ALGORITHM = "economy:ordinary-recipes/v1";
     public static final String BREWING_ALGORITHM = "economy:brewing-recipes/v1";
+    public static final String CONTRIBUTION_ALGORITHM = "economy:contributed-values/v1";
     public static final String VARIANT_ALGORITHM = "economy:component-values/v1";
     private static final Gson JSON = new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
     private ValuationData() {}
@@ -75,19 +76,27 @@ public final class ValuationData {
     public record Manifest(int version, String algorithm, Inputs inputs, Catalog catalog,
                            ValuationConfig.Config config, List<Contribution> contributions,
                            String catalogHash, String configHash, String providerHash,
-                           Map<String, Source> sources, RecipeGraph.Graph recipes, BrewingGraph.Graph brewing, VariantGraph.Graph variants) {
+                           Map<String, Source> sources, RecipeGraph.Graph recipes, BrewingGraph.Graph brewing, VariantGraph.Graph variants, List<ValuationContributions.Provider> providers) {
         public Manifest {
+            providers = providers == null ? List.of() : List.copyOf(providers);
             if (!((version == 1 && ALGORITHM.equals(algorithm) && recipes == null && brewing == null && variants == null)
                     || (version == 2 && RECIPE_ALGORITHM.equals(algorithm) && recipes != null && brewing == null && variants == null)
                     || (version == 3 && BREWING_ALGORITHM.equals(algorithm) && recipes != null && brewing != null && variants == null)
-                    || (version == 4 && VARIANT_ALGORITHM.equals(algorithm) && recipes != null && brewing != null && variants != null)))
+                    || (version == 4 && VARIANT_ALGORITHM.equals(algorithm) && recipes != null && brewing != null && variants != null)
+                    || (version == 5 && CONTRIBUTION_ALGORITHM.equals(algorithm) && recipes != null && brewing != null && variants != null)))
                 throw new IllegalArgumentException("Valuation manifest version");
+            if (version < 5 && !providers.isEmpty()) throw new IllegalArgumentException("Providers require v5");
             Objects.requireNonNull(inputs); Objects.requireNonNull(catalog); Objects.requireNonNull(config);
             contributions = List.copyOf(contributions); sources = sorted(sources);
             requireHash(catalogHash); requireHash(configHash); requireHash(providerHash);
             if (recipes != null) RecipeGraph.validate(recipes, inputs);
             if (brewing != null) BrewingGraph.validate(brewing, inputs);
             if (variants != null) VariantGraph.validate(variants, inputs);
+        }
+        public Manifest(int version,String algorithm,Inputs inputs,Catalog catalog,ValuationConfig.Config config,
+                        List<Contribution> contributions,String catalogHash,String configHash,String providerHash,
+                        Map<String,Source> sources,RecipeGraph.Graph recipes,BrewingGraph.Graph brewing,VariantGraph.Graph variants) {
+            this(version,algorithm,inputs,catalog,config,contributions,catalogHash,configHash,providerHash,sources,recipes,brewing,variants,List.of());
         }
         public Manifest(int version,String algorithm,Inputs inputs,Catalog catalog,ValuationConfig.Config config,
                         List<Contribution> contributions,String catalogHash,String configHash,String providerHash,
@@ -164,6 +173,28 @@ public final class ValuationData {
                 VariantGraph.withPremiums(Objects.requireNonNull(variants),base.config().enchantmentPremiums()));
     }
 
+    /** Public-lifecycle intake: all candidate conflicts are checked before producing an immutable v5 manifest. */
+    public static Manifest prepareWithProviders(Inputs inputs, ValuationConfig.Config config, List<Contribution> legacy,
+            RecipeGraph.Graph recipes, BrewingGraph.Graph brewing, VariantGraph.Graph variants,
+            List<ValuationContributions.Provider> providers) {
+        return withProviders(inputs,catalog(),config,legacy,recipes,brewing,variants,providers);
+    }
+    private static Manifest withProviders(Inputs inputs,Catalog catalog,ValuationConfig.Config config,List<Contribution> legacy,
+            RecipeGraph.Graph recipes,BrewingGraph.Graph brewing,VariantGraph.Graph variants,List<ValuationContributions.Provider> providers) {
+        var ordered=providers.stream().sorted(Comparator.comparing(ValuationContributions.Provider::providerId)).toList();
+        ValuationContributions.validate(inputs,ordered,legacy);
+        long entryCount=(long)config.bases().size()+config.overrides().size();
+        for(var old:legacy)entryCount+=old.bases().size();
+        for(var p:ordered)entryCount+=(long)p.bases().size()+p.exactSelectors().size()+p.derivationOptIns().size()+p.variantRules().size();
+        if(entryCount>ValuationConfig.MAX_ENTRIES)throw new IllegalArgumentException("Aggregate configuration/contribution entry limit");
+        var combined=new ArrayList<>(legacy);
+        for(var p:ordered)combined.add(new Contribution(p.providerId(),p.revision(),p.claimedItems(),p.bases()));
+        var base=assemble(inputs,catalog,config,combined);
+        var extended=VariantGraph.withPremiums(ValuationContributions.extend(variants,ordered),config.enchantmentPremiums());
+        return new Manifest(5,CONTRIBUTION_ALGORITHM,inputs,catalog,config,legacy,base.catalogHash(),base.configHash(),
+                hash(JSON.toJson(List.of(base.contributions(),ordered))),base.sources(),recipes,brewing,extended,ordered);
+    }
+
     private static Manifest assemble(Inputs inputs, Catalog catalog, ValuationConfig.Config config,
                                      List<Contribution> contributions) {
         Objects.requireNonNull(inputs); Objects.requireNonNull(catalog); Objects.requireNonNull(config);
@@ -224,12 +255,16 @@ public final class ValuationData {
     }
 
     public static String encode(Manifest manifest) {
-        Manifest expected = assemble(manifest.inputs(), manifest.catalog(), manifest.config(), manifest.contributions());
-        if (manifest.version() >= 2) expected = withRecipes(expected, manifest.recipes());
-        if (manifest.version() >= 3) expected = withBrewing(expected, manifest.brewing());
+        Manifest expected;
+        if(manifest.version()==5) expected=withProviders(manifest.inputs(),manifest.catalog(),manifest.config(),manifest.contributions(),
+                manifest.recipes(),manifest.brewing(),manifest.variants(),manifest.providers());
+        else expected = assemble(manifest.inputs(), manifest.catalog(), manifest.config(), manifest.contributions());
+        if (manifest.version() >= 2 && manifest.version()<5) expected = withRecipes(expected, manifest.recipes());
+        if (manifest.version() >= 3 && manifest.version()<5) expected = withBrewing(expected, manifest.brewing());
         if (manifest.version() == 4) expected = withVariants(expected,manifest.variants());
         if (!manifest.equals(expected)) throw new IllegalArgumentException("Inconsistent manifest provenance");
         var object = JSON.toJsonTree(manifest).getAsJsonObject();
+        if(manifest.version()<5)object.remove("providers");
         // v1 journal payloads predate the recipes field: preserve their byte-for-byte canonical form.
         if (manifest.version() == 1) object.remove("recipes");
         if (manifest.version() < 3) object.remove("brewing");

@@ -14,7 +14,8 @@ final class ValuationCapture {
 
     record Captured(ValuationData.Inputs inputs, RecipeGraph.Graph recipes, BrewingGraph.Graph brewing, VariantGraph.Graph variants) {}
 
-    static Captured capture(MinecraftServer server) throws IOException {
+    static Captured capture(MinecraftServer server) throws IOException {return capture(server,java.util.List.of());}
+    static Captured capture(MinecraftServer server,java.util.List<ValuationContributions.Provider> providers) throws IOException {
         if (!server.isSameThread()) throw new IllegalStateException("Valuation capture requires server thread");
         if (server.getRecipeManager().hadErrorsLoading()) throw new IllegalArgumentException("RECIPE_LOAD_ERRORS");
         var items = new TreeSet<String>();
@@ -50,7 +51,9 @@ final class ValuationCapture {
         if (server.getRecipeManager().getRecipes().size() > 100_000) throw new IllegalArgumentException("RECIPE_COUNT_LIMIT");
         var installed = server.getRecipeManager().getRecipes().stream()
                 .map(h -> h.id() + "=" + h.value().getClass().getName()).sorted().toList();
-        var graph = OrdinaryRecipeCapture.capture(server, tags);
+        var trusted=new TreeSet<String>();
+        for(var provider:providers)if(provider.trustedAdapterVersions().contains(ValuationContributions.ORDINARY))trusted.addAll(provider.claimedItems());
+        var graph = OrdinaryRecipeCapture.capture(server, tags, trusted);
         var brewing = VanillaBrewingCapture.capture(server);
         var variants = VariantCapture.capture(server);
         String recipeHash = ValuationData.hash(resources + "\n" + installed + "\n" + graph.hash() + "\n" + brewing.hash() + "\n" + variants.hash());

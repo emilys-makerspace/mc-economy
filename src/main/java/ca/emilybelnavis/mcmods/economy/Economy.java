@@ -104,6 +104,7 @@ public final class Economy {
         ca.emilybelnavis.mcmods.economy.foundation.RegisterPriceCommands.register(event.getDispatcher(), servers::get);
         ca.emilybelnavis.mcmods.economy.foundation.AdminConfigCommands.register(event.getDispatcher());
         ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.register(event.getDispatcher(),servers::get);
+        ca.emilybelnavis.mcmods.economy.foundation.ValuationCommands.register(event.getDispatcher(),servers::get);
         EconomyCommands.register(event.getDispatcher(), (source, view) -> {
             var server = source.getServer();
             var services = servers.get(server);
@@ -191,6 +192,7 @@ public final class Economy {
     private void stopping(ServerStoppingEvent event) {
         ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
         ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.stopping(event.getServer());
+        ca.emilybelnavis.mcmods.economy.foundation.ValuationCommands.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.stopping(event.getServer());

@@ -361,3 +361,18 @@ if (providers.gradleProperty('variantProbe').isPresent()) {
         }
     }
 }
+
+// Opt-in isolated public valuation API/provider witness; never packaged in the mod jar.
+if (providers.gradleProperty('valuationApiProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.runs.client {
+        systemProperty 'economy.valuationApiProbe', 'true'
+    }
+    tasks.named('runClient').configure {
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'valuation-api-failed.txt').exists() || !new File(root, 'valuation-api-passed.txt').exists())
+                throw new GradleException('Valuation API fixture failed; inspect its disposable marker/log.')
+        }
+    }
+}

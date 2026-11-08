@@ -206,6 +206,18 @@ public final class ServerServices {
     public List<String> macroDiagnostics(){checkOwner();if(state==State.UNAVAILABLE){String reason=failure instanceof IllegalArgumentException&&failure.getMessage()!=null?failure.getMessage():failureCode(failure);return List.of("Simulation unavailable: "+reason.substring(0,Math.min(240,reason.length())));}var s=simulationSample;if(s==null||!simulationFailure.isEmpty())return List.of("Simulation unavailable: "+simulationFailure);return List.of("Simulation "+s.reason()+" mode="+s.mode()+" coverage="+s.coverageDays()+"/7 baseline="+s.baselineDays()+"/7 ageMs="+s.fxAgeMillis(),"Activation A="+s.activationMillis()+" F="+s.firstEffectiveMillis()+" H="+s.handoverMillis(),"Config="+s.config()+" policyRevision="+s.policyRevision()+" source="+s.sources(),String.join("; ",s.limits()));}
     /** Operator capability and revocable server proof are issued before this trusted worker call. */
     public CompletionStage<ca.emilybelnavis.mcmods.economy.simulation.macro.MacroControls.Policy> scheduleMacro(PartyAuthorization.Grant grant,java.util.concurrent.atomic.AtomicBoolean live,ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.Request request){checkOwner();if(!allowsAccountRead(grant,partyWorld(),true)||!live.get())return CompletableFuture.failedStage(new IllegalStateException("Operator permission required"));return tradeMonetaryStorage(grant.actor(),store->{if(!live.get()||!allowsAccountRead(grant,store.snapshot().worldId(),true))throw new IllegalStateException("Operator session ended");return ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.schedule(store,request,java.time.Instant.now(),grant.actor());});}
+    /** Server-only valuation reads authenticated on every admission. */
+    public ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration itemValuation(MinecraftServer server) {
+        checkOwner();return ca.emilybelnavis.mcmods.economy.valuation.ValuationApi.integration(server,this);
+    }
+    public ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration.Provider itemValuationProvider(MinecraftServer server) {
+        checkOwner();requireReady();
+        return ca.emilybelnavis.mcmods.economy.valuation.ValuationApi.provider(server,this);
+    }
+    public void authenticateValuationRead(PartyAuthorization.Grant grant) {
+        checkOwner();requireReady();
+        if(grant==null||!allowsAccountRead(grant,partyWorld(),false))throw new SecurityException("Current owner grant required");
+    }
     public WorldId worldId() { return partyWorld(); }
 
     WorldId partyWorld() {
@@ -731,9 +743,12 @@ public final class ServerServices {
 
     /** Trusted detached trader adapters only; no entity, packet or external SQL callbacks. */
     public <T> CompletionStage<T> tradeStorage(java.util.function.Function<FoundationStore,T> work) {
-        checkOwner();
+        return tradeStorage(null,work);
+    }
+    public <T> CompletionStage<T> tradeStorage(ActorId actor,java.util.function.Function<FoundationStore,T> work) {
+        checkOwner();requireReady();
         if(!(storage instanceof FoundationStore store))throw new IllegalStateException("Trade storage requires foundation");
-        return storage(()->work.apply(store));
+        return storage(actor,()->work.apply(store));
     }
 
     /** Live commerce must pass both cached admission and authoritative worker-time catch-up gates. */
@@ -797,10 +812,15 @@ public final class ServerServices {
         return result.minimalCompletionStage();
     }
 
+    private final java.util.concurrent.atomic.AtomicLong valuationStorageEpoch=new java.util.concurrent.atomic.AtomicLong();
+    /** Conservative cache witness: every storage admission/start invalidates earlier FX samples. */
+    public long valuationStorageEpoch(){return valuationStorageEpoch.get();}
     private <T> CompletableFuture<T> runOn(Supplier<T> work, ThreadPoolExecutor executor) {
+        if(executor==storageWorker)valuationStorageEpoch.incrementAndGet();
         CompletableFuture<T> result = new CompletableFuture<>();
         var active = executor == storageWorker ? activeStorage : activeCalculations;
         executor.execute(new TimedTask(System.nanoTime(), () -> {
+            if(executor==storageWorker)valuationStorageEpoch.incrementAndGet();
             var thread = Thread.currentThread();
             active.put(thread, System.nanoTime());
             try { result.complete(work.get()); }

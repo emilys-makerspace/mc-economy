@@ -26,7 +26,8 @@ final class OrdinaryRecipeCapture {
 
     private OrdinaryRecipeCapture() {}
 
-    static RecipeGraph.Graph capture(MinecraftServer server, Map<String, List<String>> expandedTags) {
+    static RecipeGraph.Graph capture(MinecraftServer server, Map<String, List<String>> expandedTags) {return capture(server,expandedTags,Set.of());}
+    static RecipeGraph.Graph capture(MinecraftServer server, Map<String, List<String>> expandedTags,Set<String> trustedInputs) {
         if (!server.isSameThread()) throw new IllegalStateException("Recipe capture requires server thread");
         var installed = server.getRecipeManager().getRecipes();
         if (installed.size() > RecipeGraph.MAX_RECIPES) throw new IllegalArgumentException("RECIPE_COUNT_LIMIT");
@@ -36,7 +37,7 @@ final class OrdinaryRecipeCapture {
         for (var holder : installed.stream().sorted(Comparator.comparing(h -> h.id().toString())).toList()) {
             String id = holder.id().toString();
             try {
-                RecipeGraph.Node node = capture(id, holder.value(), server, expandedTags);
+                RecipeGraph.Node node = capture(id, holder.value(), server, expandedTags,trustedInputs);
                 bytes = addBytes(bytes, JSON.toJson(node));
                 nodes.add(node);
             } catch (UnsupportedRecipe unsupported) {
@@ -52,7 +53,7 @@ final class OrdinaryRecipeCapture {
     }
 
     private static RecipeGraph.Node capture(String id, Recipe<?> recipe, MinecraftServer server,
-                                             Map<String, List<String>> tags) {
+                                             Map<String, List<String>> tags,Set<String> trustedInputs) {
         RecipeSerializer<?> serializer = TRUSTED.get(recipe.getClass());
         if (serializer == null) throw unsupported("UNSUPPORTED_RECIPE_CLASS");
         // This method is only called after the exact class gate, so it cannot dispatch to a mod override.
@@ -69,13 +70,13 @@ final class OrdinaryRecipeCapture {
         if (original.isEmpty() || original.size() > 9) throw unsupported("UNSUPPORTED_INGREDIENT_COUNT");
         var ingredients = new ArrayList<RecipeGraph.Ingredient>();
         var exclusions = new ArrayList<String>();
-        for (int slot = 0; slot < original.size(); slot++) ingredients.add(ingredient(original.get(slot), slot, tags, exclusions));
+        for (int slot = 0; slot < original.size(); slot++) ingredients.add(ingredient(original.get(slot), slot, tags, exclusions,trustedInputs));
         if (ingredients.stream().allMatch(RecipeGraph.Ingredient::emptySlot)) throw unsupported("NO_CONSUMED_INGREDIENT");
         return new RecipeGraph.Node(id, serializerKey.toString(), outputId, output.getCount(), ingredients, exclusions);
     }
 
     private static RecipeGraph.Ingredient ingredient(Ingredient ingredient, int slot,
-            Map<String, List<String>> tags, List<String> exclusions) {
+            Map<String, List<String>> tags, List<String> exclusions,Set<String> trustedInputs) {
         if (ingredient.isCustom()) throw unsupported("CUSTOM_INGREDIENT");
         Ingredient.Value[] values = ingredient.getValues();
         if (values.length > RecipeGraph.MAX_ALTERNATIVES) throw new IllegalArgumentException("INGREDIENT_ALTERNATIVE_LIMIT");
@@ -88,21 +89,21 @@ final class OrdinaryRecipeCapture {
                     throw unsupported("UNSUPPORTED_INGREDIENT_COMPONENTS");
                 String id = itemId(stack);
                 selectors.add(id);
-                addAlternative(id, slot, alternatives, exclusions);
+                addAlternative(id, slot, alternatives, exclusions,trustedInputs);
             } else if (value instanceof Ingredient.TagValue tag) {
                 String id = tag.tag().location().toString();
                 selectors.add("#" + id);
                 List<String> members = tags.getOrDefault(id, List.of());
                 if (members.size() > RecipeGraph.MAX_ALTERNATIVES) throw new IllegalArgumentException("INGREDIENT_ALTERNATIVE_LIMIT");
-                for (String member : members) addAlternative(member, slot, alternatives, exclusions);
+                for (String member : members) addAlternative(member, slot, alternatives, exclusions,trustedInputs);
             } else throw unsupported("UNKNOWN_INGREDIENT_VALUE");
         }
         // Empty values are a shaped hole. An empty expansion retains its selectors and is unsatisfiable.
         return new RecipeGraph.Ingredient(List.copyOf(selectors), List.copyOf(alternatives));
     }
 
-    private static void addAlternative(String id, int slot, Set<String> alternatives, List<String> exclusions) {
-        if (!ValuationData.catalog().entries().containsKey(id)) {
+    private static void addAlternative(String id, int slot, Set<String> alternatives, List<String> exclusions,Set<String> trustedInputs) {
+        if (!ValuationData.catalog().entries().containsKey(id)&&!trustedInputs.contains(id)) {
             exclusions.add("slot=" + slot + ":" + id + ":UNTRUSTED_REMAINDER_SEMANTICS");
         } else if (CRAFTING_REMAINDERS.contains(id)) {
             exclusions.add("slot=" + slot + ":" + id + ":RETURNED_CONTAINER");

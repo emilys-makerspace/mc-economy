@@ -117,6 +117,13 @@ public final class RecipeValues {
         private final Search search;
         Materials(ValuationData.Manifest manifest, String hash, EconomyCurrency currency, EffectiveFxSnapshot fx,
                   ValuationBudget budget) { search = new Search(manifest, hash, currency, fx, budget); }
+        Material explicit(String item,ValuationData.Source source) {
+            try {
+                search.spend();var attempt=search.anchor(item,source);
+                if(!attempt.ready())return new Material(attempt.status(),attempt.reason(),null,null,Coverage.SUPPORTED_PATH_WITH_EXCLUSIONS,null);
+                var value=attempt.value();return new Material(Status.READY,"EXACT_SELECTOR",value.exact(),explanation(value.trace()),Coverage.COMPLETE,source);
+            }catch(ArithmeticException error){return new Material(Status.OVERFLOW,"EXACT_AMOUNT_OVERFLOW",null,null,Coverage.SUPPORTED_PATH_WITH_EXCLUSIONS,null);}
+        }
         Material content(String id,String cad,int depth) {
             try {
                 search.spend();
@@ -215,11 +222,22 @@ public final class RecipeValues {
                     && (variantRule==null||variantRule.kind().equals("TYPED")))
                 return Attempt.failed(Status.UNSUPPORTED_IDENTITY, "VARIANT_ADAPTER_NOT_INSTALLED");
             var source = manifest.sources().get(item);
+            if(manifest.version()>=5&&(source==null||!source.kind().equals("SERVER_OVERRIDE"))) {
+                var selector=ValuationContributions.selector(manifest,item,"{}");
+                if(selector!=null) {
+                    var provider=ValuationContributions.owner(manifest,item);
+                    return anchor(item,new ValuationData.Source(selector.value(),"PROVIDER_BASE",provider.providerId(),provider.revision()));
+                }
+            }
             if (source != null) return anchor(item, source);
             if (catalog == null) {
-                boolean claimed = manifest.contributions().stream().anyMatch(c -> c.claimedItems().contains(item));
-                return Attempt.failed(claimed ? Status.MISSING_INPUT : Status.MOD_UNREGISTERED,
-                        claimed ? "MOD_DERIVATION_NOT_OPTED_IN" : "MOD_ITEM_NOT_REGISTERED");
+                var provider=ValuationContributions.owner(manifest,item);
+                boolean opted=provider!=null&&(provider.derivationOptIns().contains(item)||provider.variantRules().containsKey(item));
+                if(!opted) {
+                    boolean claimed = provider!=null||manifest.contributions().stream().anyMatch(c -> c.claimedItems().contains(item));
+                    return Attempt.failed(claimed ? Status.MISSING_INPUT : Status.MOD_UNREGISTERED,
+                            claimed ? "MOD_DERIVATION_NOT_OPTED_IN" : "MOD_ITEM_NOT_REGISTERED");
+                }
             }
             if (ancestors.contains(item)) return Attempt.failed(Status.CYCLE, "CYCLIC_RECIPE_PATH");
             if (depth >= RecipeGraph.MAX_DEPTH) throw new Abort(Status.LIMIT_EXCEEDED, "RECIPE_DEPTH_LIMIT");

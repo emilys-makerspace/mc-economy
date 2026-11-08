@@ -91,10 +91,21 @@ public final class VariantValues {
             var catalog=manifest.catalog().entries().get(item);
             if(catalog!=null&&catalog.classification()==ValuationData.Classification.UNPRICED_OPERATOR)
                 throw new Failure(RecipeValues.Status.UNPRICED_OPERATOR,"OPERATOR_ONLY_ITEM");
+            if(manifest.version()>=5) {
+                var source=manifest.sources().get(item);
+                var selector=ValuationContributions.selector(manifest,item,canonical(components));
+                if(selector!=null&&(source==null||!source.kind().equals("SERVER_OVERRIDE"))) {
+                    var provider=ValuationContributions.owner(manifest,item);
+                    var selected=new ValuationData.Source(selector.value(),"PROVIDER_BASE",provider.providerId(),provider.revision());
+                    var value=from(materials.explicit(item,selected));
+                    return proof(item,"PROVIDER_EXACT_SELECTOR",canonical(components),value.exact(),List.of(value),List.of(),selected);
+                }
+            }
             var metadata=graph.items().get(item);
             if(metadata==null)throw new Failure(RecipeValues.Status.MOD_UNREGISTERED,"NO_REGISTERED_COMPONENT_ADAPTER");
             if(metadata.defaults().stream().anyMatch(key->!key.startsWith("minecraft:")||key.equals("minecraft:custom_data")))
                 throw invalid("UNSUPPORTED_ITEM_PROTOTYPE");
+            if(manifest.version()>=5&&catalog==null&&!components.isEmpty())throw invalid("MOD_COMPONENT_SELECTOR_REQUIRED");
             validateComponents(item,components,metadata);
             int holderLevel=nesting+(metadata.slots()>0?1:0);
             if(holderLevel>8)throw new Failure(RecipeValues.Status.LIMIT_EXCEEDED,"CONTAINER_NESTING_LIMIT");

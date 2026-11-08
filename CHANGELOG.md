@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-08
 
+### A9-04 — Public item-reference API and provider data
+
+- Added authenticated current/retained reference reads with currency, snapshot and bounded provenance identities.
+- Added explicit mod-provider bases, exact selectors and supported recipe/material data, with atomic conflict rejection and retained values after removal.
+- Added bounded operator valuation diagnostics and generic integration documentation. Financial qualification and trader source activation remain separate.
+
 ### A9-03-03 — Component and container reference costs
 
 - Added compatible enchantment premiums, curse and durability discounts, stored books and name-neutral exact identities, with configurable beneficial premiums.

@@ -1,5 +1,7 @@
 # A9-01 source feasibility and interface freeze
 
+Current extension: [A9-04 public API/SPI](item-valuation-api.md) delivers v5 provider data and authenticated reads; prior package descriptions below remain historical in their recorded scope.
+
 Current extension: [A9-03-03 component/container architecture](item-valuation-variants.md) records v4 typed identity, premium overrides and recursive publication. Earlier version/package descriptions below remain historical in their recorded scope.
 
 Accepted source/document checkpoint, 2026-11-07. Supplements [technical revision 1](a9-shared-contracts.md), preserving approved prices and gameplay. No runtime service, adapter, migration or activation is delivered. [Evidence](../verification/A9-01.md) separates source feasibility from runtime acceptance.
