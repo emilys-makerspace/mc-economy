@@ -95,7 +95,7 @@ Offline time and skipping the night do not advance the replacement wait. Replace
 
 ## Schema upgrades
 
-New worlds initialize automatically. Worlds on schemas 1 through 38 require a validated complete-world backup before upgrading to schema 39. Prepare it while Minecraft is fully stopped:
+New worlds initialize automatically. Worlds on schemas 1 through 49 require a validated complete-world backup before upgrading to schema 50. Prepare it while Minecraft is fully stopped:
 
 ```sh
 ./gradlew prepareEconomyUpgrade -PeconomyWorld=/absolute/path/to/world
@@ -119,7 +119,7 @@ Restore into a **new, separate directory**:
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 39 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
+The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 50 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
 
 There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination.
 
@@ -178,7 +178,7 @@ Trading replaces native checkout for ordinary villagers and wandering traders wh
 
 Claims retain committed goods/cash and independently witnessed original-input returns. A failed or cancelled untouched quote closes the original financial intent before releasing its marked cash locks. A saved held-input rejection uses an explicit return claim. Uncertain HELD/delivery/progression after disconnect or restart requires the existing custody/operator reconciliation process; do not manually duplicate items or repeat the payment. Village restock earns only loaded eligible work ticks, and wandering traders never restock. No offline/sleep tick credit is invented.
 
-Storage schema 49 captures the production manifest; upgrades retain the stopped complete-world backup requirement. Keep world and economy files together.
+Storage schema 50 also retains item reference base snapshots; upgrades retain the stopped complete-world backup requirement. Keep world and economy files together.
 
 ### A8 acceptance and operational limits
 
@@ -189,3 +189,25 @@ Acceptance combines a real merchant-to-rate SQLite witness with the earlier real
 Clear output capacity before quoting. If exact cash change or a rounded positive payout cannot be represented, choose a supported larger quantity or another explicit rail/currency; no rounding shortcut or account fallback is used. Keep saved worlds and economy data together. Ambiguous interrupted item/progression attempts remain for reconciliation instead of obtaining another execution capability. Source replacement/recipe valuation belongs to a separately selected A9 adapter; the current temporary emerald source is retained.
 
 [Acceptance evidence](../.codex/verification/A8-08.md) and [A9 downstream boundary](../.codex/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.
+
+
+## Item reference base configuration
+
+The A9 base foundation loads 349 approved vanilla base anchors and preserves the full vanilla classification inventory. It does not yet derive recipe, brewing or component values, expose a public item-valuation API, or change villager/trader prices. Item reference costs remain separate from financial qualification.
+
+Optional `config/economy-valuation.json` supplies plain-item bases and overrides. A missing file uses built-in defaults. For example:
+
+```json
+{
+  "bases": [],
+  "overrides": [
+    {"item": "minecraft:diamond", "currency": "CAD", "amount": "301", "referenceCount": 1}
+  ]
+}
+```
+
+Use registered item IDs, uppercase currency codes, positive decimal amount strings with at most 12 decimal places, and reference counts from 1 to 1,000,000. Duplicate entries within a layer, unknown fields, operator-only item prices and unregistered mod-item contributions reject the candidate. An override takes precedence over a base; component-bearing items require their later supported adapters. Missing prices never become zero or a floor-price fallback. Future consumers publish HALF_UP unit prices with a one-minor-unit minimum, then multiply by quantity; water is a typed free input only.
+
+Restart or use vanilla `/reload` after editing the file. A valid candidate becomes active only after durable publication. Invalid configuration is left untouched and the prior durable snapshot is retained; fresh valuation stays unavailable until a valid matching reload. Look for `VALUATION_SNAPSHOT_READY` or `VALUATION_RELOAD_REJECTED` in the server log. Valuation readiness currently has no effect on the existing trader price source.
+
+Snapshot history and incomplete staging are retained without automatic deletion. A manifest is capped at 32 MiB and retained canonical data at 256 MiB, including incomplete unpublished stages; quota exhaustion rejects new publication. Compiled history and result caches are bounded independently. Keep existing complete-world backups and follow the schema-upgrade procedure before opening an older world.

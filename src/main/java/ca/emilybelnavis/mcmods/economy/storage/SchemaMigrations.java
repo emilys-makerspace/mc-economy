@@ -8,7 +8,7 @@ import java.util.UUID;
 /** Ordered trusted SQL; the complete pending chain shares one transaction. */
 final class SchemaMigrations {
     static final int MINIMUM_SUPPORTED = 1;
-    static final int CURRENT = 49;
+    static final int CURRENT = 50;
     static final int APPLICATION_ID = 0x45434F4E;
     record Migration(int version, String name, List<String> statements) {
         Migration { statements = List.copyOf(statements); }
@@ -74,7 +74,8 @@ final class SchemaMigrations {
             new Migration(46,"currency prime history and loan policy provenance",currencyPrimeStatements()),
             new Migration(47,"prospective fixed retirement and exact-time FX",effectiveFxStatements()),
             new Migration(48,"financial-day macro provider and atomic handover",macroStatements()),
-            new Migration(49,"production simulation manifest",ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.statements()));
+            new Migration(49,"production simulation manifest",ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.statements()),
+            new Migration(50,"immutable item valuation snapshots",ca.emilybelnavis.mcmods.economy.valuation.ValuationStore.statements()));
 
     private static List<String> macroStatements() {
         var statements=new java.util.ArrayList<String>();

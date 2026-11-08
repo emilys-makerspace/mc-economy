@@ -2,6 +2,13 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-08
+
+### A9 — Item reference base snapshots
+
+- Added validated optional base/override configuration with exact currency arithmetic and retained immutable snapshots across reloads and restarts. Recipe/component valuation and trader price replacement remain pending.
+- Storage advances to schema 50; existing worlds require the stopped complete-world upgrade backup. Invalid valuation reloads preserve the prior durable snapshot.
+
 ## 2026-11-07
 
 ### A8 — Monetary trading and economic rates

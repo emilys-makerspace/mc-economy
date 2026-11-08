@@ -32,7 +32,7 @@ public final class InventoryPersistenceProbe {
     }
 
     private void tick(ServerTickEvent.Post event) {
-        if (ran || System.getProperty("economy.financeWorld") != null) return;
+        if (ran || Boolean.getBoolean("economy.valuationProbe") || System.getProperty("economy.financeWorld") != null) return;
         if (Boolean.getBoolean("economy.villageBankAcceptance")) {
             var services = Economy.serverServices(event.getServer());
             if (services == null || services.state() != ServerServices.State.READY) return;

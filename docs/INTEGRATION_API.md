@@ -53,7 +53,7 @@ Generated branches expose ordinary authenticated kiosk services. Branches and st
 | Trader menu transport | 1 | Bounded server-offered actions; no client prices or financial authority. |
 | `EconomicSimulationIntegration` | 1 | Cached immutable snapshots and bounded asynchronous rate history. |
 | `BranchPlans` serialization | 1 | Internal captured source, provider, geometry and placement provenance. |
-| World storage schema | 49 | Internal projections, migration validation and journal recovery. |
+| World storage schema | 50 | Internal projections, migration validation and journal recovery. |
 
 The transport and persistence versions describe their respective protocols. Integrations use the server API and current grants for financial operations. World storage upgrades follow the stopped-world complete-backup procedure in the server guide.
 
@@ -61,7 +61,7 @@ The transport and persistence versions describe their respective protocols. Inte
 
 A8 delivers the activity observer, immutable windows, future shared prime/FX activation and stage-0 provider. Ordinary loans capture their explicit currency policy; historical fixed terms and subprime pricing retain their existing meanings.
 
-Reference item valuation belongs to A9. A future reference cost is distinct from an accepted financial valuation source. Financial qualification continues to use the current authoritative valuation contracts.
+A9-02 installs internal base/override evaluation and immutable snapshots; the grant-authenticated public item-valuation API/SPI remains A9-04 work. Recipe, brewing and component algorithms and trader source activation remain unimplemented. A reference cost is distinct from an accepted financial valuation source. Financial qualification continues to use the current authoritative valuation contracts.
 
 A10 can extend the player experience and multiplayer coverage using the existing offered-action, authorization, quote and original-outcome rules. Securities, market trading and expanded lending retain their separate B-series prerequisites; monetary NPC commerce is the delivered A8 feature.
 

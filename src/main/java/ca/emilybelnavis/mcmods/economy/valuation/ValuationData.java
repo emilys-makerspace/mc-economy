@@ -1,0 +1,206 @@
+package ca.emilybelnavis.mcmods.economy.valuation;
+
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.security.*;
+import java.util.*;
+
+/** Immutable base-only manifests. A9 recipe/variant packages add algorithms under new versions. */
+public final class ValuationData {
+    public static final int MAX_MANIFEST_BYTES = 32 * 1_048_576;
+    public static final String ALGORITHM = "economy:base-values/v1";
+    private static final Gson JSON = new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
+    private ValuationData() {}
+
+    public enum Classification { BASE, DERIVED, VARIANT, UNPRICED_OPERATOR }
+    public record CatalogEntry(String item, Classification classification, String amount, String rule) {
+        public CatalogEntry {
+            itemId(item); Objects.requireNonNull(classification); Objects.requireNonNull(rule);
+            if (rule.length() > 256) throw new IllegalArgumentException("Catalog rule bound");
+            if (classification == Classification.BASE) {
+                amount = new ValuationConfig.Entry(item, ca.emilybelnavis.mcmods.economy.api.EconomyCurrency.CAD,
+                        amount, 1).amount();
+            } else if (amount != null) throw new IllegalArgumentException("Only base catalog rows have amounts");
+        }
+    }
+    public record Catalog(Map<String, CatalogEntry> entries) {
+        public Catalog {
+            entries = sorted(entries);
+            if (entries.size() != 1_333) throw new IllegalArgumentException("Pinned catalog inventory");
+            for (var pair : entries.entrySet()) {
+                if (!pair.getKey().equals(pair.getValue().item()) || !pair.getKey().startsWith("minecraft:"))
+                    throw new IllegalArgumentException("Catalog identity mismatch");
+            }
+        }
+        public String hash() { return ValuationData.hash(JSON.toJson(entries)); }
+    }
+    public record Inputs(Set<String> items, String recipeHash, String tagsHash, String featuresHash) {
+        public Inputs {
+            items = ids(items);
+            if (items.isEmpty() || items.size() > 100_000) throw new IllegalArgumentException("Registry item limit");
+            requireHash(recipeHash); requireHash(tagsHash); requireHash(featuresHash);
+        }
+        public String registryHash() { return hash(JSON.toJson(items)); }
+    }
+    /** Trusted internal intake only; no public lifecycle registration surface is installed by A9-02. */
+    public record Contribution(String providerId, String revision, Set<String> claimedItems,
+                               List<ValuationConfig.Entry> bases) {
+        public Contribution {
+            itemId(providerId);
+            if (revision == null || revision.isBlank() || revision.length() > 128)
+                throw new IllegalArgumentException("Provider revision");
+            claimedItems = ids(claimedItems);
+            if (claimedItems.size() > ValuationConfig.MAX_ENTRIES) throw new IllegalArgumentException("Provider claim limit");
+            bases = new ValuationConfig.Config(bases, List.of()).bases();
+            String namespace = providerId.substring(0, providerId.indexOf(':'));
+            if (namespace.equals("minecraft") || namespace.equals("economy"))
+                throw new IllegalArgumentException("Reserved provider namespace");
+            for (String item : claimedItems)
+                if (!item.startsWith(namespace + ':')) throw new IllegalArgumentException("Provider does not own claimed namespace");
+            for (var entry : bases)
+                if (!claimedItems.contains(entry.item())) throw new IllegalArgumentException("Unclaimed provider base");
+        }
+    }
+    public record Source(ValuationConfig.Entry entry, String kind, String provider, String revision) {
+        public Source {
+            Objects.requireNonNull(entry); Objects.requireNonNull(kind); Objects.requireNonNull(provider); Objects.requireNonNull(revision);
+            if (!Set.of("BUILTIN_BASE", "PROVIDER_BASE", "SERVER_BASE", "SERVER_OVERRIDE").contains(kind))
+                throw new IllegalArgumentException("Base source kind");
+        }
+    }
+    public record Manifest(int version, String algorithm, Inputs inputs, Catalog catalog,
+                           ValuationConfig.Config config, List<Contribution> contributions,
+                           String catalogHash, String configHash, String providerHash,
+                           Map<String, Source> sources) {
+        public Manifest {
+            if (version != 1 || !ALGORITHM.equals(algorithm)) throw new IllegalArgumentException("Valuation manifest version");
+            Objects.requireNonNull(inputs); Objects.requireNonNull(catalog); Objects.requireNonNull(config);
+            contributions = List.copyOf(contributions); sources = sorted(sources);
+            requireHash(catalogHash); requireHash(configHash); requireHash(providerHash);
+        }
+        public String hash() { return ValuationData.hash(encode(this)); }
+    }
+
+    private static final class Builtin {
+        private static final Catalog CATALOG = readCatalog();
+    }
+    public static Catalog catalog() { return Builtin.CATALOG; }
+
+    private static Catalog readCatalog() {
+        try (var stream = ValuationData.class.getResourceAsStream("/data/economy/valuation/catalog.json")) {
+            if (stream == null) throw new IllegalStateException("Missing valuation catalog");
+            byte[] bytes = stream.readNBytes(ValuationConfig.MAX_BYTES + 1);
+            if (bytes.length > ValuationConfig.MAX_BYTES) throw new IllegalStateException("Builtin catalog bound");
+            JsonElement raw = ValuationConfig.parse(ValuationConfig.utf8(bytes), ValuationConfig.MAX_BYTES);
+            if (!raw.isJsonArray()) throw new IllegalArgumentException("Catalog array required");
+            var entries = new TreeMap<String, CatalogEntry>();
+            for (JsonElement element : raw.getAsJsonArray()) {
+                var object = ValuationConfig.object(element);
+                ValuationConfig.keys(object, Set.of("item", "classification", "amount", "rule"));
+                CatalogEntry entry = JSON.fromJson(object, CatalogEntry.class);
+                if (entries.putIfAbsent(entry.item(), entry) != null) throw new IllegalArgumentException("Duplicate catalog identity");
+            }
+            return new Catalog(entries);
+        } catch (IOException e) { throw new IllegalStateException("Cannot read valuation catalog", e); }
+    }
+
+    public static Manifest prepare(Inputs inputs, ValuationConfig.Config config, List<Contribution> contributions) {
+        return assemble(inputs, catalog(), config, contributions);
+    }
+
+    private static Manifest assemble(Inputs inputs, Catalog catalog, ValuationConfig.Config config,
+                                     List<Contribution> contributions) {
+        Objects.requireNonNull(inputs); Objects.requireNonNull(catalog); Objects.requireNonNull(config);
+        if (!inputs.items().containsAll(catalog.entries().keySet()))
+            throw new IllegalArgumentException("Registry omits pinned vanilla identities");
+        // Encoding enforces the aggregate config byte limit even for trusted in-memory callers.
+        String configText = ValuationConfig.encode(config);
+        if (contributions.size() > ValuationConfig.MAX_ENTRIES)
+            throw new IllegalArgumentException("Provider count limit");
+        var providers = new TreeMap<String, Contribution>();
+        var claims = new TreeMap<String, String>();
+        int entryCount = config.bases().size() + config.overrides().size();
+        for (Contribution contribution : contributions) {
+            Objects.requireNonNull(contribution);
+            if (providers.putIfAbsent(contribution.providerId(), contribution) != null)
+                throw new IllegalArgumentException("Duplicate provider identity");
+            entryCount = Math.addExact(entryCount, contribution.bases().size());
+            if (entryCount > ValuationConfig.MAX_ENTRIES) throw new IllegalArgumentException("Contribution entry limit");
+            for (String item : contribution.claimedItems()) {
+                if (!inputs.items().contains(item)) throw new IllegalArgumentException("Unregistered provider identity");
+                if (claims.putIfAbsent(item, contribution.providerId()) != null)
+                    throw new IllegalArgumentException("Conflicting provider claim: " + item);
+            }
+        }
+        if (claims.size() > ValuationConfig.MAX_ENTRIES) throw new IllegalArgumentException("Aggregate provider claim limit");
+        List<Contribution> ordered = List.copyOf(providers.values());
+        var sources = new TreeMap<String, Source>();
+        String catalogHash = catalog.hash();
+        for (CatalogEntry entry : catalog.entries().values()) {
+            if (entry.classification() == Classification.BASE)
+                sources.put(entry.item(), new Source(new ValuationConfig.Entry(entry.item(),
+                        ca.emilybelnavis.mcmods.economy.api.EconomyCurrency.CAD, entry.amount(), 1),
+                        "BUILTIN_BASE", "economy:vanilla-catalog", catalogHash));
+        }
+        for (Contribution provider : ordered)
+            for (var entry : provider.bases()) sources.put(entry.item(), new Source(entry, "PROVIDER_BASE", provider.providerId(), provider.revision()));
+        String configHash = hash(configText);
+        for (var entry : config.bases()) {
+            validateOperatorEntry(entry, inputs, catalog, claims);
+            sources.put(entry.item(), new Source(entry, "SERVER_BASE", "economy:server-config", configHash));
+        }
+        for (var entry : config.overrides()) {
+            validateOperatorEntry(entry, inputs, catalog, claims);
+            sources.put(entry.item(), new Source(entry, "SERVER_OVERRIDE", "economy:server-config", configHash));
+        }
+        return new Manifest(1, ALGORITHM, inputs, catalog, config, ordered, catalogHash, configHash,
+                hash(JSON.toJson(ordered)), sources);
+    }
+
+    private static void validateOperatorEntry(ValuationConfig.Entry entry, Inputs inputs, Catalog catalog,
+                                              Map<String, String> claims) {
+        if (!inputs.items().contains(entry.item())) throw new IllegalArgumentException("Unknown item: " + entry.item());
+        CatalogEntry vanilla = catalog.entries().get(entry.item());
+        if (vanilla != null && vanilla.classification() == Classification.UNPRICED_OPERATOR)
+            throw new IllegalArgumentException("Operator-only item cannot receive a reference price");
+        if (vanilla == null && !claims.containsKey(entry.item()))
+            throw new IllegalArgumentException("Mod item requires explicit contribution registration");
+    }
+
+    public static String encode(Manifest manifest) {
+        Manifest expected = assemble(manifest.inputs(), manifest.catalog(), manifest.config(), manifest.contributions());
+        if (!manifest.equals(expected)) throw new IllegalArgumentException("Inconsistent manifest provenance");
+        String encoded = JSON.toJson(manifest);
+        if (ValuationConfig.bytes(encoded) > MAX_MANIFEST_BYTES) throw new IllegalArgumentException("Manifest byte limit");
+        return encoded;
+    }
+    public static Manifest decode(String encoded) {
+        JsonElement parsed = ValuationConfig.parse(encoded, MAX_MANIFEST_BYTES);
+        Manifest manifest = JSON.fromJson(parsed, Manifest.class);
+        if (manifest == null || !encode(manifest).equals(encoded))
+            throw new IllegalArgumentException("Noncanonical valuation manifest");
+        return manifest;
+    }
+    public static String hash(String text) {
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))); }
+        catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+    }
+    static void requireHash(String hash) {
+        if (hash == null || !hash.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("SHA-256 required");
+    }
+    static void itemId(String item) {
+        if (item == null || item.length() > 256 || !item.matches("[a-z0-9_.-]+:[a-z0-9_./-]+"))
+            throw new IllegalArgumentException("Namespaced item identity required");
+    }
+    private static Set<String> ids(Set<String> ids) {
+        Objects.requireNonNull(ids); var sorted = new TreeSet<String>();
+        for (String item : ids) { itemId(item); sorted.add(item); }
+        return Collections.unmodifiableSortedSet(sorted);
+    }
+    private static <V> Map<String, V> sorted(Map<String, V> values) {
+        Objects.requireNonNull(values); var sorted = new TreeMap<String, V>();
+        for (var entry : values.entrySet()) sorted.put(Objects.requireNonNull(entry.getKey()), Objects.requireNonNull(entry.getValue()));
+        return Collections.unmodifiableSortedMap(sorted);
+    }
+}

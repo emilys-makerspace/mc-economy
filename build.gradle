@@ -309,3 +309,16 @@ if (providers.gradleProperty('simulationProductionProbe').isPresent()) {
         }
     }
 }
+
+// Opt-in A9-02 lifecycle/reload smoke check; release jars exclude this source set.
+if (providers.gradleProperty('valuationProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.valuationProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'valuation-failed.txt').exists() || !new File(root, 'valuation-passed.txt').exists())
+                throw new GradleException('Valuation snapshot lifecycle check did not pass')
+        }
+    }
+}

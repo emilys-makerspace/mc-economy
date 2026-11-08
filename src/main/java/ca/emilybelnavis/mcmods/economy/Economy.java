@@ -150,6 +150,8 @@ public final class Economy {
         servers.put(server, new ServerServices(server.getWorldPath(LevelResource.ROOT), runtime, scheduling));
         servers.get(server).onDenominationChange(()->ca.emilybelnavis.mcmods.economy.village.GenerationRuntime.denominationChanged(server));
         runtimes.put(server, runtime);
+        ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.start(server, servers.get(server),
+                FMLPaths.CONFIGDIR.get().resolve("economy-valuation.json"));
         choosers.put(server, new DenominationChooser(servers.get(server), runtime, Clock.systemUTC()));
         activeChoosers.put(server, choosers.get(server));
         LOGGER.info("Economy foundation initializing");
@@ -167,6 +169,7 @@ public final class Economy {
             ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.revalidate(event.getServer());
             ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.tick(event.getServer());
             services.tick();
+            ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.tick(event.getServer());
             ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.tick(event.getServer());
             ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.tick(event.getServer());
             ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.tick(event.getServer());
@@ -186,6 +189,7 @@ public final class Economy {
         }
     }
     private void stopping(ServerStoppingEvent event) {
+        ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
         ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.stopping(event.getServer());
@@ -210,6 +214,7 @@ public final class Economy {
         }
     }
     private void stopped(ServerStoppedEvent event) {
+        ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
         invalidConfiguration.remove(event.getServer());
         ca.emilybelnavis.mcmods.economy.institution.KioskAdmission.stopped(event.getServer());
         ca.emilybelnavis.mcmods.economy.terminal.TerminalLifecycle.stopped(event.getServer());

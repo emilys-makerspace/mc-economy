@@ -1,6 +1,6 @@
 # A9 shared technical contracts — approved revision 1
 
-Prepared 2026-11-07 under the user's instruction to start drafting after settling policy. Gameplay choices in [planning](a9-planning.md) are approved; catalog prices are approved with the latest log/meat/disc revisions; the user approved all technical/package drafts on 2026-11-07, subject to prerequisites. A9-01 was selected and is complete in source/document scope; no runtime implementation or activation has been executed. [A9-01 source/interface freeze](a9-source-contracts.md) finalizes the signatures, source map and engineering details below; [evidence](../verification/A9-01.md) records its limits. Minecraft 1.21.1, NeoForge 21.1.252, Java 21 remain pinned.
+Prepared 2026-11-07 under the user's instruction to start drafting after settling policy. Gameplay choices in [planning](a9-planning.md) are approved; catalog prices are approved with the latest log/meat/disc revisions; the user approved all technical/package drafts on 2026-11-07, subject to prerequisites. A9-01 is complete in source/document scope; [A9-02](item-valuation-snapshots.md) now implements base-only configuration/snapshots. Recipe/brewing/variant algorithms, public API and trader activation remain unimplemented. [A9-01 source/interface freeze](a9-source-contracts.md) finalizes the signatures, source map and engineering details below; [evidence](../verification/A9-01.md) records its limits. Minecraft 1.21.1, NeoForge 21.1.252, Java 21 remain pinned.
 
 ## Scope and sources
 
