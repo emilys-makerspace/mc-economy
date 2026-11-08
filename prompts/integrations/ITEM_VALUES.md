@@ -1,0 +1,23 @@
+# Complete integration item values — separate module requirement
+
+## Approved scope
+
+The user requested item values for **all items in the selected Sophisticated and AE2 core mods and extensions**. This includes the four core mod artifacts and 33 extension artifact entries in [DEPENDENCIES.md](DEPENDENCIES.md), plus the new Economy integration Wallet Upgrade. Include registered item forms of blocks, crafting components/materials, tools, equipment, cards, upgrades, tier variants, storage/cells, terminals, machines, bridges and decorative items. An extension with no item registrations should be explicitly recorded as such after inspection, not assigned invented entries.
+
+This selects complete item-value coverage within those integrations, not automatic values for every unrelated mod. Direct MineColonies/casino integration stays later; items registered by an included bridge remain in scope. Contributions live in the optional integration modules and publish through the existing valuation API/SPI; core Economy still runs without those mods.
+
+## Catalog and price specification
+
+1. Inventory actual item registry IDs and relevant component identities for the pinned artifacts, with owning mod/version and conditional registrations. Produce a per-item catalog and reconcile its entries against the captured registry. Do not infer item counts or ownership from display names/JAR names alone.
+2. Give every ordinary in-scope item an explicit calibrated value or a fully supported deterministic derivation. Cover noncraftables and unsupported machine-recipe outputs with explicit anchors where appropriate. External ingredients need known inputs/contributions or explicit anchors; an unknown ingredient is not zero. Related bridge items do not opt their parent mods' entire catalogs into valuation.
+3. Preserve A9 exact internal arithmetic, explicit override/base/derivation precedence, captured denomination/FX/source revisions, published minor-unit rounding/minimums and bounded cycle-safe evaluation. Calibrate against the existing vanilla catalog instead of independently repricing it. Keep acquisition/tier/processing assumptions visible for review; actual numbers are not approved by this scope request.
+4. Describe machine/multistep transformations, output quantities, alternate recipes, returned containers and byproducts explicitly before using them for derivation. Non-item resources such as power, chemicals, fluids, XP or EMC do not become currency or freely valued ingredients by implication. Use supported adapters or explicit item anchors; do not invent conversions.
+5. Value supported component-sensitive states: storage shells, installed upgrades and contents without double counting; preserve quantities, durability/enchantments where relevant and backing identities. Distinguish true contents from network references/aliases and infinite/creative behavior. Do not count the same store once through an ME bridge and again directly.
+6. Inventory creative/admin-only items and unusual/unobtainable/unsupported states explicitly. Apply existing operator-item exclusion contracts where applicable and make any proposed departures/exceptions visible for review. Do not silently omit an item, fabricate a nominal value or mark coverage complete while ordinary-item values remain missing.
+7. Keep availability/limits/provenance typed in API/operator diagnostics and unsupported listings quiet under A9. A catalog value adds no listing, guaranteed redemption, collateral/wealth eligibility or financial authority and does not rewrite captured history.
+
+## Package and acceptance boundaries
+
+Split registry inventory, price calibration/contribution data, special-state/container evaluation and integration activation at independently verifiable boundaries before implementation. The inventory and proposed numerical catalog need review; this requirement supplies no fabricated item list, prices or support claims. Reconcile the completed catalog to actual registry IDs and distinguish classified operator/unsupported states from available numeric values. Do not declare an extension covered solely because its parent mod is covered.
+
+Every package/subtask/delegate inherits [VERIFICATION.md](../../.codex/VERIFICATION.md): prose/data draft review first; no Gradle/tests/game merely to complete a planning task. Code checks are proportional, at most one focused named-test invocation when useful, no automatic full-suite/combinatorial matrix. Runnable deliveries keep the pinned platform, optional integrations and required development runtimes and run build excluding tests plus both client-task checks once. One owner runs Gradle/game checks sequentially; necessary runtime captures use disposable fixtures.

@@ -1,6 +1,6 @@
 # A10 — Core integration, UI and hardening
 
-Status: draft DESIGN prompt. Refine specifications and future prompts only. Do not implement code, scaffold, run Gradle/tests/game processes, generate assets, change dependencies, or migrate worlds. Edit planning files only when explicitly requested. Reading a roadmap or this file is not implementation authorization.
+Status: all eleven selectable A10 prompts and their shared contracts approved 2026-11-08, subject to prerequisites. No implementation package is selected, executed or verified. Select packages individually through [the approved queue](EXECUTION.md). This phase entry and its original design brief do not auto-execute implementation, Gradle/tests/game, assets or migrations.
 
 Formerly A8.
 
@@ -14,7 +14,7 @@ Integrate A7 branch discovery, banker guidance and unattended terminal behavior;
 
 ## Scope to flesh out
 
-Public API/events; banking/FX/statement UI; permissions/admin/audit; explicitly chosen compatibility adapters; migrations/restores/recovery; throughput and persistence budgets; stock-facing documentation.
+Public API/events; banking/FX/statement UI; permissions/admin/audit; core API extension seams; migrations/restores/recovery; throughput and persistence budgets; stock-facing documentation.
 
 ## Mandatory current-feature reimplementation
 
@@ -26,7 +26,7 @@ Record affected feature coverage and proposed behavior changes. Preserve accepte
 
 ## Proposed bounded subprompts
 
-Core UI and history; API/events; administration/auditing; compatibility and migration procedures; operational/performance acceptance.
+Core UI and history; API/events; administration/auditing; core platform and migration procedures; operational/performance acceptance.
 
 For each subprompt define outcome, owner, prerequisites, persistence/entities, service/network contracts, permissions, state transitions, transaction boundary, server/worker handoff, time/version semantics, idempotency, configuration and diagnostics. Specify failures, overflow/rounding, stale requests, disconnects, retries and recovery where relevant. Avoid production code and premature class/file prescriptions.
 
@@ -51,3 +51,15 @@ Stop at planning. Do not execute the prompts you draft or expand into later-phas
 Follow [the project verification policy](../../.codex/VERIFICATION.md) for every package and sub-task. Planning uses diff/link review only; run no Gradle, tests or game processes now. Routine implementation uses at most one focused test invocation when useful, selecting named classes for meaningful changed behavior and reusing existing real-service/SQLite fixtures and unchanged evidence. Package/phase completion does not automatically require tests or a full suite. A full-suite run requires an explicit request or a stated concrete concern narrower checks cannot address.
 
 For an ordinary runnable delivery, run `./gradlew build -x test`, `./gradlew help --task runClient` and `./gradlew runClient --dry-run` once. Keep working `runClient`/`runServer`, registered main source set and required development runtime dependencies. One owner runs Gradle/game checks sequentially. Use disposable worlds for necessary runtime/generation checks; preserve player worlds and backups.
+
+## Preparation — 2026-11-08
+
+The user requested “prep PhaseA10”. [Phase specification and decisions](../../.codex/architecture/a10-planning.md), [approved shared contract](CONTRACT.md), [eleven-package queue](EXECUTION.md) and [handoff](../../.codex/A10-planning.md) are approved 2026-11-08, subject to prerequisites. No implementation package is selected or executed. A10-01 is the proposed source/interface checkpoint. Original design requirements above remain in scope; technical revision1 and package/runtime contracts are approved design targets, not verified behavior.
+
+## Scope boundary — standalone integrations
+
+All third-party mod compatibility is outside A10 and is planned in [separate optional integration modules](../integrations/README.md). A10 stabilizes core public APIs and existing functionality only; it does not add mod adapters, compatibility item catalogs, external inventory/network access, the wallet upgrade or target-mod development dependencies. A10 completion/performance acceptance does not depend on those modules.
+
+## Approved technical planning
+
+The settled decisions are now reflected in [technical revision1](TECHNICAL.md), [current source map](SOURCE_MAP.md), [runtime/performance plan](RUNTIME_PLAN.md) and [eleven selectable packages](EXECUTION.md). A10-02 is an overview of three children, not selectable. Remaining items are source-feasibility revalidation and setup-time resource availability, not unanswered routine gameplay choices. All eleven selectable prompts are approved; no implementation package has started.

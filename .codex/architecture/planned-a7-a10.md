@@ -120,6 +120,10 @@ Current packages are A9-01 source feasibility, A9-02 snapshots, A9-03-01 ordinar
 
 ## A10 — Core integration
 
+Scope revision: all third-party mod compatibility is outside A10 in [standalone optional modules](../../prompts/integrations/README.md). A10 retains core UI/history/API/admin/restore/operations only.
+
+A10 preparation was requested 2026-11-08. [Current specification](a10-planning.md) and [eleven approved packages](../../prompts/A10-core-integration/EXECUTION.md) are approved 2026-11-08, subject to prerequisites; no A10 implementation package is selected or executed. Original core UI/history/API/admin/operations requirements remain in scope.
+
 Carry forward banking explanations/navigation, window/GUI-scale review, external multiplayer/network conditions and combined borrowing-to-default-to-collection gameplay. Integrate branch discovery, banker availability, institution/currency explanations and valuation provenance. Reuse unchanged A6 evidence and retain explicit composite gameplay limits. Unsupported B-series capabilities remain unavailable.
 
 ## Verification

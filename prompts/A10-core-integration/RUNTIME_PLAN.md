@@ -1,0 +1,91 @@
+# A10 runtime and performance plan
+
+Approved 2026-11-08 with all A10 prompts, subject to prerequisites. This is a finite implementation acceptance plan, not runtime evidence or a guarantee of universal capacity. A10 contains core Economy only; no third-party compatibility modules, item catalogs, wallet or external inventory/network adapters are part of these workloads. All packages inherit [VERIFICATION.md](../../.codex/VERIFICATION.md), including its limits on tests, native launches and full suites. Preparation itself runs no Gradle/tests/game.
+
+## Available reference environment
+
+Read-only host inventory on 2026-11-08 reports a MacBook Pro, Apple M5 Pro, 18 reported CPU cores, 24 GB memory, and macOS 27.0.1. This nominates the available reference machine; it is not a claimed minimum or measured 20-player server. No serial number/device identity is needed in evidence. A direct `sysctl` query was sandbox-denied; the non-identifying fields above came from `system_profiler SPHardwareDataType -json`.
+
+For the later dedicated fixture, propose Java 21 with `-Xms2G -Xmx4G`, no extra JVM tuning, default Economy scheduling, an otherwise isolated disposable world and a quiescent host. Record actual Java vendor/build, CPU/memory allocation, architecture, storage filesystem/medium/free-space, power state and co-located clients/background load. Storage characteristics and actual JVM allocation have not been measured/configured by this preparation. Use the available local volume only after confirming adequate space; do not relocate player worlds or claim SSD specifications without inspection. Run a dedicated server for performance measurements so integrated-client rendering is not silently included.
+
+The existing `build.gradle` pins Java 21/NeoForge 21.1.252, registers `sourceSets.main` as `economy`, defines client/server game directories under `economyRunRoot`, and includes SQLite on the development runtime classpath. The opt-in `inventoryProbe` source set is registered as a separate probe mod only when its flags are selected. Keep probes out of release artifacts and do not enable every probe together.
+
+## Concrete UI matrix
+
+Support at least a **320×240 logical GUI viewport**, with a compact stacked/scrolling layout when needed; do not claim arbitrary smaller dimensions. At supported sizes, all required review terms and Confirm/Cancel/Back/source controls remain reachable without overlap. Use the actual available GUI-scale settings, not a forced unsupported scale. Record physical window size, actual scale and resulting logical viewport for every witness.
+
+| Case | Initial target | Witness |
+| --- | --- | --- |
+| Normal desktop | 1280×720 window, GUI scale 2 (expected 640×360 logical) | Dashboard, accounts and selected financial review; keyboard focus and action routing |
+| Small supported viewport | 960×720 window, GUI scale 3 if offered (expected 320×240) | Long French terms/choices, History filters/details, required controls and scroll access |
+| Large/resize | 1920×1080 window, scale 2 or 3 if offered | Resize normal→small→large with a draft, then refresh/stale review; no retained stale confirmation authority |
+
+If the actual platform cannot offer a proposed scale/window combination, obtain another actual combination with the same logical boundary and record it. Failure to reach 320×240 is an unmet selected layout criterion, not evidence for a smaller support claim.
+
+Cover `BankingScreen`, `BankerScreen`, `TraderScreen` and `CollectionScreen` proportionately: one normal representative frame per changed layout; use the longest applicable text/choice page for the minimum boundary rather than repeating every financial scenario. Review `en_gb`, `fr_ca` and `fr_fr`; share unchanged geometry evidence, but inspect regional French terms/accents and expansion. Verify keyboard focus/Tab navigation, amount input, tooltips, scrolling, explicit action reachability, selected-state preservation and invalidation when server revisions change. Screenshots must be captured after a complete render frame. Native rendering/interaction evidence is separate from service fixture calls.
+
+## Two-player and delayed transport plan
+
+Use a fresh disposable dedicated-server world, existing permitted EULA setup only, and two distinct authenticated player sessions. Local sessions establish local multiplayer only. Record client build, account/session distinction, connection topology and whether either client is genuinely external. Do not obtain credentials, contact participants or send invitations without authorization. A detached `ServerPlayer` fixture is not a socket client.
+
+1. A and B open separate authorized views; each sees only their own accounts, receipts and debt details. A stranger's menu/operation identity must not reveal owner history.
+2. Exercise one ordinary quote/review/confirm and one simultaneous offered action from each owner. Retain original operation/receipt identity, before/after balances, stock/custody where relevant and exact outcome.
+3. Obtain a review, then change the relevant server revision through a legitimate action. Confirm the stale action refuses before new effects and requires fresh review.
+4. Delay one client path by a fixture-local **150 ms each direction**, deterministic **±25 ms jitter**, for a **60-second** case. This is an intended extra round trip of approximately 300 ms; record actual observed timings. Use a loopback TCP proxy or equivalent fixture-owned transport boundary, with a small bounded pending buffer (at most 64 queued transport buffers/chunks and 1 MiB per direction, retaining byte order); overflow closes the fixture connection rather than accumulates memory. Do not change host-wide networking. Keepalive/transport correctness must be preserved by the chosen method. If only application-response delay is implemented, label it application delay, not network latency.
+5. Close/reopen a menu while processing, then disconnect after confirmation at a controlled, documented boundary. Reconnect and resolve the original operation; show the original receipt or proven absence before permitting a new reviewed attempt. No automated financial resubmission. Duplicate confirmation must not cause another debit, delivery, stock change or progression.
+
+One affected financial operation with recorded disconnect timing is sufficient; do not repeat all custody interruption permutations. Ambiguous physical effects retain existing quarantine/reconciliation, not an invented exactly-once cross-store guarantee. Do not kill user games or abruptly terminate the server. Stop proxy/server normally and remove only fixture-local temporary settings.
+
+Actual external-player evidence may remain explicitly pending under the user's partial-acceptance policy. That exception does not waive missing required two-session implementation, owner isolation, failed available checks or other selected criteria. If two actual sessions are unavailable, complete independent work and state that limitation; do not relabel fake-player or single-client evidence as passing the two-player case.
+
+## Accelerated linked debt composite
+
+Use a controlled fixture-only clock behind the existing trusted clock/dispatcher path, not `/time`, sleep, a production deadline change or a new server/admin time-jump command. Keep ordinary production origin/policy and captured fixed terms. [Financial calendar](../../.codex/architecture/financial-calendar.md) defines one financial day as 1,200,000 ms; [debt lifecycle](../../.codex/architecture/debt-lifecycle.md) defines due+2 days reporting and oldest unmet due+84 days default. The latter interval is 100,800,000 ms, or 28 real hours after due, explaining why accelerated evidence is selected. An unaccelerated continuous playthrough remains optional later evidence.
+
+Follow one owner and newly originated facility through native offered review/confirmation, original due obligation, delinquency, report boundary, default/case creation, agent presentation, reviewed positive partial payment and full settlement. Keep one linked facility/obligation/case/operation chain; a pre-seeded default only supplements a separate case, not this chain. Capture initial finite funding, principal/currency, captured prime/FX/rates, due instants, amounts and original receipts. Include native explicit-FX and subprime confirmation gaps as separate clearly labeled facilities when one contract cannot cover both.
+
+Advance only the fixture clock to successive authoritative boundaries and wait for real readiness/frontier completion before each next action. The dispatcher retains maximum 16 targets/page and one child or completion per worker turn, with FIFO yields. Do not bypass catch-up by editing projections, skipping obligations or manually marking readiness. [Recovery clock](../../.codex/architecture/recovery-clock.md) preserves observed UTC high-water; rollback cannot erase future work. A failed accelerated world remains disposable, never converted into an ordinary user save.
+
+Use at most **10,000 observed dispatcher turns / 10 minutes wall time** as a fixture watchdog, recording the current boundary/provider/cursor if exhausted; this bounds the test harness, not financial behavior. Fixture time advances must be monotonic and large jumps must be limited to the next relevant boundary. Retain stage ordering: scheduled payment stage 3, debt state/default stage 4, reporting stage 5, score stage 6 and tier stage 7. Autopay remains default-OFF unless separately consented; no implicit automatic repayment may cure the intentional delinquency. Default freezes principal/interest under existing policy, positive payment updates collection acknowledgement without rewriting original report expiry, and full settlement leaves zero payable case balance. Collection expiry/report expiry are 728/2,548 financial days under the existing contract and need no new full-duration run for this composite.
+
+A normal save/restart at default-before-payment is a useful single boundary only if prior evidence cannot establish the new linked path. Reuse unchanged restart/expiry/accounting evidence. Native agent/payment interaction, detached service chronology and startup/reopen evidence must be labeled separately. No new cross-store process-crash claim is required.
+
+## Twenty-player workload and engineering budgets
+
+These numeric defaults make the approved target measurable on the recorded reference environment; they are **acceptance targets to verify**, not measured results. A10 must not claim verified 20-client transport capacity from simulated service actors alone. Use existing authenticated service/SQLite fixtures for load, retaining independent two-client native evidence. Real 20-client execution is additional evidence only when actual clients are available; do not install unrelated bots/plugins or buy accounts by implication.
+
+Set up 20 distinct funded synthetic owner contexts in a fixed-seed disposable fixture, valid policies/currency/stock and ordinary product admissions, with no financial clock backlog at sample start. Keep inventory/price/custody prerequisites realistic; rejection due to deliberately absent funds is not throughput. Warm up for **120 seconds**, sample for **300 seconds**, then allow **60 seconds recovery**. No repeated performance run by default; repeat only an affected measurement after a demonstrated failure/fix.
+
+Each actor starts one action every **10 seconds**, staggered by 0.5 seconds: **2 top-level actions/second**. Use a deterministic 100-action cycle: **40 owner dashboard/history reads; 20 banking/FX reviews; 20 explicitly confirmed bank payments/transfers; 10 trader quote+confirm purchases; 10 FX review+confirm exchanges**. A review+confirm pair is one user action but report its actual underlying service/packet/SQLite work separately. Every financial action uses fresh server terms and a new intended operation ID; fixture original-outcome checks reuse the original ID, never generate another spend. Sufficient seeded balances/stock are fixture preparation, audited where applicable.
+
+At sample second 180, replace one staggered 20-actor round with **20 simultaneous requests**, then resume staggering. This is one bounded burst, not an unbounded saturator. Leave ordinary prime/FX/debt background scheduling enabled and record whether a natural publication occurred during the sample; absence of a 20-minute boundary is not a publication-performance pass. If a separately needed dispatcher boundary workload is measured, use the approved fixture-only clock and label it separately from the real-time steady sample.
+
+| Measure | Initial reference acceptance target | Interpretation |
+| --- | --- | --- |
+| Steady server tick duration | p95 ≤50 ms, p99 ≤100 ms | Record absolute and idle-baseline delta; local reference world only, not all terrain/world sizes |
+| Owner dashboard/history response | p95 ≤500 ms, p99 ≤1,000 ms | Submission→published result on normal local path; no client rendering time hidden |
+| Reviewed financial commit response | p95 ≤1,000 ms, p99 ≤2,000 ms | Confirmation→terminal financial outcome; separately record physical delivery completion and deliberately injected network delay |
+| Burst recovery | Pending work returns to pre-burst range within 5 s; idle queues drain within 10 s after submissions stop | Controlled refusals are counted/reported; accepted operation outcomes must remain resolvable |
+| Queue behavior | No unbounded growth, lost callbacks or new saturation rejection during the ordinary steady sample | Measure configured capacity, queued/active count and oldest age; do not enlarge queues solely to hide pressure |
+| Financial/data integrity | Zero duplicate effects, unauthorized owner results or unexplained reconciliation differences | No latency budget can excuse a correctness failure |
+| Graceful shutdown | Completes within existing configured 30 s drain deadline, or reports a controlled non-clean result | No forcibly clean marker, dropped pending operation or process kill |
+
+Current `SchedulingConfig.defaults()` is 2 calculation workers, 256 storage slots, 64 calculation slots, 1 ms callback-start budget, 5,000 ms SQLite lock timeout and 30 s drain. `ServerServices` reserves additional bounded positions, publishes queue/age metrics and limits per-actor outstanding submissions to at most 8. Use its actual metric capacities rather than treating the configured storage count as the executor's full physical capacity. The callback-start budget is not a guarantee that an individual callback lasts ≤1 ms. No storage/JDBC join belongs on the server thread. Existing defaults are the initial sample configuration; any tuning must state cause, changed parameter and affected measurement.
+
+Report sample count and p50/p95/p99/max for each operation type, queue high-water/oldest age, refusals/timeouts and final reconciliation. Failures require scoped diagnosis; do not lower the target, omit slow samples or silently change workload after measuring. Budgets may be revised only with a written technical reason and explicit recorded scope, never retroactively relabel a failed run passed.
+
+## Evidence ownership and completion
+
+| Package area | Required new evidence when affected/uncovered | Reused evidence / limitation |
+| --- | --- | --- |
+| Dashboard/history/status/localization | Structured state, frozen filters/cursors, captured facts; representative native layout/locale interactions | Reuse unchanged accounting; no all-screen×all-locale×all-scale product matrix |
+| Dedicated multiplayer | Two actual distinct sessions, owner isolation, stale review, one delayed/reconnect original-outcome case | Fake-player service probes do not establish sockets; external availability recorded |
+| Debt composite | One linked newly originated facility through accelerated due/default/agent/payment using production services | Reuse unchanged expiry/replay/component acceptance; label seeded and accelerated separately |
+| Operational performance | One bounded 20-actor sample and burst on recorded environment, metrics and reconciliation | Synthetic owners do not establish 20 actual transport clients or universal hardware support |
+| Restore/documentation | Current complete-world backup/restore guidance and a disposable witness only if changed/uncovered | Clean reopen is not abrupt termination; preserve existing worlds/backups |
+
+Existing reusable entry points include `FinanceAcceptanceProbe`, `BankingAcceptanceProbe`, `CollectionAcceptanceProbe` and `SimulationProductionProbe`. Their current source includes finite tick deadlines and explicit statements about excluded socket/GUI/FX/accelerated coverage; never expand their pass wording without adding the corresponding witness. Client-specific probes and hooks must be inspected before reuse, not inferred from a server fixture. Old result markers are original evidence, not new-run success markers.
+
+The main agent owns all sequential Gradle/game runs. Later ordinary runnable deliveries run build excluding tests and both runClient help/dry-run checks once. Use at most one focused named-test invocation when useful for each changed behavior package; completion is not a test trigger. No automatic full suite, new repeated stress matrix or phase acceptance suite. Run native checks only for affected/uncovered selected behavior, use disposable paths, stop normally, never accept a new EULA or touch user worlds. Record pass markers, original operation IDs, screenshots and qualified limits once in the responsible evidence file.
+
+Remaining resources: two authenticated actual sessions and any external participant are not established; display/window combinations, storage medium/free-space and actual JVM settings need setup-time confirmation. No runtime witness or performance sample has run during this planning work. Actual external-client evidence alone may remain pending for clearly labeled partial acceptance once implementation and available required checks pass. Missing implementation, failed available checks, unmet layout budgets or a failed operational sample remain incomplete work.

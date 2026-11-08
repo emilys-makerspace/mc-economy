@@ -1,0 +1,12 @@
+# A10 approved planning handoff
+
+2026-11-08 — The user approved **all eleven selectable A10 prompts and their shared technical/runtime contracts**, subject to prerequisites. No implementation package is selected, executed or verified; approval did not execute A10-01. A10-02 remains overview-only.
+
+- [Core specification](architecture/a10-planning.md), [technical contract](../prompts/A10-core-integration/TECHNICAL.md), [current source map](../prompts/A10-core-integration/SOURCE_MAP.md), [runtime/workload plan](../prompts/A10-core-integration/RUNTIME_PLAN.md) and [queue](../prompts/A10-core-integration/EXECUTION.md).
+- Settled core UX: unified dashboard; filtered newest-first History/details and separate historical FX view; structured operation/recovery state; en_gb/fr_ca/fr_fr; bounded resizable/scrollable keyboard-accessible screens; existing admin tools. Player value browser/admin GUI remain later options.
+- A10-02 is now overview-only. A10-02-01 owns dashboard/status, A10-02-02 history, A10-02-03 localization, then A10-03 layouts and A10-04–09 multiplayer/debt/API/admin/operations/acceptance. Next explicit selection: **A10-01** source/interface feasibility checkpoint.
+- Runtime targets:320×240 minimum logical viewport, two actual dedicated sessions with scoped delay/reconnect, fixture-only accelerated debt chain,20synthetic-owner mixed core workload at2actions/s and one burst. Available reference host is M5 Pro/24GB; exact JVM/storage/display/client setup remains to verify. Numeric latency/queue/tick budgets are targets, not results.
+- Actual external-player evidence may remain pending for partial acceptance if selected implementation/available required checks pass. Required missing local evidence/failed checks are incomplete. Real-time debt play is optional;20synthetic actors do not prove20live clients.
+- All mod compatibility remains in [standalone optional modules](../prompts/integrations/README.md), with separate loading/artifacts, item values, inventory contracts and wallet. A10 has no adapter/catalog/wallet/external-inventory or target-mod runtime requirement.
+
+[Preparation evidence](verification/A10-planning.md) records source/hardware/diff/link review, two disjoint documentation workers and scoped final review. No Gradle/tests/game, code/dependency/world or user-facing release/changelog change. Preserve prior financial policy and historical evidence.
