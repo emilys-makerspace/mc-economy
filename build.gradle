@@ -39,6 +39,7 @@ configurations {
 dependencies { processProbeRuntime 'com.google.code.gson:gson:2.10.1' }
 test {
     useJUnitPlatform()
+    reports.junitXml.required = true
     // Measure the mod; instrumenting Minecraft's large static initializers can exceed JVM limits.
     jacoco { includes = ['ca.emilybelnavis.mcmods.economy.*'] }
     finalizedBy jacocoTestReport

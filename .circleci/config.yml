@@ -4,8 +4,16 @@ orbs:
   codecov: codecov/codecov@6.1.0
 
 jobs:
+  list-tests:
+    docker:
+      - image: cimg/openjdk:21.0
+    steps:
+      - checkout
+      - run:
+          name: Select tests for dynamic parallelism
+          command: circleci testsuite list-tests "economy tests" --key=economy-tests
   test:
-    parallelism: 2
+    parallelism: 4
     docker:
       - image: cimg/openjdk:21.0
     steps:
@@ -32,6 +40,8 @@ jobs:
       - store_test_results:
           path: build/circleci/junit
       - store_artifacts:
+          path: build/circleci/junit
+      - store_artifacts:
           path: build/circleci/batches
       - store_artifacts:
           path: build/reports/jacoco/test/html
@@ -40,6 +50,18 @@ jobs:
 
 workflows:
   test:
-    when: pipeline.event.name == "api" or (pipeline.event.name == "pull_request" and (pipeline.event.action == "opened" or pipeline.event.action == "synchronize" or pipeline.event.action == "reopened"))
+    # Main builds refresh impact data; PR builds select impacted tests.
+    when: pipeline.git.branch == "main" or pipeline.event.name == "api" or (pipeline.event.name == "pull_request" and (pipeline.event.action == "opened" or pipeline.event.action == "synchronize" or pipeline.event.action == "reopened"))
     jobs:
-      - test
+      - list-tests
+      - test:
+          requires:
+            - list-tests
+
+# Experimental CircleCI syntax: keep the existing two-node ceiling/fallback.
+experimental:
+  dynamic-parallelism:
+    test:
+      key: economy-tests
+      min: 1
+      max: 4
