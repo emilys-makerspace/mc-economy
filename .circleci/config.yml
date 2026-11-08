@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  codecov: codecov/codecov@5
+  codecov: codecov/codecov@6.1.0
 
 jobs:
   test:
@@ -32,6 +32,6 @@ jobs:
 
 workflows:
   test:
-    when: pipeline.event.name == "api" or (pipeline.event.name == "pull_request" and pipeline.event.action == "opened")
+    when: pipeline.event.name == "api" or (pipeline.event.name == "pull_request" and (pipeline.event.action == "opened" or pipeline.event.action == "synchronize" or pipeline.event.action == "reopened"))
     jobs:
       - test
