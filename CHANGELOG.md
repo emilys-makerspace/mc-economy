@@ -2,6 +2,49 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-08
+
+### A9-06 — Opt-in reference-price trading
+
+- Fixed valuation refresh failing with 18–63 activated market/item scopes.
+- Added operator coverage review and explicit prospective trader activation, keeping existing market/currency assignments and original receipts.
+- Added exact native item valuation linkage, published unit/total review, and rounded-gap admission without new fractional carry or an emerald-price multiplier.
+- Unsupported listings are omitted in activated scopes. Native required-component buybacks remain unsupported; work limits and component rules can refuse other listings.
+- Added schema52 activation history and reviewed NeoForge ingredient expression capture; retained earlier source/pricing implementations.
+
+### A9-05 — Prospective trade-source transition foundation
+
+- Added durable reference-source epochs and account/cash quote formats that preserve original receipts across source changes.
+- Added explicit retirement records for legacy fractional carry and prospective unit-rounded pricing, with no carry payout or historical balance/price rewrite.
+- Added schema51 recovery validation and atomic valuation updates for already-enabled scopes. Production reference-price activation remains pending.
+
+### A9-04 — Public item-reference API and provider data
+
+- Added authenticated current/retained reference reads with currency, snapshot and bounded provenance identities.
+- Added explicit mod-provider bases, exact selectors and supported recipe/material data, with atomic conflict rejection and retained values after removal.
+- Added bounded operator valuation diagnostics and generic integration documentation. Financial qualification and trader source activation remain separate.
+
+### A9-03-03 — Component and container reference costs
+
+- Added compatible enchantment premiums, curse and durability discounts, stored books and name-neutral exact identities, with configurable beneficial premiums.
+- Added reviewed vanilla variants and bounded container shell/content totals, including typed bucket/bee contents and potion bottles counted once.
+- Retained original snapshot prices across reloads. Unsupported component state remains unavailable; public integration and trader activation remain pending.
+
+### A9-03-02 — Potion reference brewing costs
+
+- Added captured vanilla brewing paths for potion effects, strength, duration and forms, with standard shared ingredient/fuel allocation and one potion bottle.
+- Retained exact potion snapshots and original values across material reloads. Custom brewing requires an adapter; generic variants, public integration and trader activation remain pending.
+
+### A9-03-01 — Ordinary reference recipe costs
+
+- Added exact ordinary crafting, stonecutting and cooking derivation with bounded acyclic search, deterministic provenance and retained recipe snapshots across reloads.
+- Added canonical oak-based sticks and the approved raw/refined-food calibration, preserving explicit overrides and historical base-only values. Brewing, component valuation and trader activation remain pending.
+
+### A9 — Item reference base snapshots
+
+- Added validated optional base/override configuration with exact currency arithmetic and retained immutable snapshots across reloads and restarts. Recipe/component valuation and trader price replacement remain pending.
+- Storage advances to schema 50; existing worlds require the stopped complete-world upgrade backup. Invalid valuation reloads preserve the prior durable snapshot.
+
 ## 2026-11-07
 
 ### A8 — Monetary trading and economic rates

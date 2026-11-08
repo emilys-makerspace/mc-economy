@@ -95,7 +95,7 @@ Offline time and skipping the night do not advance the replacement wait. Replace
 
 ## Schema upgrades
 
-New worlds initialize automatically. Worlds on schemas 1 through 38 require a validated complete-world backup before upgrading to schema 39. Prepare it while Minecraft is fully stopped:
+New worlds initialize automatically. Worlds on schemas 1 through 49 require a validated complete-world backup before upgrading to schema 50. Prepare it while Minecraft is fully stopped:
 
 ```sh
 ./gradlew prepareEconomyUpgrade -PeconomyWorld=/absolute/path/to/world
@@ -119,7 +119,7 @@ Restore into a **new, separate directory**:
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 39 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
+The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 50 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
 
 There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination.
 
@@ -178,7 +178,7 @@ Trading replaces native checkout for ordinary villagers and wandering traders wh
 
 Claims retain committed goods/cash and independently witnessed original-input returns. A failed or cancelled untouched quote closes the original financial intent before releasing its marked cash locks. A saved held-input rejection uses an explicit return claim. Uncertain HELD/delivery/progression after disconnect or restart requires the existing custody/operator reconciliation process; do not manually duplicate items or repeat the payment. Village restock earns only loaded eligible work ticks, and wandering traders never restock. No offline/sleep tick credit is invented.
 
-Storage schema 49 captures the production manifest; upgrades retain the stopped complete-world backup requirement. Keep world and economy files together.
+Storage schema 50 also retains item reference base snapshots; upgrades retain the stopped complete-world backup requirement. Keep world and economy files together.
 
 ### A8 acceptance and operational limits
 
@@ -189,3 +189,55 @@ Acceptance combines a real merchant-to-rate SQLite witness with the earlier real
 Clear output capacity before quoting. If exact cash change or a rounded positive payout cannot be represented, choose a supported larger quantity or another explicit rail/currency; no rounding shortcut or account fallback is used. Keep saved worlds and economy data together. Ambiguous interrupted item/progression attempts remain for reconciliation instead of obtaining another execution capability. Source replacement/recipe valuation belongs to a separately selected A9 adapter; the current temporary emerald source is retained.
 
 [Acceptance evidence](../.codex/verification/A8-08.md) and [A9 downstream boundary](../.codex/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.
+
+
+## Item reference configuration
+
+The A9 foundation loads 349 approved vanilla base anchors, captures ordinary crafting/stonecutting/cooking recipes and preserves the full vanilla classification inventory. A9-03-02 also values supported vanilla potion identities through captured brewing paths. A9-03-03 adds supported component variants and bounded container contents. A9-04 exposes authenticated item-reference reads and typed provider registration; A9-06 adds explicit operator opt-in for reference-price trading. Item reference costs remain separate from financial qualification.
+
+Optional `config/economy-valuation.json` supplies plain-item bases and overrides. A missing file uses built-in defaults. For example:
+
+```json
+{
+  "bases": [],
+  "overrides": [
+    {"item": "minecraft:diamond", "currency": "CAD", "amount": "301", "referenceCount": 1}
+  ]
+}
+```
+
+Use registered item IDs, uppercase currency codes, positive decimal amount strings with at most 12 decimal places, and reference counts from 1 to 1,000,000. Duplicate entries within a layer, unknown fields, operator-only item prices and unregistered mod-item contributions reject the candidate. An override takes precedence over a base; component-bearing items require a supported typed adapter. Missing prices never become zero or a floor-price fallback. Reference values publish HALF_UP unit prices with a one-minor-unit minimum, then multiply by quantity; water is a typed free input only.
+
+Restart or use vanilla `/reload` after editing the file. A valid candidate becomes active only after durable publication. Invalid configuration is left untouched and the prior durable snapshot is retained; fresh valuation stays unavailable until a valid matching reload. Look for `VALUATION_SNAPSHOT_READY` or `VALUATION_RELOAD_REJECTED` in the server log. Unselected traders retain legacy pricing. Activated reference scopes require matching valuation readiness for new quotes and settlement effects.
+
+Ordinary recipe costs use exact ingredient/output quantities and the cheapest supported acyclic path. Sticks use two oak planks per four sticks regardless of crafting origin. Named refined metals and cooked foods use their calibrated raw input divided by 0.75, once; this canonical rule prevents cheaper intact ores from bypassing the approved refined values. Explicit overrides still take precedence. Other cooking adds no generic fuel/time fee. Unsupported dynamic recipes, returned containers and unregistered mod items are not inferred as free or guessed prices. A search limit makes a value unavailable rather than returning a partial minimum.
+
+Brewing reference costs use the prior per-potion cost plus one-third of the shared ingredient and one-sixtieth of blaze powder per step. Water content is free; the potion bottle is counted once. Dragon breath contributes its collected content and its own shared ingredient bottle, with no returned-bottle credit. Prices use a standard three-potion batch regardless of actual stand occupancy. Known effect, strength, duration and form identities remain distinct. Extra/custom brewing registrations or changed vanilla mix lists require a supported adapter; affected potion values are unavailable rather than inferred by running custom recipe code.
+
+Snapshot history and incomplete staging are retained without automatic deletion. A manifest is capped at 32 MiB and retained canonical data at 256 MiB, including incomplete unpublished stages; quota exhaustion rejects new publication. Compiled history and result caches are bounded independently. Keep existing complete-world backups and follow the schema-upgrade procedure before opening an older world.
+
+Supported equipment adds compatible enchantment premiums, applies 25% per distinct curse, then multiplies by remaining durability. Names add no price and preserve other state. Stored books use book plus stored premiums. Containers add their individually modified shell and each published child unit times count; potion bottles are already included. Missing or unsupported child state makes the whole container unavailable. Limits include eight container levels and 4,096 children. Unknown components/custom data are not discarded. Native text supports plain literals up to 16,384 characters and books up to 100 pages; custom entity state requires an adapter.
+
+Optional `enchantmentPremiums` in the item-valuation config supplies a complete positive CAD list for a supported beneficial enchantment, for example `"enchantmentPremiums": {"minecraft:sharpness": ["20", "45", "80", "110", "150"]}`. Unknown enchantments, curse overrides, incorrect level counts and invalid amounts reject the whole candidate. Reload creates a new immutable snapshot while original values remain reproducible.
+
+### Item reference diagnostics
+
+Connected operator players can use `/economy valuation status`, `/economy valuation coverage`, `/economy valuation value minecraft:diamond USD` and `/economy valuation history 8`. The value command reads one unmodified item (`{}` component identity), defaults to CAD when currency is omitted and reports typed availability, published unit money and bounded provenance identifiers. Integrations use the exact-component API for supported stateful identities. History accepts 1–16 rows. The per-server diagnostic queue admits at most 16 pending reads; a disconnected/demoted player or replaced session receives no stale result. These commands neither change prices nor enable listings.
+
+Coverage distinguishes all 1,333 classified vanilla identities (349 base, 760 derived, 109 variant and 115 intentionally operator-unpriced), supported component states and unregistered mod items. Registry classification is not a promise of a numeric value for every component permutation, custom recipe or exhausted-budget case. Operator diagnostics and the API retain reasons; unsupported ordinary trader listings remain disabled without exposing a valuation explanation to players. Generic integrations must explicitly register their mod identities; there are no built-in mod prices or automatic mod-recipe guesses.
+
+### Prospective trade-source support
+
+A9-05 installs schema51 support for source epochs, reference account/cash receipts and retained carry-retirement history. Use the existing complete-world backup procedure before a schema upgrade. Existing EmeraldV1 trader pricing remains selected until an operator explicitly activates reference pricing using the controls below.
+
+After a separately enabled scope exists, valid valuation reloads advance its source epoch atomically with the valuation snapshot. Uncommitted old-source quotes refuse; committed originals retain their original receipts. Old fractional carry is recorded as retired without erasure or payout. New reference goods prices use rounded units without carry, and unsupported exact components or unproved rounded bid/ask gaps remain unavailable. A9-06 supplies the initial production activation and player presentation described below.
+
+### Opt-in reference-price trader activation
+
+Reference-price trading is available in 0.4.0-alpha, with native checkout/presentation acceptance recorded for A9-06. It does not switch existing worlds automatically. Preserve complete-world backups before the additive schema52 upgrade.
+
+A connected permission-level2 operator can review a loaded, captured trader with `/economy valuation review <trader UUID>`. The report shows pinned vanilla classifications, representative values, missing sources, component/work limits and each captured offer's neutral availability. Review these limits, then publish that exact report with `/economy valuation activate <trader UUID> <review hash>`. A changed snapshot/catalog/FX/readiness requires a new review. Activation publishes prospective source epochs; reopen trading afterward. Subsequent valid valuation reloads update only already-enabled scopes.
+
+Activated offers use reference unit prices and show the effective unit and total before confirmation. Unsupported entries are omitted. There is no fallback to old emerald prices within activated policy. Exact supported outputs can trade; native required-component buybacks remain unsupported, including empty required predicates. Unknown custom data, operator-only goods, missing mod adapters, bounded work and failed rounded-spread proofs can also disable entries. The review never promises every component permutation.
+
+Activation covers at most32 captured keys and the world supports at most63 enabled keys in one atomic valuation publication; more refuses publication. Pending control requests/reviews are bounded. No old balance, stock/restock, demand anchor, receipt, activity/rate window or fixed loan is revalued, and retired carry is not paid out. Reference values remain separate from financial eligibility.

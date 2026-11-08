@@ -3,9 +3,11 @@ loaderVersion="[4,)"
 license="All Rights Reserved"
 [[mixins]]
 config="economy.mixins.json"
+[[mixins]]
+config="economy.valuation.mixins.json"
 [[mods]]
 modId="economy"
-version="0.3.0-alpha"
+version="0.4.0-alpha"
 displayName="Economy"
 logoFile="economy-icon.png"
 logoBlur=false

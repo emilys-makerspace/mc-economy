@@ -107,6 +107,8 @@ The user approved merchant sales, borrowing/repayment, FX exchanges and monetary
 
 ## A9 — Basic item valuation
 
+Planning was explicitly selected and gameplay policies settled on 2026-11-07. [Current decisions](a9-planning.md), [approved technical revision 1](a9-shared-contracts.md), [approved catalog](a9-item-catalog.md) and [eight-package queue](../../prompts/A9-item-valuation/EXECUTION.md) supersede the original suggested split below. All A9 planning/package drafts are approved 2026-11-07, subject to prerequisites; implementation remains unselected. The user selected trader baseline replacement, component/brewing valuation, no built-in mod prices without API registration, nearest-cent unit rounding/minimum one cent, and disabled unsupported listings without player-facing explanations. Detailed internal availability/provenance remains available to API/operator diagnostics.
+
 Currencies remain fiat-like. Authorized one-time 28B institutional capital and operator-created cash/deposits remain separate from reference valuations. Banks spend finite funded cash; claims do not fund spending. Reference prices create no commodity reserve, guaranteed redemption, automatic trading, collateral eligibility or wealth qualification.
 
 - Configurable base resource values: per-item values with explicit currency, exact monetary representation, validation and immutable configuration revisions. Iron/gold/diamond values do not make those items currency backing.
@@ -114,7 +116,7 @@ Currencies remain fiat-like. Authorized one-time 28B institutional capital and o
 - Currency and valuation APIs: immutable server results identifying item/quantity, supported component-sensitive identity, denomination, effective time and source/configuration/recipe revisions. Reuse existing money/FX contracts with captured conversion versions and rounding. Provide an integration SPI for separate mods; specific integrations require a request. Keep reference reads separate from settlement and financial qualification.
 - Overrides and provenance: explicit item override, then configured base resource, then supported recipe derivation, otherwise unavailable. Preserve selected source and bounded derivation explanations. Overrides may intentionally break recipe consistency and must be identified. Reload invalidates affected cached values; historical consumers retain captured versions.
 
-Suggested packages: A9-01 shared value/configuration/provenance contract; A9-02 bounded recipe derivation; A9-03 APIs/diagnostics and scoped acceptance. Finalize policies before implementation. Do not silently feed reference values into Tier2 wealth, collateral, FX, shop pricing or trading.
+Current packages are A9-01 source feasibility, A9-02 snapshots, A9-03-01 ordinary recipes/processing, A9-03-02 brewing, A9-03-03 variants/containers, A9-04 public integration, A9-05 durable source transition and A9-06 trader activation. A9-03 is overview only. Trader replacement is explicitly planned; no automatic financial qualification, FX driver, arbitrary shop integration or additional listing discovery is selected.
 
 ## A10 — Core integration
 

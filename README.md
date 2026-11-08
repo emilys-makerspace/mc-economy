@@ -42,6 +42,8 @@ Right-click a villager or wandering trader to choose an offer, quantity and paym
 
 Cash checkout requires exact representable change in the selected currency. If it is unavailable, choose another cash currency, quantity or account explicitly. Unsupported offers or missing pricing inputs remain unavailable.
 
+Operators can opt captured traders into reference item prices after reviewing coverage with `/economy valuation review <trader UUID>`. Activated trades show unit and total prices; unsupported offers are omitted. See [activation controls and limits](docs/SERVER_GUIDE.md#opt-in-reference-price-trader-activation).
+
 Villagers share their local market prices while keeping individual sale stock. Their stock replenishes after 10,000 eligible loaded work ticks; wandering traders do not restock. Banker guides remain separate from traders.
 
 After currency selection and source preparation, prime and exchange rates start with a future full observation day, then update every 20 real minutes. The rolling window covers up to seven complete financial days, with no invented pre-activation history. Empty observed windows hold rates. Existing fixed-loan terms remain unchanged. Operators can inspect `/economy macro status` and schedule future pause/manual/resume policies; see the [simulation server guide](docs/SERVER_GUIDE.md#economic-simulation-and-trading).

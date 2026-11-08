@@ -39,6 +39,9 @@ configurations {
 dependencies { processProbeRuntime 'com.google.code.gson:gson:2.10.1' }
 test {
     useJUnitPlatform()
+    reports.junitXml.required = true
+    // Measure the mod; instrumenting Minecraft's large static initializers can exceed JVM limits.
+    jacoco { includes = ['ca.emilybelnavis.mcmods.economy.*'] }
     finalizedBy jacocoTestReport
     // Standalone storage probes use stdout as a protocol and do not load Minecraft.
     systemProperty 'economy.test.classpath',
@@ -306,6 +309,86 @@ if (providers.gradleProperty('simulationProductionProbe').isPresent()) {
             def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
             if (new File(root, 'simulation-production-failed.txt').exists() || !new File(root, 'simulation-production-passed.txt').exists())
                 throw new GradleException('Simulation production acceptance did not pass')
+        }
+    }
+}
+
+// Opt-in A9-02 lifecycle/reload smoke check; release jars exclude this source set.
+if (providers.gradleProperty('valuationProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.valuationProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'valuation-failed.txt').exists() || !new File(root, 'valuation-passed.txt').exists())
+                throw new GradleException('Valuation snapshot lifecycle check did not pass')
+        }
+    }
+}
+
+// Opt-in ordinary recipe capture/reload witness, excluded from release jars.
+if (providers.gradleProperty('recipeProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.recipeProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'recipes-failed.txt').exists() || !new File(root, 'recipes-passed.txt').exists())
+                throw new GradleException('Ordinary recipe capture/reload witness did not pass')
+        }
+    }
+}
+
+// Opt-in pinned brewing accessor and retained-value witness; excluded from release jars.
+if (providers.gradleProperty('brewingProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.brewingProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'brewing-failed.txt').exists() || !new File(root, 'brewing-passed.txt').exists())
+                throw new GradleException('Brewing accessor/value witness did not pass')
+        }
+    }
+}
+
+// Opt-in native variant/container identity witness, excluded from release jars.
+if (providers.gradleProperty('variantProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.variantProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'variants-failed.txt').exists() || !new File(root, 'variants-passed.txt').exists())
+                throw new GradleException('Native variant/container identity witness did not pass')
+        }
+    }
+}
+
+// Opt-in isolated public valuation API/provider witness; never packaged in the mod jar.
+if (providers.gradleProperty('valuationApiProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.runs.client {
+        systemProperty 'economy.valuationApiProbe', 'true'
+    }
+    tasks.named('runClient').configure {
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'valuation-api-failed.txt').exists() || !new File(root, 'valuation-api-passed.txt').exists())
+                throw new GradleException('Valuation API fixture failed; inspect its disposable marker/log.')
+        }
+    }
+}
+
+// Fresh native reference activation and changed trader presentation witness; excluded from jars.
+if (providers.gradleProperty('referenceTraderProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.referenceTraderProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'reference-trader-failed.txt').exists() || !new File(root, 'reference-trader-passed.txt').exists())
+                throw new GradleException('Native reference trader acceptance did not pass')
         }
     }
 }

@@ -140,6 +140,7 @@ public final class NpcTrades {
         return List.copyOf(groups);
     }
     private void validateCurrent(JournalEngine.ReadView reads,Quote quote,Instant now) {
+        TradeSources.requireLegacy(reads,quote.world(),quote.market(),quote.priceRequest().key().item());
         if(now.toEpochMilli()<quote.issuedMillis()||now.toEpochMilli()>=quote.expiresMillis())throw new IllegalArgumentException("NPC quote expired");var terms=quote.terms();
         if(terms.outputCustody()!=null&&!reads.query("SELECT id FROM custody_cases WHERE id=?",List.of(terms.outputCustody().toString()),1).isEmpty())throw new IllegalArgumentException("NPC output custody already exists");
         var selected=account(reads,quote.world(),terms.actor(),terms.account());if(selected.revision()!=quote.accountRevision()||selected.currency()!=quote.accountCurrency()||!issuer(reads,selected).equals(quote.issuer()))throw new IllegalArgumentException("NPC account/provider changed");

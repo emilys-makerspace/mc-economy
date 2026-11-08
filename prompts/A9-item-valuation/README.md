@@ -1,46 +1,27 @@
-# A9 — Basic item valuation
+# A9 — Item valuation and trader reference prices
 
-Status: planning-only DESIGN specification. Refine specifications and draft future prompts only when selected. Reading this file does not authorize implementation, assets, dependency changes, migrations or game processes. A6-13 is accepted; reuse its delivered contracts and evidence.
+Status: all A9 drafts approved 2026-11-07, including technical revision 1, catalog pricing revision 2 and all eight selectable packages, subject to prerequisites. **A9-01 is complete and accepted in source/document scope** ([handoff](../../.codex/A9-01.md)); [A9-02](../../.codex/A9-02.md) delivers base-only configuration/snapshots. [A9-03-01](../../.codex/A9-03-01.md) delivers ordinary graph/processing. [A9-03-02](../../.codex/A9-03-02.md) delivers brewing. [A9-03-03](../../.codex/A9-03-03.md) delivers supported variants/containers. [A9-04](../../.codex/A9-04.md) delivers public API/SPI and scoped acceptance. [A9-05](../../.codex/A9-05.md) delivers the durable source-transition foundation. [A9-06](../../.codex/A9-06.md) is complete with native checkout/presentation and read-only history validation. All eight A9 packages are complete in their recorded scopes as of 2026-11-08. A10 remains unselected. Reading a prompt authorizes no implementation, migration, dependency change or game process.
 
-Baseline: Minecraft 1.21.1, NeoForge 21.1.252, Java 21; server authority on integrated and dedicated servers. Preserve existing code, worlds, accounts, money and backups. [Shared A7–A10 planning boundaries](../../.codex/architecture/planned-a7-a10.md) and [current project state](../../.codex/PROJECT.md) supply scope. No parallel financial database or specific integration mod is authorized.
+Read the [shared contract](CONTRACT.md), [technical contracts](../../.codex/architecture/a9-shared-contracts.md), [catalog](../../.codex/architecture/a9-item-catalog.md), [approved premiums](../../.codex/architecture/a9-enchantment-premiums.md) and [selection queue](EXECUTION.md). The [decision record](../../.codex/architecture/a9-planning.md#final-decisions-before-drafting) preserves user choices. A9 follows accepted A8 and its [source-transition boundary](../../.codex/architecture/a8-downstream.md).
 
-## Goal and dependencies
+## Selected outcome
 
-Provide configurable resource values and recipe-derived reference costs with currency-aware APIs, overrides and explanations. Use A2 monetary/FX/denomination contracts and existing server lifecycle/configuration services. A9 follows A8 in the selected phase sequence, but any simulation input must have an explicit contract; do not invent a runtime dependency on branch staffing or securities.
+Provide complete vanilla item valuation coverage through acquisition-based anchors, lowest fully known supported acyclic recipes, brewing and component-aware rules. Replace villager/wandering-trader original price principals prospectively, retaining demand/recovery, reputation, spreads/cohorts, saved currencies, stock and settlement safety. A reference value does not discover a new offer or authorize a trade.
 
-## Required scope
+- Overrides precede bases, then supported derivation. Preserve exact internal arithmetic, captured FX and immutable configuration/recipe/provider provenance.
+- Publish HALF_UP unit prices with at least one currency minor unit per priced item; quantity totals use the published unit. Free water is explicit. Missing inputs never become zero or a one-cent fallback. New A9 trades have no cumulative fractional carry.
+- Raw metals and listed raw meats/fish cost 75% of refined/cooked values; apply processing value once. Preserve accepted log/metal/gem/food calibration.
+- Support ordinary crafting, stonecutting and cooking. Brewing includes ingredients, bottles and allocated blaze-powder fuel across standard three-output batches, with free water and no labour/time fee. Unsupported special recipe execution remains excluded; acquisition anchors may still price obtainable outputs.
+- Damage reduces value proportionally. Add compatible approved premiums, apply additive 25% discounts per distinct vanilla curse before durability, value stored enchanted books, and sum containers/contents once. Names add no value.
+- Mod items receive no built-in or automatic recipe prices. A contribution API/SPI admits explicit values or opted-in supported derivation; no specific integration mod is selected.
+- Operator-only items remain unpriced. Unsupported listings stay disabled without player-facing explanations; API/operator diagnostics retain structured availability.
 
-- Configurable base resource values, including resources such as iron, gold and diamonds, with explicit currency, exact representation, validation and immutable configuration revisions.
-- Per-output recipe reference costs from supported inputs and output counts. Set deterministic ingredient-alternative and multiple-recipe selection, precision/rounding, bounded depth/work and cycle handling. Unsupported/dynamic inputs yield explained unavailability, not zero.
-- Immutable server-side currency/valuation APIs reporting item/quantity and supported component-sensitive identity, denomination, effective time, source/configuration/recipe revisions and availability. Reuse money and captured FX/version/rounding contracts. Provide a separate-mod integration SPI; specific integrations require a request.
-- Override precedence: explicit item override, configured base resource, supported recipe derivation, otherwise unavailable. Preserve chosen source and bounded derivation provenance. Identify intentional override inconsistencies, invalidate affected caches on reload and retain versions captured by historical consumers.
+Currencies remain fiat-like. Values create no money, backing, redemption, collateral/wealth eligibility, automatic trading or arbitrary shop repricing. Preserve code, worlds, backups and historical receipts/custody/observations/rates/loans. No reset, parallel financial database or B-series integration is selected.
 
-Currencies remain fiat-like. Existing authorized one-time 28B institution capital and operator-created cash/deposits are separate from item reference values. Banks retain finite funded spending. Reference costs do not add commodity backing, redemption guarantees, market prices, shop repricing, automatic trades, Tier2 wealth qualification or collateral eligibility.
+## Execution and verification
 
-## Proposed bounded packages
+Use the ordered [queue](EXECUTION.md). A9-01 is source/document feasibility only; A9-03 is a non-executable overview of three bounded packages. Explicitly select one package after its prerequisites; completion does not select dependents. Catalog registry coverage is not proof that every component state or live path is implemented.
 
-| Draft ID | Outcome | Prerequisite |
-| --- | --- | --- |
-| A9-01 | Shared monetary value, configuration, override/provenance and availability contract | Existing currency/FX services; accepted preceding phase handoffs |
-| A9-02 | Bounded deterministic recipe derivation and reload/cache behavior | A9-01 |
-| A9-03 | Public API/SPI, diagnostics and scoped integrated acceptance | A9-01, A9-02 |
+Apply [project verification scope](../../.codex/VERIFICATION.md) to every package/sub-task. Drafting/source-document work uses diff/link review only: no Gradle/tests/game. Routine runtime work uses at most one useful focused named-test invocation; completion never automatically requires tests or a full suite. Reuse unchanged evidence. A full suite requires an explicit request or concrete stated concern narrower checks cannot address.
 
-These are draft boundaries. Prepare only a selected package; do not execute from this README.
-
-## Decisions to settle before implementation
-
-Define supported recipe types, ingredient alternatives/tags, multiple valid recipes, output batching, fractional costs and final rounding. Specify container returns, byproducts, reversible recipes, processing/fuel assumptions, cycle policy and derivation limits. Define item component sensitivity, override validation/precedence, cache invalidation, historical version retention and foreign-denomination conversion. Recommendations do not silently approve defaults.
-
-## Acceptance scenarios to specify
-
-Numerical base/override and multi-output examples; alternative and competing recipes; missing inputs and cycles; unsupported recipes; container/byproduct policy; overflow and rounding; versioned FX conversion; reload invalidation and retained provenance. Confirm valuation reads cannot issue money, mutate balances or qualify financial products. Use a few meaningful changed-behavior cases rather than duplicating every algorithm branch.
-
-## Required planning output and handoff
-
-Return a reviewable specification, source/precedence rules, API/result contracts, numerical examples, unresolved decisions and ordered bounded implementation prompts. This is new scope; do not invent historical F-ID coverage. Hand read-only reference values and explanations to A10; securities marks, collateral/trading consumers and specific integrations remain separately authorized work.
-
-## Verification scope
-
-Follow [the project verification policy](../../.codex/VERIFICATION.md) for every package and sub-task. Planning uses diff/link review only; run no Gradle, tests or game processes now. Routine implementation uses at most one focused test invocation when useful, selecting named classes for meaningful changed behavior and reusing existing real-service/SQLite fixtures and unchanged evidence. Package/phase completion does not automatically require tests or a full suite. A full-suite run requires an explicit request or a stated concrete concern narrower checks cannot address.
-
-For an ordinary runnable delivery, run `./gradlew build -x test`, `./gradlew help --task runClient` and `./gradlew runClient --dry-run` once. Keep working `runClient`/`runServer`, registered main source set and required development runtime dependencies. One owner runs Gradle/game checks sequentially. Use disposable worlds for necessary runtime/generation checks; preserve player worlds and backups.
+Ordinary runnable delivery runs `./gradlew build -x test`, `./gradlew help --task runClient` and `./gradlew runClient --dry-run` once. One owner runs Gradle/game tasks sequentially. Preserve Minecraft 1.21.1, NeoForge 21.1.252, Java 21, registered main source set, working client/server tasks and required development runtime dependencies. Use disposable fixtures for necessary runtime evidence. Write a short `.codex/<selected-id>.md` handoff linking current architecture and scoped evidence. A10 receives read-only valuation/provenance and recorded trader behavior; financial eligibility stays separately selected.

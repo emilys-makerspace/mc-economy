@@ -11,6 +11,8 @@ import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.loan.LoanDisbursementFx;
 import ca.emilybelnavis.mcmods.economy.loan.Loans;
 import ca.emilybelnavis.mcmods.economy.trade.settlement.NpcFacts;
+import ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceNpcFacts;
+import ca.emilybelnavis.mcmods.economy.trade.cash.ReferenceCashFacts;
 import ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashFacts;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -85,7 +87,7 @@ public final class ActivityClassifier {
         }
 
         private void prepare(List<Journal.Record> facts) {
-            if(facts.stream().anyMatch(f->f.type().equals(NpcFacts.RECEIPT)||f.type().equals(NpcCashFacts.RECEIPT))&&facts.stream().anyMatch(f->f.type().equals(FxSettlement.FACT)))
+            if(facts.stream().anyMatch(f->f.type().equals(NpcFacts.RECEIPT)||f.type().equals(NpcCashFacts.RECEIPT)||f.type().equals(ReferenceNpcFacts.RECEIPT)||f.type().equals(ReferenceCashFacts.RECEIPT))&&facts.stream().anyMatch(f->f.type().equals(FxSettlement.FACT)))
                 throw invalid("NPC FX semantic source cannot be duplicated");
             for (var fact : facts) {
                 switch (fact.type()) {
@@ -97,6 +99,18 @@ public final class ActivityClassifier {
                     }
                     case NpcFacts.ADAPTER -> {
                         version(fact,1);var adapter=NpcFacts.decodeAdapter(fact.payload());
+                        var state=ActivityStore.activation(reads);
+                        if(state==null||!state.world().equals(adapter.world())||npcAdapter)throw invalid("NPC activity adapter identity");
+                        npcAdapter=true;
+                    }
+                    case ReferenceCashFacts.ADAPTER -> {
+                        version(fact,1);var adapter=ReferenceCashFacts.decodeAdapter(fact.payload());
+                        var state=ActivityStore.activation(reads);
+                        if(state==null||!state.world().equals(adapter.world())||npcCashAdapter)throw invalid("NPC cash activity adapter identity");
+                        npcCashAdapter=true;
+                    }
+                    case ReferenceNpcFacts.ADAPTER -> {
+                        version(fact,1);var adapter=ReferenceNpcFacts.decodeAdapter(fact.payload());
                         var state=ActivityStore.activation(reads);
                         if(state==null||!state.world().equals(adapter.world())||npcAdapter)throw invalid("NPC activity adapter identity");
                         npcAdapter=true;
@@ -137,6 +151,8 @@ public final class ActivityClassifier {
             switch (fact.type()) {
                 case NpcFacts.RECEIPT -> npc(fact);
                 case NpcCashFacts.RECEIPT -> npcCash(fact);
+                case ReferenceNpcFacts.RECEIPT -> referenceNpc(fact);
+                case ReferenceCashFacts.RECEIPT -> referenceCash(fact);
                 case RegisterSales.FACT -> register(fact);
                 case MerchantPayments.FACT -> merchant(fact);
                 case Loans.EVENT_FACT -> loan(fact);
@@ -182,6 +198,45 @@ public final class ActivityClassifier {
             if(!npcAdapter) {
                 var rows=reads.query("SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT 1",List.of(NpcFacts.ADAPTER),1);
                 if(rows.isEmpty()||!NpcFacts.decodeAdapter(rows.getFirst().get("payload")).world().equals(state.world()))throw invalid("NPC activity adapter unavailable");
+            }
+            add("npc-account",1,GOODS_SALE,trade.currency(),trade.goodsPrincipal(),trade.trader(),trade.effectiveMillis(),null,null);
+            add("npc-account",1,trade.side()==ca.emilybelnavis.mcmods.economy.trade.pricing.Pricing.Side.BUY?NPC_RETIRE:NPC_CREATE,
+                    trade.currency(),trade.goodsPrincipal(),trade.trader(),trade.effectiveMillis(),null,null);
+            if(trade.publication()!=null) {
+                add("npc-account",1,FX_SELL,trade.fxSourceCurrency(),trade.fxSourcePrincipal(),trade.quote(),trade.effectiveMillis(),null,trade.publication());
+                add("npc-account",1,FX_BUY,trade.fxTargetCurrency(),trade.fxTargetPrincipal(),trade.quote(),trade.effectiveMillis(),null,trade.publication());
+            }
+        }
+
+        private void referenceCash(Journal.Record fact) {
+            version(fact,1);var trade=ReferenceCashFacts.decodeReceipt(fact.payload());
+            var state=ActivityStore.activation(reads);
+            if(state==null||!state.ready()||!state.world().equals(trade.world())
+                    ||!trade.operation().equals(intent.operationId().value())||!trade.actor().equals(intent.actor())
+                    ||!npcTrades.add(trade.operation()))throw invalid("NPC cash activity original identity");
+            if(!npcCashAdapter) {
+                var rows=reads.query("SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT 1",List.of(ReferenceCashFacts.ADAPTER),1);
+                if(rows.isEmpty()||!ReferenceCashFacts.decodeAdapter(rows.getFirst().get("payload")).world().equals(state.world()))throw invalid("NPC cash activity adapter unavailable");
+            }
+            add("npc-cash",1,GOODS_SALE,trade.currency(),trade.goodsPrincipal(),trade.trader(),trade.effectiveMillis(),null,null);
+            add("npc-cash",1,trade.side()==ca.emilybelnavis.mcmods.economy.trade.pricing.Pricing.Side.BUY?NPC_RETIRE:NPC_CREATE,
+                    trade.currency(),trade.goodsPrincipal(),trade.trader(),trade.effectiveMillis(),null,null);
+            if(trade.operatorCashMinor()>0) add("npc-cash",1,OPERATOR_CASH_CREATE,trade.cashCurrency(),trade.operatorCashMinor(),trade.inputCustody(),trade.effectiveMillis(),null,null);
+            if(trade.publication()!=null) {
+                add("npc-cash",1,FX_SELL,trade.fxSourceCurrency(),trade.fxSourcePrincipal(),trade.quote(),trade.effectiveMillis(),null,trade.publication());
+                add("npc-cash",1,FX_BUY,trade.fxTargetCurrency(),trade.fxTargetPrincipal(),trade.quote(),trade.effectiveMillis(),null,trade.publication());
+            }
+        }
+
+        private void referenceNpc(Journal.Record fact) {
+            version(fact,1);var trade=ReferenceNpcFacts.decodeReceipt(fact.payload());
+            var state=ActivityStore.activation(reads);
+            if(state==null||!state.ready()||!state.world().equals(trade.world())
+                    ||!trade.operation().equals(intent.operationId().value())||!trade.actor().equals(intent.actor())
+                    ||!npcTrades.add(trade.operation()))throw invalid("NPC activity original identity");
+            if(!npcAdapter) {
+                var rows=reads.query("SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT 1",List.of(ReferenceNpcFacts.ADAPTER),1);
+                if(rows.isEmpty()||!ReferenceNpcFacts.decodeAdapter(rows.getFirst().get("payload")).world().equals(state.world()))throw invalid("NPC activity adapter unavailable");
             }
             add("npc-account",1,GOODS_SALE,trade.currency(),trade.goodsPrincipal(),trade.trader(),trade.effectiveMillis(),null,null);
             add("npc-account",1,trade.side()==ca.emilybelnavis.mcmods.economy.trade.pricing.Pricing.Side.BUY?NPC_RETIRE:NPC_CREATE,

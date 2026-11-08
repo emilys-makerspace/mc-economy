@@ -27,12 +27,13 @@ public final class InventoryPersistenceProbe {
     private static final UUID CUSTODY = UUID.fromString("15235352-e0ad-4608-af08-06fc65377d53");
     private boolean ran;
 
-    public InventoryPersistenceProbe() {
+    public InventoryPersistenceProbe(net.neoforged.bus.api.IEventBus bus) {
+        if(Boolean.getBoolean("economy.valuationApiProbe"))ValuationApiClient.register(bus);
         NeoForge.EVENT_BUS.addListener(this::tick);
     }
 
     private void tick(ServerTickEvent.Post event) {
-        if (ran || System.getProperty("economy.financeWorld") != null) return;
+        if (ran || Boolean.getBoolean("economy.referenceTraderProbe") || Boolean.getBoolean("economy.valuationApiProbe") || Boolean.getBoolean("economy.variantProbe") || Boolean.getBoolean("economy.brewingProbe") || Boolean.getBoolean("economy.recipeProbe") || Boolean.getBoolean("economy.valuationProbe") || System.getProperty("economy.financeWorld") != null) return;
         if (Boolean.getBoolean("economy.villageBankAcceptance")) {
             var services = Economy.serverServices(event.getServer());
             if (services == null || services.state() != ServerServices.State.READY) return;
