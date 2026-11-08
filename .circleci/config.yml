@@ -5,6 +5,7 @@ orbs:
 
 jobs:
   test:
+    parallelism: 2
     docker:
       - image: cimg/openjdk:21.0
     steps:
@@ -14,17 +15,24 @@ jobs:
             - gradle-v1-{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}-{{ checksum "build.gradle" }}
             - gradle-v1-
       - run:
-          name: Run tests and create coverage report
-          command: ./gradlew test jacocoTestReport --no-daemon
+          name: Compile tests before requesting dynamic batches
+          command: ./gradlew testClasses
+      - run:
+          name: Run dynamically distributed test batches
+          command: circleci testsuite run "economy tests"
+      - run:
+          name: Combine coverage from this node's batches
+          when: always
+          command: ./gradlew jacocoTestReport -x test -I .circleci/gradle-tests.init.gradle
       - save_cache:
           paths:
             - ~/.gradle/caches
             - ~/.gradle/wrapper
           key: gradle-v1-{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}-{{ checksum "build.gradle" }}
       - store_test_results:
-          path: build/test-results/test
+          path: build/circleci/junit
       - store_artifacts:
-          path: build/reports/tests/test
+          path: build/circleci/batches
       - store_artifacts:
           path: build/reports/jacoco/test/html
       - codecov/upload:

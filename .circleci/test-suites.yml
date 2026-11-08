@@ -1,0 +1,10 @@
+name: economy tests
+discover: >-
+  find src/test/java -type f -name '*Test.java' |
+  sed 's#^src/test/java/##; s#/#.#g; s#\.java$##' |
+  sort
+run: bash .circleci/run-test-batch.sh "<< outputs.junit-directory >>" << test.atoms >>
+outputs:
+  junit-directory: build/circleci/junit
+options:
+  dynamic-test-splitting: true

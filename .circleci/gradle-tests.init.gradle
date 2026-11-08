@@ -1,0 +1,18 @@
+// Isolate repeated Gradle invocations without changing local test behavior.
+gradle.projectsEvaluated {
+    def project = gradle.rootProject
+    def batchDir = project.findProperty('circleciBatchDir')
+    if (batchDir != null) {
+        project.tasks.named('test') {
+            reports.junitXml.outputLocation.set(project.file(project.property('circleciJunitDir')))
+            reports.html.outputLocation.set(project.file("${batchDir}/html"))
+            binaryResultsDirectory.set(project.file("${batchDir}/binary"))
+            extensions.getByName('jacoco').destinationFile = project.file("${batchDir}/jacoco.exec")
+        }
+    }
+    project.tasks.named('jacocoTestReport') {
+        executionData.setFrom(project.fileTree('build/circleci/batches') {
+            include '**/jacoco.exec'
+        })
+    }
+}
