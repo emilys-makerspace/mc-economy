@@ -32,5 +32,6 @@ jobs:
 
 workflows:
   test:
+    when: pipeline.event.name == "pull_request" and pipeline.event.action == "opened"
     jobs:
       - test
