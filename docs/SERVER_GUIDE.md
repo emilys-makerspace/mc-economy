@@ -191,9 +191,9 @@ Clear output capacity before quoting. If exact cash change or a rounded positive
 [Acceptance evidence](../.codex/verification/A8-08.md) and [A9 downstream boundary](../.codex/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.
 
 
-## Item reference base configuration
+## Item reference configuration
 
-The A9 base foundation loads 349 approved vanilla base anchors and preserves the full vanilla classification inventory. It does not yet derive recipe, brewing or component values, expose a public item-valuation API, or change villager/trader prices. Item reference costs remain separate from financial qualification.
+The A9 foundation loads 349 approved vanilla base anchors, captures ordinary crafting/stonecutting/cooking recipes and preserves the full vanilla classification inventory. A9-03-02 also values supported vanilla potion identities through captured brewing paths. A9-03-03 adds supported component variants and bounded container contents. The public item-valuation API and villager/trader price replacement remain pending. Item reference costs remain separate from financial qualification.
 
 Optional `config/economy-valuation.json` supplies plain-item bases and overrides. A missing file uses built-in defaults. For example:
 
@@ -206,8 +206,16 @@ Optional `config/economy-valuation.json` supplies plain-item bases and overrides
 }
 ```
 
-Use registered item IDs, uppercase currency codes, positive decimal amount strings with at most 12 decimal places, and reference counts from 1 to 1,000,000. Duplicate entries within a layer, unknown fields, operator-only item prices and unregistered mod-item contributions reject the candidate. An override takes precedence over a base; component-bearing items require their later supported adapters. Missing prices never become zero or a floor-price fallback. Future consumers publish HALF_UP unit prices with a one-minor-unit minimum, then multiply by quantity; water is a typed free input only.
+Use registered item IDs, uppercase currency codes, positive decimal amount strings with at most 12 decimal places, and reference counts from 1 to 1,000,000. Duplicate entries within a layer, unknown fields, operator-only item prices and unregistered mod-item contributions reject the candidate. An override takes precedence over a base; component-bearing items require a supported typed adapter. Missing prices never become zero or a floor-price fallback. Reference values publish HALF_UP unit prices with a one-minor-unit minimum, then multiply by quantity; water is a typed free input only.
 
 Restart or use vanilla `/reload` after editing the file. A valid candidate becomes active only after durable publication. Invalid configuration is left untouched and the prior durable snapshot is retained; fresh valuation stays unavailable until a valid matching reload. Look for `VALUATION_SNAPSHOT_READY` or `VALUATION_RELOAD_REJECTED` in the server log. Valuation readiness currently has no effect on the existing trader price source.
 
+Ordinary recipe costs use exact ingredient/output quantities and the cheapest supported acyclic path. Sticks use two oak planks per four sticks regardless of crafting origin. Named refined metals and cooked foods use their calibrated raw input divided by 0.75, once; this canonical rule prevents cheaper intact ores from bypassing the approved refined values. Explicit overrides still take precedence. Other cooking adds no generic fuel/time fee. Unsupported dynamic recipes, returned containers and unregistered mod items are not inferred as free or guessed prices. A search limit makes a value unavailable rather than returning a partial minimum.
+
+Brewing reference costs use the prior per-potion cost plus one-third of the shared ingredient and one-sixtieth of blaze powder per step. Water content is free; the potion bottle is counted once. Dragon breath contributes its collected content and its own shared ingredient bottle, with no returned-bottle credit. Prices use a standard three-potion batch regardless of actual stand occupancy. Known effect, strength, duration and form identities remain distinct. Extra/custom brewing registrations or changed vanilla mix lists require a supported adapter; affected potion values are unavailable rather than inferred by running custom recipe code.
+
 Snapshot history and incomplete staging are retained without automatic deletion. A manifest is capped at 32 MiB and retained canonical data at 256 MiB, including incomplete unpublished stages; quota exhaustion rejects new publication. Compiled history and result caches are bounded independently. Keep existing complete-world backups and follow the schema-upgrade procedure before opening an older world.
+
+Supported equipment adds compatible enchantment premiums, applies 25% per distinct curse, then multiplies by remaining durability. Names add no price and preserve other state. Stored books use book plus stored premiums. Containers add their individually modified shell and each published child unit times count; potion bottles are already included. Missing or unsupported child state makes the whole container unavailable. Limits include eight container levels and 4,096 children. Unknown components/custom data are not discarded. Native text supports plain literals up to 16,384 characters and books up to 100 pages; custom entity state requires an adapter.
+
+Optional `enchantmentPremiums` in the item-valuation config supplies a complete positive CAD list for a supported beneficial enchantment, for example `"enchantmentPremiums": {"minecraft:sharpness": ["20", "45", "80", "110", "150"]}`. Unknown enchantments, curse overrides, incorrect level counts and invalid amounts reject the whole candidate. Reload creates a new immutable snapshot while original values remain reproducible.

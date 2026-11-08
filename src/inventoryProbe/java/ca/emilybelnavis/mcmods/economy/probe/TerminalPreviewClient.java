@@ -21,6 +21,9 @@ public final class TerminalPreviewClient {
     public TerminalPreviewClient() {
         NeoForge.EVENT_BUS.addListener(this::tick);
         if (Boolean.getBoolean("economy.valuationProbe")) new ValuationClient();
+        if (Boolean.getBoolean("economy.recipeProbe")) new RecipeClient();
+        if (Boolean.getBoolean("economy.brewingProbe")) new BrewingClient();
+        if (Boolean.getBoolean("economy.variantProbe")) new VariantClient();
         if (Boolean.getBoolean("economy.kioskUpgradeProbe")) new KioskUpgradeClient();
         if (Boolean.getBoolean("economy.villageGenerationProbe")) new VillageGenerationClient();
         if (Boolean.getBoolean("economy.bankLocateProbe")) new BankLocateClient();
@@ -32,7 +35,7 @@ public final class TerminalPreviewClient {
         if (Boolean.getBoolean("economy.villageBankAcceptance")) new VillageBankAcceptanceClient();
     }
     private void tick(ClientTickEvent.Post event) {
-        if (Boolean.getBoolean("economy.valuationProbe") || Boolean.getBoolean("economy.simulationProductionProbe") || Boolean.getBoolean("economy.traderCustodyProbe") || Boolean.getBoolean("economy.traderHookProbe") || Boolean.getBoolean("economy.villageBankAcceptance") || Boolean.getBoolean("economy.bankerProbe") || Boolean.getBoolean("economy.bankingProbe") || Boolean.getBoolean("economy.kioskUpgradeProbe") || Boolean.getBoolean("economy.villageGenerationProbe") || Boolean.getBoolean("economy.bankLocateProbe") || Boolean.getBoolean("economy.bankStructureProbe")) return;
+        if (Boolean.getBoolean("economy.variantProbe") || Boolean.getBoolean("economy.brewingProbe") || Boolean.getBoolean("economy.recipeProbe") || Boolean.getBoolean("economy.valuationProbe") || Boolean.getBoolean("economy.simulationProductionProbe") || Boolean.getBoolean("economy.traderCustodyProbe") || Boolean.getBoolean("economy.traderHookProbe") || Boolean.getBoolean("economy.villageBankAcceptance") || Boolean.getBoolean("economy.bankerProbe") || Boolean.getBoolean("economy.bankingProbe") || Boolean.getBoolean("economy.kioskUpgradeProbe") || Boolean.getBoolean("economy.villageGenerationProbe") || Boolean.getBoolean("economy.bankLocateProbe") || Boolean.getBoolean("economy.bankStructureProbe")) return;
         var minecraft = Minecraft.getInstance();
         if (!opened && minecraft.getOverlay() == null && minecraft.screen != null && minecraft.level == null) {
             opened = true;

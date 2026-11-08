@@ -39,12 +39,21 @@ public final class ValuationConfig {
         }
     }
 
-    public record Config(List<Entry> bases, List<Entry> overrides) {
+    public record Config(List<Entry> bases, List<Entry> overrides, Map<String,List<String>> enchantmentPremiums) {
         public Config {
             bases = entries(bases); overrides = entries(overrides);
+            var premiums = new TreeMap<String,List<String>>();
+            if(enchantmentPremiums != null) for(var e:enchantmentPremiums.entrySet()) {
+                ValuationData.itemId(e.getKey());
+                if(e.getValue().isEmpty()||e.getValue().size()>255)throw new IllegalArgumentException("Premium levels");
+                premiums.put(e.getKey(),e.getValue().stream().map(v->new Entry("economy:premium",EconomyCurrency.CAD,v,1).amount()).toList());
+            }
+            if(premiums.size()>4096)throw new IllegalArgumentException("Premium count");
+            enchantmentPremiums=Collections.unmodifiableSortedMap(premiums);
             if ((long) bases.size() + overrides.size() > MAX_ENTRIES)
                 throw new IllegalArgumentException("Configuration entry limit");
         }
+        public Config(List<Entry> bases,List<Entry> overrides){this(bases,overrides,Map.of());}
         public static Config empty() { return new Config(List.of(), List.of()); }
     }
 
@@ -72,8 +81,18 @@ public final class ValuationConfig {
 
     public static Config decode(String text) {
         JsonObject object = object(parse(text, MAX_BYTES));
-        keys(object, Set.of("bases", "overrides"));
-        return new Config(readEntries(object.get("bases")), readEntries(object.get("overrides")));
+        if(!object.has("bases")||!object.has("overrides")||!Set.of("bases","overrides","enchantmentPremiums").containsAll(object.keySet()))
+            throw new IllegalArgumentException("Unexpected or missing JSON fields");
+        var premiums=new TreeMap<String,List<String>>();
+        if(object.has("enchantmentPremiums"))for(var e:object(object.get("enchantmentPremiums")).entrySet()) {
+            if(!e.getValue().isJsonArray())throw new IllegalArgumentException("Premium array");
+            var values=new ArrayList<String>();for(var value:e.getValue().getAsJsonArray()) {
+                if(!value.isJsonPrimitive()||!value.getAsJsonPrimitive().isString())throw new IllegalArgumentException("Premium amount string");
+                values.add(value.getAsString());
+            }
+            premiums.put(e.getKey(),values);
+        }
+        return new Config(readEntries(object.get("bases")), readEntries(object.get("overrides")),premiums);
     }
 
     private static List<Entry> readEntries(JsonElement value) {
@@ -97,6 +116,7 @@ public final class ValuationConfig {
         var object = new JsonObject();
         object.add("bases", entryArray(config.bases()));
         object.add("overrides", entryArray(config.overrides()));
+        if(!config.enchantmentPremiums().isEmpty())object.add("enchantmentPremiums",new Gson().toJsonTree(config.enchantmentPremiums()));
         String text = object.toString();
         if (bytes(text) > MAX_BYTES) throw new IllegalArgumentException("Configuration byte limit");
         return text;
@@ -114,31 +134,33 @@ public final class ValuationConfig {
     }
 
     /** Strict duplicate-aware JSON, bounded before parsing. */
-    static JsonElement parse(String text, int limit) {
+    static JsonElement parse(String text, int limit) { return parse(text,limit,32); }
+    static JsonElement parseIdentity(String text) { return parse(text,65_536,64); }
+    private static JsonElement parse(String text,int limit,int maxDepth) {
         if (text == null || bytes(text) > limit) throw new IllegalArgumentException("JSON byte limit");
         try (var reader = new JsonReader(new StringReader(text))) {
             reader.setLenient(false);
-            JsonElement element = read(reader, 0);
+            JsonElement element = read(reader, 0, maxDepth);
             if (reader.peek() != JsonToken.END_DOCUMENT) throw new IllegalArgumentException("Trailing JSON");
             return element;
         } catch (IOException | IllegalStateException e) { throw new IllegalArgumentException("Invalid JSON", e); }
     }
 
-    private static JsonElement read(JsonReader reader, int depth) throws IOException {
-        if (depth > 32) throw new IllegalArgumentException("JSON depth limit");
+    private static JsonElement read(JsonReader reader, int depth,int maxDepth) throws IOException {
+        if (depth > maxDepth) throw new IllegalArgumentException("JSON depth limit");
         return switch (reader.peek()) {
             case BEGIN_OBJECT -> {
                 var object = new JsonObject(); reader.beginObject();
                 while (reader.hasNext()) {
                     String key = reader.nextName();
                     if (object.has(key)) throw new IllegalArgumentException("Duplicate JSON key: " + key);
-                    object.add(key, read(reader, depth + 1));
+                    object.add(key, read(reader, depth + 1,maxDepth));
                 }
                 reader.endObject(); yield object;
             }
             case BEGIN_ARRAY -> {
                 var array = new JsonArray(); reader.beginArray();
-                while (reader.hasNext()) array.add(read(reader, depth + 1));
+                while (reader.hasNext()) array.add(read(reader, depth + 1,maxDepth));
                 reader.endArray(); yield array;
             }
             case STRING -> new JsonPrimitive(reader.nextString());

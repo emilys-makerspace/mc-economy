@@ -1,5 +1,7 @@
 # A9-01 source feasibility and interface freeze
 
+Current extension: [A9-03-03 component/container architecture](item-valuation-variants.md) records v4 typed identity, premium overrides and recursive publication. Earlier version/package descriptions below remain historical in their recorded scope.
+
 Accepted source/document checkpoint, 2026-11-07. Supplements [technical revision 1](a9-shared-contracts.md), preserving approved prices and gameplay. No runtime service, adapter, migration or activation is delivered. [Evidence](../verification/A9-01.md) separates source feasibility from runtime acceptance.
 
 ## Pinned source map
@@ -59,11 +61,13 @@ Named processing table, once per exact edge; different serializers share the sam
 | kelp → dried_kelp | .10 → 2/15 |
 | chorus_fruit → popped_chorus_fruit | .50 → 2/3 |
 
-Multiply captured raw cost by 4/3, record PROCESSING_VALUE separately; do not apply again to nuggets/blocks/tools/downstream meals. Processed-item override terminates derivation. Sticks use two oak planks/four, CAD .25, regardless of bamboo/rare-wood alternatives.
+A9-03-01 source finding: named processed counterparts use this calibrated source canonically after explicit sources, before ordinary alternatives, with a supported one-to-one cooking witness. This prevents the approved CAD8 Nether gold ore from undercutting the approved CAD24 ingot. Multiply captured raw cost by 4/3, record PROCESSING_VALUE separately; do not apply again to nuggets/blocks/tools/downstream meals. Processed-item override terminates derivation. Sticks use two oak planks/four, CAD .25, regardless of bamboo/rare-wood alternatives.
 
 Publish `max(1, HALF_UP(exactUnitMinor))`, then checked multiply by quantity. A 1/3-cent item publishes one cent, quantity three totals three cents. JPY floor is one yen. Half-durability iron sword with Sharpness III, Unbreaking II and Vanishing: CAD 73.96875 exact →73.97. Water is a zero-cost typed input/content, not a zero-priced spendable item.
 
 ## Brewing freeze
+
+[A9-03-02](item-valuation-brewing.md) implements this capture. It confirms46 registered definitions but no `minecraft:empty` ID: EMPTY below means absent PotionContents identity. Captured default cure sets and hidden-effect rejection also bind the supported effect state.
 
 A9-03-02 must add narrow access-transformer access to the actual `PotionBrewing` lists and `PotionBrewing$Mix` type/accessors; Gradle already wires an access-transformer file. Capture reviewed vanilla tuples from the server instance with registry/feature and accessor-version hashes. Source has 41 direct potion edges and 11 `addStartMix` calls, each adding WATER→MUNDANE and AWKWARD→target: 63 potion edges, two form edges, three container kinds. `getRecipes()` alone misses these. Additional/custom or shadowing behavior needs registered trusted data; do not execute `IBrewingRecipe` or event callbacks. Record exclusions; vanilla cost reference does not claim arbitrary modded brewing behavior.
 

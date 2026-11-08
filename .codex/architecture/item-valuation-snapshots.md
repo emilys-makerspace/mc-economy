@@ -1,6 +1,10 @@
 # Item reference configuration and snapshots — A9-02
 
+Current extension: [A9-03-03 component/container architecture](item-valuation-variants.md) records v4 typed identity, premium overrides and recursive publication. Earlier version/package descriptions below remain historical in their recorded scope.
+
 Delivered 2026-11-08 under the [A9-01 freeze](a9-source-contracts.md) and [shared policy](a9-shared-contracts.md). [Evidence](../verification/A9-02.md) and [handoff](../A9-02.md) record acceptance. Storage is V50; Minecraft 1.21.1, NeoForge 21.1.252 and Java 21 remain pinned.
+
+Current extension: [A9-03-01 ordinary recipes](item-valuation-recipes.md) delivers v2 graph manifests and recipe reads. The base-only v1 scope below remains its historical contract.
 
 ## Delivered scope
 

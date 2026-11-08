@@ -322,3 +322,42 @@ if (providers.gradleProperty('valuationProbe').isPresent()) {
         }
     }
 }
+
+// Opt-in ordinary recipe capture/reload witness, excluded from release jars.
+if (providers.gradleProperty('recipeProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.recipeProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'recipes-failed.txt').exists() || !new File(root, 'recipes-passed.txt').exists())
+                throw new GradleException('Ordinary recipe capture/reload witness did not pass')
+        }
+    }
+}
+
+// Opt-in pinned brewing accessor and retained-value witness; excluded from release jars.
+if (providers.gradleProperty('brewingProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.brewingProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'brewing-failed.txt').exists() || !new File(root, 'brewing-passed.txt').exists())
+                throw new GradleException('Brewing accessor/value witness did not pass')
+        }
+    }
+}
+
+// Opt-in native variant/container identity witness, excluded from release jars.
+if (providers.gradleProperty('variantProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.variantProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'variants-failed.txt').exists() || !new File(root, 'variants-passed.txt').exists())
+                throw new GradleException('Native variant/container identity witness did not pass')
+        }
+    }
+}

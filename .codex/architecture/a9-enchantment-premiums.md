@@ -4,6 +4,8 @@ The user approved the beneficial-enchantment premium amounts on 2026-11-07. The 
 
 Inventory and maximum levels were read from `data/minecraft/enchantment/*.json` in the cached official Minecraft 1.21.1 client artifact. All 42 definitions are represented below, including the two curses. The [official 1.21 release notes](https://feedback.minecraft.net/hc/en-us/articles/27547857163917-Minecraft-Java-Edition-1-21-Tricky-Trials) also document the three mace enchantments. No Gradle, tests or game processes were run.
 
+Runtime implementation: [A9-03-03](item-valuation-variants.md) retains these amounts in v4 snapshots and accepts optional complete per-level beneficial premium overrides. The source-review statement above describes the original drafting checkpoint.
+
 ## Reading the table
 
 Each level column is the **total premium for that level**, not an amount to add to all lower levels. Sharpness V adds CAD 150, not the sum of I through V. Add distinct compatible beneficial enchantment premiums together once. A dash means that level is outside the pinned normal range.

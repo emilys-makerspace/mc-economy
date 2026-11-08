@@ -4,6 +4,22 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-08
 
+### A9-03-03 — Component and container reference costs
+
+- Added compatible enchantment premiums, curse and durability discounts, stored books and name-neutral exact identities, with configurable beneficial premiums.
+- Added reviewed vanilla variants and bounded container shell/content totals, including typed bucket/bee contents and potion bottles counted once.
+- Retained original snapshot prices across reloads. Unsupported component state remains unavailable; public integration and trader activation remain pending.
+
+### A9-03-02 — Potion reference brewing costs
+
+- Added captured vanilla brewing paths for potion effects, strength, duration and forms, with standard shared ingredient/fuel allocation and one potion bottle.
+- Retained exact potion snapshots and original values across material reloads. Custom brewing requires an adapter; generic variants, public integration and trader activation remain pending.
+
+### A9-03-01 — Ordinary reference recipe costs
+
+- Added exact ordinary crafting, stonecutting and cooking derivation with bounded acyclic search, deterministic provenance and retained recipe snapshots across reloads.
+- Added canonical oak-based sticks and the approved raw/refined-food calibration, preserving explicit overrides and historical base-only values. Brewing, component valuation and trader activation remain pending.
+
 ### A9 — Item reference base snapshots
 
 - Added validated optional base/override configuration with exact currency arithmetic and retained immutable snapshots across reloads and restarts. Recipe/component valuation and trader price replacement remain pending.

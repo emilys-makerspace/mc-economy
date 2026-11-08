@@ -10,7 +10,7 @@ import java.util.UUID;
 final class ValuationCache {
     private UUID active;
     private final Map<UUID, ValuationData.Manifest> compiled = new LinkedHashMap<>(16, .75f, true);
-    private final Map<Key, BaseValues.Result> results = new LinkedHashMap<>(16, .75f, true);
+    private final Map<Key, RecipeValues.Result> results = new LinkedHashMap<>(16, .75f, true);
     private record Key(UUID snapshot, UUID fx, String item, String components, long quantity, EconomyCurrency currency) {}
 
     synchronized void activate(ValuationStore.Snapshot snapshot, ValuationData.Manifest manifest) {
@@ -39,18 +39,18 @@ final class ValuationCache {
             while (it.hasNext()) { if (!it.next().equals(active)) { it.remove(); break; } }
         }
     }
-    synchronized BaseValues.Result cached(UUID snapshot, String item, String components, long quantity,
+    synchronized RecipeValues.Result cached(UUID snapshot, String item, String components, long quantity,
                                            EconomyCurrency currency, UUID fx) {
         return results.get(new Key(snapshot, fx, item, components, quantity, currency));
     }
-    BaseValues.Result evaluate(ValuationStore.Snapshot snapshot, String item, String components,
+    RecipeValues.Result evaluate(ValuationStore.Snapshot snapshot, String item, String components,
                                long quantity, EconomyCurrency currency, EffectiveFxSnapshot fx) {
         var key = new Key(snapshot.id(), fx == null ? null : fx.id(), item, components, quantity, currency);
         synchronized (this) {
             var cached = results.get(key);
             if (cached != null) return cached;
         }
-        var evaluated = BaseValues.evaluate(retain(snapshot), item, components, quantity, currency, fx);
+        var evaluated = RecipeValues.evaluate(retain(snapshot), item, components, quantity, currency, fx);
         synchronized (this) {
             var previous = results.putIfAbsent(key, evaluated);
             if (results.size() > 10_000) results.remove(results.keySet().iterator().next());

@@ -6,10 +6,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
 
-/** Immutable base-only manifests. A9 recipe/variant packages add algorithms under new versions. */
+/** Immutable versioned manifests. Historical base-only encodings retain their original semantics. */
 public final class ValuationData {
     public static final int MAX_MANIFEST_BYTES = 32 * 1_048_576;
     public static final String ALGORITHM = "economy:base-values/v1";
+    public static final String RECIPE_ALGORITHM = "economy:ordinary-recipes/v1";
+    public static final String BREWING_ALGORITHM = "economy:brewing-recipes/v1";
+    public static final String VARIANT_ALGORITHM = "economy:component-values/v1";
     private static final Gson JSON = new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
     private ValuationData() {}
 
@@ -72,12 +75,34 @@ public final class ValuationData {
     public record Manifest(int version, String algorithm, Inputs inputs, Catalog catalog,
                            ValuationConfig.Config config, List<Contribution> contributions,
                            String catalogHash, String configHash, String providerHash,
-                           Map<String, Source> sources) {
+                           Map<String, Source> sources, RecipeGraph.Graph recipes, BrewingGraph.Graph brewing, VariantGraph.Graph variants) {
         public Manifest {
-            if (version != 1 || !ALGORITHM.equals(algorithm)) throw new IllegalArgumentException("Valuation manifest version");
+            if (!((version == 1 && ALGORITHM.equals(algorithm) && recipes == null && brewing == null && variants == null)
+                    || (version == 2 && RECIPE_ALGORITHM.equals(algorithm) && recipes != null && brewing == null && variants == null)
+                    || (version == 3 && BREWING_ALGORITHM.equals(algorithm) && recipes != null && brewing != null && variants == null)
+                    || (version == 4 && VARIANT_ALGORITHM.equals(algorithm) && recipes != null && brewing != null && variants != null)))
+                throw new IllegalArgumentException("Valuation manifest version");
             Objects.requireNonNull(inputs); Objects.requireNonNull(catalog); Objects.requireNonNull(config);
             contributions = List.copyOf(contributions); sources = sorted(sources);
             requireHash(catalogHash); requireHash(configHash); requireHash(providerHash);
+            if (recipes != null) RecipeGraph.validate(recipes, inputs);
+            if (brewing != null) BrewingGraph.validate(brewing, inputs);
+            if (variants != null) VariantGraph.validate(variants, inputs);
+        }
+        public Manifest(int version,String algorithm,Inputs inputs,Catalog catalog,ValuationConfig.Config config,
+                        List<Contribution> contributions,String catalogHash,String configHash,String providerHash,
+                        Map<String,Source> sources,RecipeGraph.Graph recipes,BrewingGraph.Graph brewing) {
+            this(version,algorithm,inputs,catalog,config,contributions,catalogHash,configHash,providerHash,sources,recipes,brewing,null);
+        }
+        public Manifest(int version, String algorithm, Inputs inputs, Catalog catalog, ValuationConfig.Config config,
+                        List<Contribution> contributions, String catalogHash, String configHash, String providerHash,
+                        Map<String, Source> sources, RecipeGraph.Graph recipes) {
+            this(version, algorithm, inputs, catalog, config, contributions, catalogHash, configHash, providerHash, sources, recipes, null);
+        }
+        public Manifest(int version, String algorithm, Inputs inputs, Catalog catalog, ValuationConfig.Config config,
+                        List<Contribution> contributions, String catalogHash, String configHash, String providerHash,
+                        Map<String, Source> sources) {
+            this(version, algorithm, inputs, catalog, config, contributions, catalogHash, configHash, providerHash, sources, null, null);
         }
         public String hash() { return ValuationData.hash(encode(this)); }
     }
@@ -107,6 +132,36 @@ public final class ValuationData {
 
     public static Manifest prepare(Inputs inputs, ValuationConfig.Config config, List<Contribution> contributions) {
         return assemble(inputs, catalog(), config, contributions);
+    }
+
+    public static Manifest prepare(Inputs inputs, ValuationConfig.Config config, List<Contribution> contributions,
+                                   RecipeGraph.Graph recipes) {
+        var base = assemble(inputs, catalog(), config, contributions);
+        return withRecipes(base, recipes);
+    }
+    private static Manifest withRecipes(Manifest base, RecipeGraph.Graph recipes) {
+        return new Manifest(2, RECIPE_ALGORITHM, base.inputs(), base.catalog(), base.config(), base.contributions(),
+                base.catalogHash(), base.configHash(), base.providerHash(), base.sources(), Objects.requireNonNull(recipes));
+    }
+
+    public static Manifest prepare(Inputs inputs, ValuationConfig.Config config, List<Contribution> contributions,
+                                   RecipeGraph.Graph recipes, BrewingGraph.Graph brewing) {
+        return withBrewing(prepare(inputs, config, contributions, recipes), brewing);
+    }
+    private static Manifest withBrewing(Manifest ordinary, BrewingGraph.Graph brewing) {
+        return new Manifest(3, BREWING_ALGORITHM, ordinary.inputs(), ordinary.catalog(), ordinary.config(), ordinary.contributions(),
+                ordinary.catalogHash(), ordinary.configHash(), ordinary.providerHash(), ordinary.sources(), ordinary.recipes(),
+                Objects.requireNonNull(brewing));
+    }
+
+    public static Manifest prepare(Inputs inputs,ValuationConfig.Config config,List<Contribution> contributions,
+                                   RecipeGraph.Graph recipes,BrewingGraph.Graph brewing,VariantGraph.Graph variants) {
+        return withVariants(withBrewing(withRecipes(assemble(inputs,catalog(),config,contributions),recipes),brewing),variants);
+    }
+    private static Manifest withVariants(Manifest base,VariantGraph.Graph variants) {
+        return new Manifest(4,VARIANT_ALGORITHM,base.inputs(),base.catalog(),base.config(),base.contributions(),
+                base.catalogHash(),base.configHash(),base.providerHash(),base.sources(),base.recipes(),base.brewing(),
+                VariantGraph.withPremiums(Objects.requireNonNull(variants),base.config().enchantmentPremiums()));
     }
 
     private static Manifest assemble(Inputs inputs, Catalog catalog, ValuationConfig.Config config,
@@ -170,8 +225,19 @@ public final class ValuationData {
 
     public static String encode(Manifest manifest) {
         Manifest expected = assemble(manifest.inputs(), manifest.catalog(), manifest.config(), manifest.contributions());
+        if (manifest.version() >= 2) expected = withRecipes(expected, manifest.recipes());
+        if (manifest.version() >= 3) expected = withBrewing(expected, manifest.brewing());
+        if (manifest.version() == 4) expected = withVariants(expected,manifest.variants());
         if (!manifest.equals(expected)) throw new IllegalArgumentException("Inconsistent manifest provenance");
-        String encoded = JSON.toJson(manifest);
+        var object = JSON.toJsonTree(manifest).getAsJsonObject();
+        // v1 journal payloads predate the recipes field: preserve their byte-for-byte canonical form.
+        if (manifest.version() == 1) object.remove("recipes");
+        if (manifest.version() < 3) object.remove("brewing");
+        if (manifest.version() < 4) {
+            if(!manifest.config().enchantmentPremiums().isEmpty())throw new IllegalArgumentException("Premium configuration needs variant algorithm");
+            object.remove("variants");object.getAsJsonObject("config").remove("enchantmentPremiums");
+        }
+        String encoded = JSON.toJson(object);
         if (ValuationConfig.bytes(encoded) > MAX_MANIFEST_BYTES) throw new IllegalArgumentException("Manifest byte limit");
         return encoded;
     }

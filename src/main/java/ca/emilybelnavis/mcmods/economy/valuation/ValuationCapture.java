@@ -12,7 +12,9 @@ final class ValuationCapture {
     private static final int MAX_SOURCE_BYTES = 32 * 1024 * 1024;
     private ValuationCapture() {}
 
-    static ValuationData.Inputs capture(MinecraftServer server) throws IOException {
+    record Captured(ValuationData.Inputs inputs, RecipeGraph.Graph recipes, BrewingGraph.Graph brewing, VariantGraph.Graph variants) {}
+
+    static Captured capture(MinecraftServer server) throws IOException {
         if (!server.isSameThread()) throw new IllegalStateException("Valuation capture requires server thread");
         if (server.getRecipeManager().hadErrorsLoading()) throw new IllegalArgumentException("RECIPE_LOAD_ERRORS");
         var items = new TreeSet<String>();
@@ -34,7 +36,7 @@ final class ValuationCapture {
             }
         }
         // Raw selected resource content captures quantities/components without invoking mod serializers.
-        // This package records an input epoch only; recipe interpretation belongs to A9-03-01.
+        // Detached trusted recipe semantics below are hashed alongside selected raw source content.
         var resources = new TreeMap<String, String>();
         int bytes = 0;
         for (var entry : server.getResourceManager().listResources("recipe", id -> id.getPath().endsWith(".json")).entrySet()) {
@@ -48,10 +50,13 @@ final class ValuationCapture {
         if (server.getRecipeManager().getRecipes().size() > 100_000) throw new IllegalArgumentException("RECIPE_COUNT_LIMIT");
         var installed = server.getRecipeManager().getRecipes().stream()
                 .map(h -> h.id() + "=" + h.value().getClass().getName()).sorted().toList();
-        String recipeHash = ValuationData.hash(resources + "\n" + installed);
+        var graph = OrdinaryRecipeCapture.capture(server, tags);
+        var brewing = VanillaBrewingCapture.capture(server);
+        var variants = VariantCapture.capture(server);
+        String recipeHash = ValuationData.hash(resources + "\n" + installed + "\n" + graph.hash() + "\n" + brewing.hash() + "\n" + variants.hash());
         String tagsHash = ValuationData.hash(tags.toString());
         String featuresHash = ValuationData.hash(new TreeSet<>(net.minecraft.world.flag.FeatureFlags.REGISTRY
                 .toNames(server.getWorldData().enabledFeatures())).toString());
-        return new ValuationData.Inputs(items, recipeHash, tagsHash, featuresHash);
+        return new Captured(new ValuationData.Inputs(items, recipeHash, tagsHash, featuresHash), graph, brewing, variants);
     }
 }

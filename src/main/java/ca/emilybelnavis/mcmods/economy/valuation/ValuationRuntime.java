@@ -73,7 +73,7 @@ public final class ValuationRuntime {
                 || session.services.state() != ServerServices.State.READY) return;
         session.requested = false;
         long generation = session.gate.generation();
-        final ValuationData.Inputs inputs;
+        final ValuationCapture.Captured inputs;
         try { inputs = ValuationCapture.capture(server); }
         catch (Exception failure) { fail(session, generation, failure); return; }
         Object capturedResources = server.getServerResources();
@@ -93,9 +93,9 @@ public final class ValuationRuntime {
             fail(session, generation, rejected);
         }
     }
-    private static Candidate prepare(ValuationData.Inputs inputs, Path config) {
+    private static Candidate prepare(ValuationCapture.Captured inputs, Path config) {
         try {
-            var manifest = ValuationData.prepare(inputs, ValuationConfig.load(config), List.of());
+            var manifest = ValuationData.prepare(inputs.inputs(), ValuationConfig.load(config), List.of(), inputs.recipes(), inputs.brewing(), inputs.variants());
             return new Candidate(manifest, ValuationData.encode(manifest));
         } catch (java.io.IOException failure) { throw new java.io.UncheckedIOException(failure); }
     }
@@ -111,7 +111,7 @@ public final class ValuationRuntime {
                     if (snapshot == null || !gate.matches(generation)) return;
                     session.cache.activate(snapshot, candidate.manifest());
                     session.snapshot = snapshot;
-                    session.status = new Status(true, "BASE_SNAPSHOT_READY", snapshot.id(), snapshot.revision(), snapshot.hash());
+                    session.status = new Status(true, "VARIANT_SNAPSHOT_READY", snapshot.id(), snapshot.revision(), snapshot.hash());
                     session.readyStatus = session.status;
                     session.readyResources = capturedResources;
                 }
@@ -123,8 +123,8 @@ public final class ValuationRuntime {
         }
     }
     /** Detached internal read seam; grant-authenticated public routing remains A9-04 work. */
-    record BaseRead(UUID snapshot, long capturedAt, long effectiveFrom, BaseValues.Result value) {}
-    static BaseValues.Result cachedBase(MinecraftServer server, String item, String components, long quantity,
+    record Read(UUID snapshot, long capturedAt, long effectiveFrom, RecipeValues.Result value) {}
+    static RecipeValues.Result cached(MinecraftServer server, String item, String components, long quantity,
                                         ca.emilybelnavis.mcmods.economy.api.EconomyCurrency currency, UUID fx) {
         if (!server.isSameThread()) throw new IllegalStateException("Valuation read requires session owner");
         var session = SESSIONS.get(server);
@@ -134,7 +134,7 @@ public final class ValuationRuntime {
             return session.cache.cached(session.status.snapshot(), item, components, quantity, currency, fx);
         }
     }
-    static java.util.concurrent.CompletionStage<BaseRead> evaluateBase(MinecraftServer server, UUID retained,
+    static java.util.concurrent.CompletionStage<Read> evaluate(MinecraftServer server, UUID retained,
             UUID retainedFx, String item, String components, long quantity,
             ca.emilybelnavis.mcmods.economy.api.EconomyCurrency currency) {
         if (!server.isSameThread()) throw new IllegalStateException("Valuation read requires session owner");
@@ -160,7 +160,7 @@ public final class ValuationRuntime {
             var fx = store.transaction(tx -> retained == null
                     ? ca.emilybelnavis.mcmods.economy.fx.FxService.at(tx::query, capturedAt)
                     : ca.emilybelnavis.mcmods.economy.fx.FxService.snapshot(tx::query, retainedFx));
-            return new BaseRead(snapshot.id(), capturedAt, snapshot.publishedMillis(),
+            return new Read(snapshot.id(), capturedAt, snapshot.publishedMillis(),
                     cache.evaluate(snapshot, item, components, quantity, currency, fx));
         });
     }
