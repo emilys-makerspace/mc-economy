@@ -1,5 +1,7 @@
 # A9-01 source feasibility and interface freeze
 
+Current extension: [A9-05 source-transition foundation](trade-source-transition.md) delivers additiveV51 facts/epochs and no-carry settlement services; production activation remains separately selected A9-06 work. Prior package descriptions below retain their recorded historical scope.
+
 Current extension: [A9-04 public API/SPI](item-valuation-api.md) delivers v5 provider data and authenticated reads; prior package descriptions below remain historical in their recorded scope.
 
 Current extension: [A9-03-03 component/container architecture](item-valuation-variants.md) records v4 typed identity, premium overrides and recursive publication. Earlier version/package descriptions below remain historical in their recorded scope.

@@ -82,6 +82,10 @@ public final class ValuationStore {
         });
     }
 
+    /** Trusted detached settlement/recovery lookup; no current-FX substitution. */
+    public static Snapshot load(JournalEngine.ReadView reads,UUID id) {
+        Head value=head(reads,id);return value==null?null:snapshot(reads,value);
+    }
     public static List<Metadata> history(FoundationStore store, UUID exclusiveBefore, int limit) {
         if (limit < 1 || limit > 16) throw new IllegalArgumentException("Valuation history limit");
         return store.transaction(tx -> {
@@ -149,12 +153,16 @@ public final class ValuationStore {
                         return reject("VALUATION_RETENTION_LIMIT");
                     if (accounted > MAX_RETAINED_BYTES) return reject("VALUATION_RETENTION_LIMIT");
                     String payload = JSON.toJson(value);
-                    return new JournalEngine.Commit(List.of(new Journal.Record(PUBLICATION, 1, payload)),
+                    var refreshed=ca.emilybelnavis.mcmods.economy.trade.pricing.TradeSources.prepareRefresh(reads,id,ValuationData.decode(canonicalPayload),operation,value.publishedMillis());
+                    var records=new ArrayList<Journal.Record>();records.add(new Journal.Record(PUBLICATION,1,payload));
+                    for(var part:refreshed)records.addAll(part.records());
+                    return new JournalEngine.Commit(records,
                             new Journal.Result(1, "VALUATION_PUBLISHED", id.toString()), tx -> {
                         tx.execute("INSERT INTO valuation_manifests VALUES(?,?,?,?,?,?,?)", List.of(id.toString(), Long.toString(revision),
                                 world.value().toString(), operation.toString(), hash, Integer.toString(value.bytes()), payload));
                         if (latest == null) tx.execute("INSERT INTO valuation_active VALUES(1,?)", List.of(id.toString()));
                         else tx.execute("UPDATE valuation_active SET manifest_id=? WHERE singleton=1", List.of(id.toString()));
+                        for(var part:refreshed)part.projections().apply(tx);
                     });
                 });
                 submit(store, PUBLISH, operation, request, registration);

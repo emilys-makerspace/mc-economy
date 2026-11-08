@@ -186,7 +186,7 @@ public final class NpcSettlement {
             try(var s=c.prepareStatement("SELECT r.sequence,r.payload,t.world_id FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE r.record_type=? ORDER BY r.sequence")) {
                 s.setString(1,GROUPS);try(var rows=s.executeQuery()){while(rows.next()) {
                     var manifest=decode(rows.getString("payload"));if(!manifest.world().value().toString().equals(world)||!world.equals(rows.getString("world_id")))throw new SQLException("NPC group world");
-                    if(!"1".equals(scalar(c,"SELECT count(*) FROM journal_records WHERE sequence=? AND record_type IN ('economy:a8/npc-trade','economy:a8/npc-cash-trade') AND record_version=1",Long.toString(rows.getLong("sequence")))))throw new SQLException("NPC groups require one owning source receipt");
+                    if(!"1".equals(scalar(c,"SELECT count(*) FROM journal_records WHERE sequence=? AND record_type IN ('economy:a8/npc-trade','economy:a8/npc-cash-trade','economy:a9/reference-npc-trade','economy:a9/reference-cash-trade') AND record_version=1",Long.toString(rows.getLong("sequence")))))throw new SQLException("NPC groups require one owning source receipt");
                     var expected=new ArrayList<String>();var balances=new HashMap<Key,Long>();
                     for(var g:manifest.groups()) {
                         for(var l:g.legs()) {

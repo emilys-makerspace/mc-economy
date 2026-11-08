@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-08
 
+### A9-05 — Prospective trade-source transition foundation
+
+- Added durable reference-source epochs and account/cash quote formats that preserve original receipts across source changes.
+- Added explicit retirement records for legacy fractional carry and prospective unit-rounded pricing, with no carry payout or historical balance/price rewrite.
+- Added schema51 recovery validation and atomic valuation updates for already-enabled scopes. Production reference-price activation remains pending.
+
 ### A9-04 — Public item-reference API and provider data
 
 - Added authenticated current/retained reference reads with currency, snapshot and bounded provenance identities.

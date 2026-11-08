@@ -1,5 +1,7 @@
 # Public item-reference reads and contribution data
 
+Current extension: [A9-05 source-transition foundation](trade-source-transition.md) delivers additiveV51 facts/epochs and no-carry settlement services; production activation remains separately selected A9-06 work. Prior package descriptions below retain their recorded historical scope.
+
 Delivered by [A9-04](../A9-04.md), with [scoped evidence](../verification/A9-04.md), extending [component/container valuation](item-valuation-variants.md). Public interface: `api.ItemValuationIntegration`, version1. [User integration example](../../docs/INTEGRATION_API.md#generic-provider-registration).
 
 ## Read admission and immutable results

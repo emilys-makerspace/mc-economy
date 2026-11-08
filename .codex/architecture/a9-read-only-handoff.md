@@ -1,5 +1,7 @@
 # A9 read-only handoff for A10
 
+Current extension: [A9-05 source-transition foundation](trade-source-transition.md) delivers additiveV51 facts/epochs and no-carry settlement services; production activation remains separately selected A9-06 work. Prior package descriptions below retain their recorded historical scope.
+
 A9-04 delivers `ItemValuationIntegration` v1 through current `ServerServices`. See [API contracts](item-valuation-api.md), [integration example](../../docs/INTEGRATION_API.md#item-reference-reads-version1) and [evidence](../verification/A9-04.md). This document selects no A10 work.
 
 A10 may authenticate ownership and request immutable reference values, structured unavailable reasons, rounded unit/quantity amounts, exact nonspendable derivations and bounded provenance. Use Current for a new capture, or Retained with both saved valuation and FX UUIDs for reproducibility. Store the complete selected result/proof with any durable consumer record; a hash alone is not replay data. Cached PENDING, missing inputs, unsupported components and limits never mean zero or one-cent fallback.

@@ -8,7 +8,7 @@ import java.util.UUID;
 /** Ordered trusted SQL; the complete pending chain shares one transaction. */
 final class SchemaMigrations {
     static final int MINIMUM_SUPPORTED = 1;
-    static final int CURRENT = 50;
+    static final int CURRENT = 51;
     static final int APPLICATION_ID = 0x45434F4E;
     record Migration(int version, String name, List<String> statements) {
         Migration { statements = List.copyOf(statements); }
@@ -75,8 +75,16 @@ final class SchemaMigrations {
             new Migration(47,"prospective fixed retirement and exact-time FX",effectiveFxStatements()),
             new Migration(48,"financial-day macro provider and atomic handover",macroStatements()),
             new Migration(49,"production simulation manifest",ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.statements()),
-            new Migration(50,"immutable item valuation snapshots",ca.emilybelnavis.mcmods.economy.valuation.ValuationStore.statements()));
+            new Migration(50,"immutable item valuation snapshots",ca.emilybelnavis.mcmods.economy.valuation.ValuationStore.statements()),
+            new Migration(51,"prospective reference trade sources and no-carry facts",referenceTradeStatements()));
 
+    private static List<String> referenceTradeStatements(){
+        var statements=new java.util.ArrayList<String>();
+        statements.addAll(ca.emilybelnavis.mcmods.economy.trade.pricing.TradeSources.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceNpcSchema.statements());
+        statements.addAll(ca.emilybelnavis.mcmods.economy.trade.cash.ReferenceCashSchema.statements());
+        return java.util.List.copyOf(statements);
+    }
     private static List<String> macroStatements() {
         var statements=new java.util.ArrayList<String>();
         statements.addAll(ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.statements());
