@@ -67,7 +67,7 @@ public final class ReferenceNpcTrades {
         var selectedComparison=terms.comparisons().stream().filter(c->offer.side()==Pricing.Side.BUY?c.neutralAsk().equals(raw.minorPerStandard()):raw.minorPerStandard().compareTo(c.neutralBid())>=0).reduce((a,b)->b).orElseThrow(()->new IllegalArgumentException("Selected source comparison unavailable"));
         var basis=ReferencePricing.normalizedBasis(offer.side(),raw,selectedComparison);
         var pricingRequest=new ReferencePricing.Request(key,basis,offer.standardQuantity(),Math.multiplyExact((long)terms.executions(),offer.goodsCount()),priceState==null?new Pricing.Demand(Rational.ZERO,0):priceState.demand(),eligible,terms.reputation(),terms.comparisons());
-        var outcome=ReferencePricing.quote(pricingRequest);if(!outcome.available())throw new IllegalArgumentException(outcome.reason());
+        var outcome=ReferencePricing.quote(pricingRequest,terms.source().ref().implementation());if(!outcome.available())throw new IllegalArgumentException(outcome.reason());
         Instant expiry=now.plusSeconds(30).isBefore(sourceExpiry)?now.plusSeconds(30):sourceExpiry;
         NpcAccountFx.Quote foreign=null;if(account.currency()!=market.currency()){if(fx==null)throw new IllegalArgumentException("NPC FX unavailable");foreign=fx.issue(reads,world,terms.actor(),account,offer.side(),new Money(market.currency(),outcome.quote().minor()),now,expiry);if(foreign.expiresAt().isBefore(expiry))expiry=foreign.expiresAt();}
         var quote=new Quote(quoteId(world,terms.operation()),world,terms,account.currency(),account.revision(),issuer,market.id(),binding.revision(),stock.revision(),priceState==null?0:priceState.revision(),tickRevision,eligible,pricingRequest,outcome.quote(),foreign,now.toEpochMilli(),expiry.toEpochMilli(),financialIntent(world,terms.operation(),terms.actor()));
@@ -149,7 +149,7 @@ public final class ReferenceNpcTrades {
         terms.source().validate(reads,capture.offers().get(terms.offerOrdinal()));
         if(!terms.comparisons().equals(terms.source().comparisons(reads,capture,capture.offers().get(terms.offerOrdinal()))))throw new IllegalArgumentException("NPC reference comparison changed");
         var latest=FxService.at(reads,now.toEpochMilli());if(latest==null||!latest.id().equals(terms.source().fxSnapshot()))throw new IllegalArgumentException("NPC price FX changed");
-        var recomputed=ReferencePricing.quote(quote.priceRequest());if(!recomputed.available()||!recomputed.quote().equals(quote.price()))throw new IllegalArgumentException("NPC price changed");
+        var recomputed=ReferencePricing.quote(quote.priceRequest(),terms.source().ref().implementation());if(!recomputed.available()||!recomputed.quote().equals(quote.price()))throw new IllegalArgumentException("NPC price changed");
         if(quote.fx()!=null){if(fx==null)throw new IllegalArgumentException("NPC FX unavailable");fx.requireFresh(reads,quote.fx(),quote.world(),terms.actor(),now);}
     }
     static AccountIdentity account(JournalEngine.ReadView reads,WorldId world,PlayerId actor,AccountId id){var value=AccountCatalog.find(reads,new PartyRef(world,new PartyRef.Player(actor)),id).orElseThrow(()->new IllegalArgumentException("Authorized account required"));if(value.purpose()!=AccountIdentity.Purpose.BANK||value.status()!=AccountIdentity.Status.OPEN)throw new IllegalArgumentException("Open BANK account required");return value;}

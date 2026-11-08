@@ -45,6 +45,7 @@ public final class RecordCatalog {
         catalog = ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.valuation.ValuationStore.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.trade.pricing.TradeSources.register(catalog);
+        catalog = ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceNpcFacts.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceInputReturns.register(catalog);
         catalog = ca.emilybelnavis.mcmods.economy.trade.cash.ReferenceCashFacts.register(catalog);

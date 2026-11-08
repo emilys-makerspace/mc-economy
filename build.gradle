@@ -376,3 +376,16 @@ if (providers.gradleProperty('valuationApiProbe').isPresent()) {
         }
     }
 }
+
+// Fresh native reference activation and changed trader presentation witness; excluded from jars.
+if (providers.gradleProperty('referenceTraderProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.referenceTraderProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'reference-trader-failed.txt').exists() || !new File(root, 'reference-trader-passed.txt').exists())
+                throw new GradleException('Native reference trader acceptance did not pass')
+        }
+    }
+}

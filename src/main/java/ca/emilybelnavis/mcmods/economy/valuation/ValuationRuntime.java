@@ -25,6 +25,24 @@ public final class ValuationRuntime {
         var session = SESSIONS.get(server);
         return session == null ? new Status(false, "SESSION_UNAVAILABLE", null, 0, null) : session.status;
     }
+    public record Lease(UUID snapshot,long generation,UUID session){}
+    public static Lease lease(MinecraftServer server){
+        var session=require(server);synchronized(session.gate){return session.status.ready()&&session.readyResources==server.getServerResources()?new Lease(session.status.snapshot(),session.gate.generation(),session.services.sessionId()):null;}
+    }
+    /** Worker-safe: reads detached session state and gate, never live resources. */
+    public static boolean matches(MinecraftServer server,Lease lease){
+        if(lease==null)return false;var session=SESSIONS.get(server);return session!=null&&session.status.ready()&&session.services.sessionId().equals(lease.session())&&lease.snapshot().equals(session.status.snapshot())&&session.gate.matches(lease.generation());
+    }
+    public static boolean matchesServerLease(Lease lease){
+        if(lease==null)return false;
+        for(var session:SESSIONS.values())if(session.services.sessionId().equals(lease.session()))return session.status.ready()&&session.gate.matches(lease.generation())&&lease.snapshot().equals(session.status.snapshot());
+        return false;
+    }
+    /** Serialize source-aware admission with reload invalidation; original lookup stays inside work. */
+    public static <T>T locked(Lease lease,java.util.function.Supplier<T> work){
+        if(lease!=null)for(var session:SESSIONS.values())if(session.services.sessionId().equals(lease.session())){synchronized(session.gate){return work.get();}}
+        return work.get();
+    }
     /** May be called off the server thread: invalidate synchronously before vanilla reload starts. */
     public static Reload beginReload(MinecraftServer server) {
         var session = SESSIONS.get(server);

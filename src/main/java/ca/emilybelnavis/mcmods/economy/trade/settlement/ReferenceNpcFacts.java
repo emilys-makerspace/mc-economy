@@ -19,7 +19,7 @@ public final class ReferenceNpcFacts {
     public static final String ADAPTER="economy:a9/reference-npc-adapter",QUOTE="economy:a9/reference-npc-quote",RECEIPT="economy:a9/reference-npc-trade";
     public static final String SOURCES="npc-reference-account-v1:goods,creation,retirement,customer-fx;carry=absent";
     private static final Gson JSON=new GsonBuilder().disableHtmlEscaping().serializeNulls()
-            .registerTypeAdapter(Instant.class,new InstantCodec()).registerTypeAdapter(PartyRef.Owner.class,new OwnerCodec()).create();
+            .registerTypeAdapter(ReferenceSource.class,new ReferenceSource.Codec()).registerTypeAdapter(Instant.class,new InstantCodec()).registerTypeAdapter(PartyRef.Owner.class,new OwnerCodec()).create();
     public record Adapter(WorldId world,String sources){public Adapter{Objects.requireNonNull(world);if(!SOURCES.equals(sources))throw new IllegalArgumentException("NPC adapter manifest");}}
     /** Constructed by the authenticated server service after detached entity/save admission. */
     public record Terms(UUID operation,PlayerId actor,UUID session,UUID trader,long catalogRevision,int offerOrdinal,int executions,

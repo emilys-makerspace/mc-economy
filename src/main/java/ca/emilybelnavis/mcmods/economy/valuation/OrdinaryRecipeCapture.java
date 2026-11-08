@@ -6,6 +6,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.*;
+import net.neoforged.neoforge.common.crafting.CompoundIngredient;
+import net.neoforged.neoforge.common.crafting.DifferenceIngredient;
+import net.neoforged.neoforge.common.crafting.IntersectionIngredient;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -70,36 +73,86 @@ final class OrdinaryRecipeCapture {
         if (original.isEmpty() || original.size() > 9) throw unsupported("UNSUPPORTED_INGREDIENT_COUNT");
         var ingredients = new ArrayList<RecipeGraph.Ingredient>();
         var exclusions = new ArrayList<String>();
-        for (int slot = 0; slot < original.size(); slot++) ingredients.add(ingredient(original.get(slot), slot, tags, exclusions,trustedInputs));
+        var work = new IngredientWork();
+        for (int slot = 0; slot < original.size(); slot++) ingredients.add(ingredient(original.get(slot), slot, tags, exclusions,trustedInputs,work));
         if (ingredients.stream().allMatch(RecipeGraph.Ingredient::emptySlot)) throw unsupported("NO_CONSUMED_INGREDIENT");
         return new RecipeGraph.Node(id, serializerKey.toString(), outputId, output.getCount(), ingredients, exclusions);
     }
 
-    private static RecipeGraph.Ingredient ingredient(Ingredient ingredient, int slot,
-            Map<String, List<String>> tags, List<String> exclusions,Set<String> trustedInputs) {
-        if (ingredient.isCustom()) throw unsupported("CUSTOM_INGREDIENT");
-        Ingredient.Value[] values = ingredient.getValues();
-        if (values.length > RecipeGraph.MAX_ALTERNATIVES) throw new IllegalArgumentException("INGREDIENT_ALTERNATIVE_LIMIT");
-        var selectors = new TreeSet<String>();
-        var alternatives = new TreeSet<String>();
-        for (Ingredient.Value value : values) {
-            if (value instanceof Ingredient.ItemValue item) {
-                ItemStack stack = item.item();
-                if (stack.isEmpty() || stack.getCount() != 1 || !stack.isComponentsPatchEmpty())
-                    throw unsupported("UNSUPPORTED_INGREDIENT_COMPONENTS");
-                String id = itemId(stack);
-                selectors.add(id);
-                addAlternative(id, slot, alternatives, exclusions,trustedInputs);
-            } else if (value instanceof Ingredient.TagValue tag) {
-                String id = tag.tag().location().toString();
-                selectors.add("#" + id);
-                List<String> members = tags.getOrDefault(id, List.of());
-                if (members.size() > RecipeGraph.MAX_ALTERNATIVES) throw new IllegalArgumentException("INGREDIENT_ALTERNATIVE_LIMIT");
-                for (String member : members) addAlternative(member, slot, alternatives, exclusions,trustedInputs);
-            } else throw unsupported("UNKNOWN_INGREDIENT_VALUE");
+    private record DetachedIngredient(SortedSet<String> selectors,SortedSet<String> items) {}
+    private static final class IngredientWork {
+        int nodes;
+        void visit(int depth) {
+            if(depth>RecipeGraph.MAX_DEPTH||++nodes>RecipeGraph.MAX_WORK)throw new IllegalArgumentException("INGREDIENT_TREE_LIMIT");
         }
-        // Empty values are a shaped hole. An empty expansion retains its selectors and is unsatisfiable.
-        return new RecipeGraph.Ingredient(List.copyOf(selectors), List.copyOf(alternatives));
+    }
+
+    private static RecipeGraph.Ingredient ingredient(Ingredient ingredient,int slot,
+            Map<String,List<String>> tags,List<String> exclusions,Set<String> trustedInputs,IngredientWork work) {
+        var detached=detach(ingredient,tags,work,0);
+        var alternatives=new TreeSet<String>();
+        for(String id:detached.items())addAlternative(id,slot,alternatives,exclusions,trustedInputs);
+        // No selectors means a true vanilla shaped hole. A custom expression that yields no
+        // items retains its adapter selector, so it remains unsatisfiable rather than free.
+        return new RecipeGraph.Ingredient(List.copyOf(detached.selectors()),List.copyOf(alternatives));
+    }
+
+    /** Read pinned immutable expression fields only; never call getItems/test/isSimple/type. */
+    private static DetachedIngredient detach(Ingredient ingredient,Map<String,List<String>> tags,
+                                             IngredientWork work,int depth) {
+        work.visit(depth);
+        var selectors=new TreeSet<String>();var alternatives=new TreeSet<String>();
+        if(ingredient.isCustom()) {
+            var custom=ingredient.getCustomIngredient();
+            if(custom.getClass()==CompoundIngredient.class) {
+                selectors.add("economy:ingredient/compound-v1");
+                var children=((CompoundIngredient)custom).children();
+                if(children.isEmpty()||children.size()>RecipeGraph.MAX_WORK)throw new IllegalArgumentException("INGREDIENT_CHILD_LIMIT");
+                for(var child:children) {
+                    var value=detach(child,tags,work,depth+1);selectors.addAll(value.selectors());alternatives.addAll(value.items());
+                    ingredientBounds(selectors,alternatives);
+                }
+            } else if(custom.getClass()==DifferenceIngredient.class) {
+                selectors.add("economy:ingredient/difference-v1");
+                var difference=(DifferenceIngredient)custom;
+                var base=detach(difference.base(),tags,work,depth+1);
+                var subtracted=detach(difference.subtracted(),tags,work,depth+1);
+                selectors.addAll(base.selectors());selectors.addAll(subtracted.selectors());
+                alternatives.addAll(base.items());alternatives.removeAll(subtracted.items());
+            } else if(custom.getClass()==IntersectionIngredient.class) {
+                selectors.add("economy:ingredient/intersection-v1");
+                var children=((IntersectionIngredient)custom).children();
+                if(children.isEmpty()||children.size()>RecipeGraph.MAX_WORK)throw new IllegalArgumentException("INGREDIENT_CHILD_LIMIT");
+                boolean first=true;
+                for(var child:children) {
+                    var value=detach(child,tags,work,depth+1);selectors.addAll(value.selectors());
+                    if(first){alternatives.addAll(value.items());first=false;}else alternatives.retainAll(value.items());
+                    ingredientBounds(selectors,alternatives);
+                }
+            } else throw unsupported("CUSTOM_INGREDIENT");
+        } else {
+            Ingredient.Value[] values=ingredient.getValues();
+            if(values.length>RecipeGraph.MAX_ALTERNATIVES)throw new IllegalArgumentException("INGREDIENT_ALTERNATIVE_LIMIT");
+            for(Ingredient.Value value:values) {
+                if(value instanceof Ingredient.ItemValue item) {
+                    ItemStack stack=item.item();
+                    if(stack.isEmpty()||stack.getCount()!=1||!stack.isComponentsPatchEmpty())throw unsupported("UNSUPPORTED_INGREDIENT_COMPONENTS");
+                    String id=itemId(stack);selectors.add(id);alternatives.add(id);
+                } else if(value instanceof Ingredient.TagValue tag) {
+                    String id=tag.tag().location().toString();selectors.add("#"+id);
+                    List<String> members=tags.getOrDefault(id,List.of());
+                    if(members.size()>RecipeGraph.MAX_ALTERNATIVES)throw new IllegalArgumentException("INGREDIENT_ALTERNATIVE_LIMIT");
+                    alternatives.addAll(members);
+                } else throw unsupported("UNKNOWN_INGREDIENT_VALUE");
+                ingredientBounds(selectors,alternatives);
+            }
+        }
+        ingredientBounds(selectors,alternatives);
+        return new DetachedIngredient(Collections.unmodifiableSortedSet(selectors),Collections.unmodifiableSortedSet(alternatives));
+    }
+    private static void ingredientBounds(Set<String> selectors,Set<String> alternatives) {
+        if(selectors.size()>RecipeGraph.MAX_ALTERNATIVES||alternatives.size()>RecipeGraph.MAX_ALTERNATIVES)
+            throw new IllegalArgumentException("INGREDIENT_ALTERNATIVE_LIMIT");
     }
 
     private static void addAlternative(String id, int slot, Set<String> alternatives, List<String> exclusions,Set<String> trustedInputs) {

@@ -165,6 +165,7 @@ public final class SqliteStorage implements FoundationStore {
             ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.validate(connection);
             ca.emilybelnavis.mcmods.economy.valuation.ValuationStore.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.pricing.TradeSources.validate(connection);
+            ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceNpcSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceInputReturns.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.cash.ReferenceCashSchema.validate(connection);
@@ -381,6 +382,7 @@ public final class SqliteStorage implements FoundationStore {
             ca.emilybelnavis.mcmods.economy.simulation.SimulationLifecycle.validate(connection);
             ca.emilybelnavis.mcmods.economy.valuation.ValuationStore.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.pricing.TradeSources.validate(connection);
+            ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceNpcSchema.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceInputReturns.validate(connection);
             ca.emilybelnavis.mcmods.economy.trade.cash.ReferenceCashSchema.validate(connection);

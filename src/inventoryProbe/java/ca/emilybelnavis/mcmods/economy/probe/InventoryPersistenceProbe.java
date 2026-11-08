@@ -33,7 +33,7 @@ public final class InventoryPersistenceProbe {
     }
 
     private void tick(ServerTickEvent.Post event) {
-        if (ran || Boolean.getBoolean("economy.valuationApiProbe") || Boolean.getBoolean("economy.variantProbe") || Boolean.getBoolean("economy.brewingProbe") || Boolean.getBoolean("economy.recipeProbe") || Boolean.getBoolean("economy.valuationProbe") || System.getProperty("economy.financeWorld") != null) return;
+        if (ran || Boolean.getBoolean("economy.referenceTraderProbe") || Boolean.getBoolean("economy.valuationApiProbe") || Boolean.getBoolean("economy.variantProbe") || Boolean.getBoolean("economy.brewingProbe") || Boolean.getBoolean("economy.recipeProbe") || Boolean.getBoolean("economy.valuationProbe") || System.getProperty("economy.financeWorld") != null) return;
         if (Boolean.getBoolean("economy.villageBankAcceptance")) {
             var services = Economy.serverServices(event.getServer());
             if (services == null || services.state() != ServerServices.State.READY) return;

@@ -11,7 +11,7 @@ public record SourceRef(WorldId world,UUID market,String item,UUID source,int re
     public SourceRef {
         Objects.requireNonNull(world);Objects.requireNonNull(market);MarketFacts.key(item);
         Objects.requireNonNull(source);Objects.requireNonNull(epoch);Objects.requireNonNull(valuationManifest);Objects.requireNonNull(activation);
-        if(revision<1||!ReferencePricing.VERSION.equals(implementation)||!ReferencePricing.ROUNDING.equals(rounding))throw new IllegalArgumentException("Reference source version");
+        if(revision<1||!Set.of(ReferencePricing.VERSION,ReferencePricing.V2).contains(implementation)||!ReferencePricing.ROUNDING.equals(rounding))throw new IllegalArgumentException("Reference source version");
         for(String hash:List.of(configHash,recipeHash,providerHash))if(!hash.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("Source input hash");
     }
 }

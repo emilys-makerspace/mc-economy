@@ -105,6 +105,7 @@ public final class Economy {
         ca.emilybelnavis.mcmods.economy.foundation.AdminConfigCommands.register(event.getDispatcher());
         ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.register(event.getDispatcher(),servers::get);
         ca.emilybelnavis.mcmods.economy.foundation.ValuationCommands.register(event.getDispatcher(),servers::get);
+        ca.emilybelnavis.mcmods.economy.foundation.ReferenceActivationCommands.register(event.getDispatcher(),servers::get);
         EconomyCommands.register(event.getDispatcher(), (source, view) -> {
             var server = source.getServer();
             var services = servers.get(server);
@@ -169,6 +170,7 @@ public final class Economy {
             ca.emilybelnavis.mcmods.economy.village.GenerationRuntime.revalidate(event.getServer());
             ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.revalidate(event.getServer());
             ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.tick(event.getServer());
+            ca.emilybelnavis.mcmods.economy.foundation.ReferenceActivationCommands.tick(event.getServer());
             services.tick();
             ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.tick(event.getServer());
             ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.tick(event.getServer());
@@ -193,6 +195,8 @@ public final class Economy {
         ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
         ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.foundation.ValuationCommands.stopping(event.getServer());
+        ca.emilybelnavis.mcmods.economy.foundation.ReferenceActivationCommands.stopping(event.getServer());
+        if(servers.get(event.getServer())!=null)ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.stop(servers.get(event.getServer()).worldId());
         ca.emilybelnavis.mcmods.economy.trade.menu.TraderController.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.banker.StaffingRuntime.stopping(event.getServer());

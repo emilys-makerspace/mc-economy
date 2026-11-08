@@ -64,14 +64,37 @@ class ReferenceCashTradesTest {
         var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());
         try{assertEquals(principal,reopened.transaction(tx->ReferenceCashTrades.receipt(tx::query,operation)).goodsPrincipal());}finally{reopened.close();}
     }
+    @Test void v2OneSidedCashQuoteCommitsAndReopensUnderItsCapturedPricingImplementation()throws Exception {
+        UUID operation;Quote captured;
+        try(var f=new Fixture(path,true,ReferencePricing.V2)){
+            var terms=f.terms(false);captured=f.trades.quote(terms);operation=terms.operation();
+            assertEquals(ReferencePricing.V2,captured.terms().source().ref().implementation());
+            assertFalse(ReferencePricing.quote(captured.pricing().request()).available(),"The historical v1 envelope refuses this exact .8 cohort");
+            assertTrue(ReferencePricing.quote(captured.pricing().request(),ReferencePricing.V2).available());
+            assertEquals(100,captured.pricing().price().unitMinor());assertEquals(100,captured.pricing().price().minor());
+            f.saved(terms);
+            var committed=f.trades.settle(ReferenceCashTrades.intent(f.world(),operation,f.actor));
+            assertEquals(Journal.Status.COMMITTED,committed.status(),committed.result().code());
+            assertEquals(100,f.total(ActivityFacts.Kind.NPC_RETIRE));
+        }
+        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());
+        try{
+            var retained=reopened.transaction(tx->ReferenceCashTrades.read(tx::query,captured.id()));
+            assertEquals(captured,retained);
+            assertEquals(ReferencePricing.V2,retained.terms().source().ref().implementation());
+            assertEquals(100,reopened.transaction(tx->ReferenceCashTrades.receipt(tx::query,operation)).goodsPrincipal());
+        }finally{reopened.close();}
+    }
     private static final class Fixture implements AutoCloseable {
         final SqliteStorage store=new SqliteStorage();final PlayerId actor=new PlayerId(UUID.randomUUID());final UUID trader=UUID.randomUUID(),lot=UUID.randomUUID(),source=UUID.randomUUID(),epoch=UUID.randomUUID();long now=Instant.parse("2026-11-07T12:00:00Z").toEpochMilli();boolean allowed=true;
         final Clock wall=new Clock(){public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId z){return this;}public Instant instant(){return Instant.ofEpochMilli(now);}};
+        final String implementation;
         final TradeCatalog.Offer offer=new TradeCatalog.Offer(0,Pricing.Side.BUY,new TradeCatalog.Goods("minecraft:bread",TradeCatalog.Match.EXACT_COMPONENTS,"{}"),1,2,List.of(),16,2);final ReferenceCashTrades trades;SourceRef active;ReferenceSource priceSource;ValuationStore.Snapshot valuationSnapshot;ValuationData.Manifest manifest;
-        Fixture(Path path)throws Exception {store.initialize(path.toRealPath());var opening=FxService.opening(wall);var registration=new JournalEngine.Registration(1,(i,r)->{var decision=opening.handler().prepare(i,r);if(!(decision instanceof JournalEngine.Commit base))return decision;return CashIssuance.composeIssuance(world(),List.of(new CashIssuance.Lot(world(),lot,"economy:usd_bill_5",2,2,CashIssuance.State.ACTIVE,1,"fixture-original-cash")),base,r);});submit(FxService.OPEN,registration,new Journal.CanonicalRequest(1,Map.of("currency","CAD")));
+        Fixture(Path path)throws Exception {this(path,false,ReferencePricing.VERSION);}
+        Fixture(Path path,boolean oneSided,String implementation)throws Exception {this.implementation=implementation;store.initialize(path.toRealPath());var opening=FxService.opening(wall);var registration=new JournalEngine.Registration(1,(i,r)->{var decision=opening.handler().prepare(i,r);if(!(decision instanceof JournalEngine.Commit base))return decision;return CashIssuance.composeIssuance(world(),List.of(new CashIssuance.Lot(world(),lot,"economy:usd_bill_5",2,2,CashIssuance.State.ACTIVE,1,"fixture-original-cash")),base,r);});submit(FxService.OPEN,registration,new Journal.CanonicalRequest(1,Map.of("currency","CAD")));
             var capital=new InstitutionCapital(store,new SystemActorId(UUID.randomUUID()),CapitalPosting.poster());for(int n=0;n<26;n++)assertEquals(Journal.Status.COMMITTED,capital.advance(wall.instant()).status());
             new DeadlineDispatcher(store,wall,List.of(),16).prepare();var activity=new ActivityRuntime(store,wall);store.commitObserver((i,r,c)->activity.observe(i,r,c,now));for(int n=0;n<100;n++)if(activity.prepare())break;assertTrue(store.<Boolean>transaction(tx->ActivityStore.ready(tx::query)));
-            var position=new MarketFacts.Position("minecraft:overworld",0,64,0);for(int n=0;n<100;n++)if(!MarketStore.resolve(store,trader,position,position,USD,true).pending())break;CatalogStore.capture(store,new TradeCatalog.Capture(trader,1,List.of(offer,new TradeCatalog.Offer(1,Pricing.Side.SELL,offer.goods(),1,1,List.of(),16,2))));StockStore.install(store,trader,1,false);
+            var position=new MarketFacts.Position("minecraft:overworld",0,64,0);for(int n=0;n<100;n++)if(!MarketStore.resolve(store,trader,position,position,USD,true).pending())break;CatalogStore.capture(store,new TradeCatalog.Capture(trader,1,oneSided?List.of(offer):List.of(offer,new TradeCatalog.Offer(1,Pricing.Side.SELL,offer.goods(),1,1,List.of(),16,2))));StockStore.install(store,trader,1,false);
             var recipes=new RecipeGraph.Graph(List.of(),Map.of(),Map.of());
             var brewing=new BrewingGraph.Graph(1,BrewingGraph.ADAPTER,BrewingGraph.RULES_HASH,true,Map.of("minecraft:water",new BrewingGraph.Potion("minecraft:water",List.of())),new ArrayList<>(BrewingGraph.FORMS),List.of(),Map.of(),ValuationData.hash("fixture:brewing"));
             var items=new TreeMap<String,VariantGraph.Item>();for(var id:ValuationData.catalog().entries().keySet())items.put(id,new VariantGraph.Item(id,0,64,0,Set.of()));
@@ -84,7 +107,7 @@ class ReferenceCashTradesTest {
         }
         void switchSource(){
             var market=store.transaction(tx->MarketStore.binding(tx::query,trader)).market();
-            var next=new SourceRef(world(),market,offer.goods().priceKey(),source,active==null?1:active.revision()+1,UUID.randomUUID(),valuationSnapshot.id(),manifest.configHash(),manifest.inputs().recipeHash(),manifest.providerHash(),ReferencePricing.VERSION,ReferencePricing.ROUNDING,active==null?UUID.randomUUID():active.activation());
+            var next=new SourceRef(world(),market,offer.goods().priceKey(),source,active==null?1:active.revision()+1,UUID.randomUUID(),valuationSnapshot.id(),manifest.configHash(),manifest.inputs().recipeHash(),manifest.providerHash(),implementation,ReferencePricing.ROUNDING,active==null?UUID.randomUUID():active.activation());
             assertEquals(Journal.Status.COMMITTED,TradeSources.transition(store,next,active,UUID.randomUUID(),new SystemActorId(UUID.randomUUID())).status());active=next;
             var fx=store.transaction(tx->FxService.at(tx::query,now));priceSource=ReferenceSource.capture(active,valuationSnapshot,"minecraft:bread","{}",USD,fx);
         }

@@ -71,6 +71,7 @@ final class OfflineInspector {
                 if(schema>=47) { ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.validate(c);
                     ca.emilybelnavis.mcmods.economy.fx.EffectiveFxSchema.validate(c); }
             }
+            if(schema>=52)ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.validate(c);
             if(schema>=51){
                 ca.emilybelnavis.mcmods.economy.trade.pricing.TradeSources.validate(c);
                 ca.emilybelnavis.mcmods.economy.trade.settlement.ReferenceNpcSchema.validate(c);

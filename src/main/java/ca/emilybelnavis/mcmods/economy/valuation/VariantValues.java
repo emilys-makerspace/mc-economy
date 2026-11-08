@@ -29,9 +29,11 @@ public final class VariantValues {
 
     public static RecipeValues.Result evaluate(ValuationData.Manifest manifest,String item,String components,long quantity,
                                                EconomyCurrency currency,EffectiveFxSnapshot fx) {
+        return evaluate(manifest,item,components,quantity,currency,fx,manifest.hash());
+    }
+    static RecipeValues.Result evaluate(ValuationData.Manifest manifest,String item,String components,long quantity,EconomyCurrency currency,EffectiveFxSnapshot fx,String hash){
         Objects.requireNonNull(manifest);Objects.requireNonNull(currency);ValuationData.itemId(item);
         if(quantity<1||quantity>1_000_000)throw new IllegalArgumentException("Quantity limit");
-        String hash=manifest.hash();
         try {
             if(manifest.variants()==null)throw invalid("VARIANT_ADAPTER_NOT_INSTALLED");
             var object=ValuationConfig.object(ValuationConfig.parseIdentity(components));

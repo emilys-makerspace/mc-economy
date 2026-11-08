@@ -218,6 +218,16 @@ public final class ServerServices {
         checkOwner();requireReady();
         if(grant==null||!allowsAccountRead(grant,partyWorld(),false))throw new SecurityException("Current owner grant required");
     }
+    public CompletionStage<ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.Review> referenceReview(
+            PartyAuthorization.Grant grant,java.util.UUID trader,ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.Lease lease,java.util.concurrent.atomic.AtomicBoolean live){
+        checkOwner();requireReady();if(grant==null||!allowsAccountRead(grant,partyWorld(),true)||lease==null||!lease.session().equals(sessionId)||!live.get())throw new SecurityException("Current operator inspection required");
+        var world=partyWorld();return tradeStorage(grant.actor(),store->{if(!live.get()||!ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.matchesServerLease(lease))throw new SecurityException("Operator session ended");return ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.review(store,world,trader,lease.snapshot());});
+    }
+    public CompletionStage<Journal.Outcome> activateReference(PartyAuthorization.Grant grant,java.util.UUID trader,java.util.UUID operation,
+            ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.Review review,ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.Lease lease,java.util.concurrent.atomic.AtomicBoolean live){
+        checkOwner();requireReady();if(grant==null||!allowsAccountRead(grant,partyWorld(),true)||lease==null||!lease.session().equals(sessionId))throw new SecurityException("Current operator inspection required");
+        var world=partyWorld();return tradeStorage(grant.actor(),store->ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.locked(lease,()->ca.emilybelnavis.mcmods.economy.trade.pricing.ReferenceTrading.activate(store,world,trader,grant.actor(),operation,review,()->live.get()&&ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.matchesServerLease(lease))));
+    }
     public WorldId worldId() { return partyWorld(); }
 
     WorldId partyWorld() {

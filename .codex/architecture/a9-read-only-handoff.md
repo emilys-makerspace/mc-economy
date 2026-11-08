@@ -1,5 +1,7 @@
 # A9 read-only handoff for A10
 
+A9-06 delivered: [reference trader activation](reference-trader-activation.md) adds explicit operator controls/V2 pricing under V52, with accepted native checkout/presentation evidence. See [handoff](../A9-06.md). Earlier package descriptions below retain their recorded historical scope.
+
 Current extension: [A9-05 source-transition foundation](trade-source-transition.md) delivers additiveV51 facts/epochs and no-carry settlement services; production activation remains separately selected A9-06 work. Prior package descriptions below retain their recorded historical scope.
 
 A9-04 delivers `ItemValuationIntegration` v1 through current `ServerServices`. See [API contracts](item-valuation-api.md), [integration example](../../docs/INTEGRATION_API.md#item-reference-reads-version1) and [evidence](../verification/A9-04.md). This document selects no A10 work.

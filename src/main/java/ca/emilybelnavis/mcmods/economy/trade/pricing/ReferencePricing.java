@@ -7,6 +7,7 @@ import static ca.emilybelnavis.mcmods.economy.simulation.model.Rational.*;
 
 /** Prospective rounded-unit pricing; legacy Pricing and its carry remain unchanged. */
 public final class ReferencePricing {
+    public static final String V2="economy:reference-unit/v2";
     public static final String VERSION="economy:reference-unit/v1",ROUNDING="economy:half-up-unit/v1";
     private static final Rational SPREAD=of("0.8"),REP=of("0.25"),SENSITIVITY=of("0.01");
     private ReferencePricing(){}
@@ -21,7 +22,9 @@ public final class ReferencePricing {
     }
     public record Outcome(boolean available,String reason,Quote quote){public Outcome{Objects.requireNonNull(reason);if(available!=(quote!=null))throw new IllegalArgumentException("Price outcome");}}
     public static TradePriceSource.Basis normalizedBasis(Pricing.Side side,TradePriceSource.Basis raw,Pricing.Comparison comparison){return Pricing.normalizedBasis(side,raw,comparison);}
-    public static Outcome quote(Request r){
+    public static Outcome quote(Request r){return quote(r,VERSION);}
+    public static Outcome quote(Request r,String implementation){
+        if(!Set.of(VERSION,V2).contains(implementation))return no("PRICING_VERSION_UNAVAILABLE");
         for(var c:r.comparisons())if(!c.equivalenceKey().equals(r.key().item()))return no("COMPARISON_UNRESOLVED");
         if(r.comparisons().stream().noneMatch(c->r.basis().minorPerStandard().equals(r.key().side()==Pricing.Side.BUY?c.neutralAsk():c.neutralBid())))return no("PRICE_BASIS_MISMATCH");
         Rational ask=r.comparisons().stream().map(Pricing.Comparison::neutralAsk).min(Rational::compareTo).orElseThrow();
@@ -34,9 +37,16 @@ public final class ReferencePricing {
         // envelope proves the complete rounded cohort for this authenticated reputation witness.
         Rational margin=ask.multiply(SPREAD).multiply(ONE.subtract(t)).subtract(bid.multiply(ONE.add(t)))
                 .multiply(of("0.5")).divide(of(r.standardQuantity()));
-        if(margin.compareTo(of("0.9"))<0)return no("ROUNDED_COHORT_SPREAD_UNAVAILABLE");
+        if(implementation.equals(VERSION)&&margin.compareTo(of("0.9"))<0)return no("ROUNDED_COHORT_SPREAD_UNAVAILABLE");
         try{
             Rational multiplier=Pricing.recover(r.demand(),r.eligibleTick());
+            if(implementation.equals(V2)){
+                Rational smallest=ONE.divide(of(r.standardQuantity()));
+                Rational minimumAsk=ask.multiply(ONE.subtract(t)).multiply(Pricing.integral(multiplier,smallest,Pricing.Side.BUY));
+                Rational maximumBid=bid.multiply(ONE.add(t)).multiply(Pricing.integral(multiplier,smallest,Pricing.Side.SELL));
+                BigInteger roundedAsk=halfUp(minimumAsk).max(BigInteger.ONE),roundedBid=halfUp(maximumBid).max(BigInteger.ONE);
+                if(of(roundedBid).compareTo(of(roundedAsk).multiply(SPREAD))>0)return no("ROUNDED_COHORT_SPREAD_UNAVAILABLE");
+            }
             Rational q=of(r.goods()).divide(of(r.standardQuantity()));
             Rational factor=r.key().side()==Pricing.Side.BUY?ONE.subtract(t):ONE.add(t);
             Rational exact=r.basis().minorPerStandard().multiply(factor).multiply(Pricing.integral(multiplier,q,r.key().side()));

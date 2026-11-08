@@ -18,7 +18,7 @@ public final class ReferenceCashFacts {
     private ReferenceCashFacts(){}
     public static final String ADAPTER="economy:a9/reference-cash-adapter",QUOTE="economy:a9/reference-cash-quote",RECEIPT="economy:a9/reference-cash-trade",RETURN="economy:a9/reference-cash-return";
     public static final String SOURCES="reference-cash-v1:goods,creation,retirement,customer-fx,operator-unmarked";
-    private static final Gson JSON=new GsonBuilder().disableHtmlEscaping().serializeNulls().registerTypeAdapter(Instant.class,new TimeCodec()).create();
+    private static final Gson JSON=new GsonBuilder().disableHtmlEscaping().serializeNulls().registerTypeAdapter(ReferenceSource.class,new ReferenceSource.Codec()).registerTypeAdapter(Instant.class,new TimeCodec()).create();
     public record Adapter(WorldId world,String sources){public Adapter{Objects.requireNonNull(world);if(!SOURCES.equals(sources))throw new IllegalArgumentException("Cash adapter manifest");}}
     public record Terms(UUID operation,PlayerId actor,UUID session,UUID trader,long catalogRevision,int offerOrdinal,int executions,
                         EconomyCurrency cashCurrency,List<Deposits.Slot> cash,UUID epoch,ReferenceSource source,Rational reputation,

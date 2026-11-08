@@ -1,5 +1,7 @@
 # A9 shared technical contracts — approved revision 1
 
+A9-06 delivered: [reference trader activation](reference-trader-activation.md) adds explicit operator controls/V2 pricing under V52, with accepted native checkout/presentation evidence. See [handoff](../A9-06.md). Earlier package descriptions below retain their recorded historical scope.
+
 Prepared 2026-11-07 under the user's instruction to start drafting after settling policy. Gameplay choices in [planning](a9-planning.md) are approved; catalog prices are approved with the latest log/meat/disc revisions; the user approved all technical/package drafts on 2026-11-07, subject to prerequisites. A9-01 is complete in source/document scope; [A9-02](item-valuation-snapshots.md) now implements base-only configuration/snapshots. [A9-03-01](item-valuation-recipes.md) now implements ordinary graph/processing; [A9-03-02](item-valuation-brewing.md) adds brewing; [A9-03-03](item-valuation-variants.md) adds supported component variants/containers; [A9-04](item-valuation-api.md) adds public API/SPI and scoped acceptance; [A9-05](trade-source-transition.md) adds the durable source-transition foundation; production trader activation remains unimplemented. [A9-01 source/interface freeze](a9-source-contracts.md) finalizes the signatures, source map and engineering details below; [evidence](../verification/A9-01.md) records its limits. Minecraft 1.21.1, NeoForge 21.1.252, Java 21 remain pinned.
 
 ## Scope and sources
