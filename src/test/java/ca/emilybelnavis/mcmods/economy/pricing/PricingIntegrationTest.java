@@ -129,17 +129,21 @@ class PricingIntegrationTest {
             assertSame(candidate,f.store.transaction(tx->PricingAdmission.check(intent(SameCurrency.PAY,new Journal.CanonicalRequest(1,Map.of())),tx::query,candidate,f.world,NOW,valuation)));
         }
     }
-    @Test void productionRegistersThirteenProvidersActivatesOnceAndRunsDailyYieldBeforeTierReevaluationAcrossRestart()throws Exception{
+    @Test void productionRegistersProvidersActivatesOnceAndRunsDailyYieldBeforeTierReevaluationAcrossRestart()throws Exception{
         var wall=new Wall();var raw=new SqliteStorage();raw.initialize(path.toRealPath());
         try{
             seedFx(raw,wall);
             raw.transaction(tx->{tx.execute("INSERT INTO account_catalog VALUES(?,?,'BANK','CAD','OPEN',1,1)",List.of(SOURCE.value().toString(),OWNER.value().toString()));tx.execute("INSERT INTO bank_account_providers VALUES(?,?,0,1,0)",List.of(SOURCE.value().toString(),BANK.key()));LedgerProjection.write(tx,SOURCE.value(),CAD,10000);return null;});
         }finally{raw.close();}
-        var configuration=FoundationRuntime.Configuration.production(wall);assertEquals(13,configuration.deadlineProviders().size());
+        var configuration=FoundationRuntime.Configuration.production(wall);
+        var expectedProviders=configuration.deadlineProviders().stream().map(provider->provider.id()).sorted().toList();
         var runtime=new FoundationRuntime(configuration);runtime.initialize(path.toRealPath());
         try{
             ready(runtime);assertEquals(1,count(runtime,"pricing_activation"));assertEquals(1,count(runtime,"deposit_yield_activation"));
-            assertEquals(13,count(runtime,"financial_deadline_providers"));
+            var registeredProviders=runtime.transaction(tx->tx.query(
+                    "SELECT provider FROM financial_deadline_providers ORDER BY provider",List.of(),64))
+                    .stream().map(row->row.get("provider")).toList();
+            assertEquals(expectedProviders,registeredProviders);
             wall.now=NOW.plusMillis(1_200_000);boolean current=false;
             for(int step=0;step<1000;step++){
                 var work=runtime.prepareEconomicStep();var progress=work.calculation()==null?work.progress():work.commit().apply(work.calculation().get());

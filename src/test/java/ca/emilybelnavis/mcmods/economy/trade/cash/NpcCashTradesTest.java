@@ -11,6 +11,7 @@ import ca.emilybelnavis.mcmods.economy.simulation.activity.*;
 import ca.emilybelnavis.mcmods.economy.simulation.model.Rational;
 import ca.emilybelnavis.mcmods.economy.storage.SqliteStorage;
 import ca.emilybelnavis.mcmods.economy.trade.catalog.*;
+import ca.emilybelnavis.mcmods.economy.trade.custody.NpcDeliveries;
 import ca.emilybelnavis.mcmods.economy.trade.market.*;
 import ca.emilybelnavis.mcmods.economy.trade.pricing.*;
 import ca.emilybelnavis.mcmods.economy.trade.stock.StockStore;
@@ -41,16 +42,58 @@ class NpcCashTradesTest {
         var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());try{var world=reopened.snapshot().worldId();assertEquals(1,reopened.transaction(tx->CashIssuance.find(tx::query,world,lot).orElseThrow()).remaining());assertEquals(goods,reopened.transaction(tx->NpcCashTrades.receipt(tx::query,original)).goodsPrincipal());}finally{reopened.close();}
     }
     @Test void capacityFailureLeavesOriginalsAndExpiredHeldInputsRequireAnOriginalProtectedReturn()throws Exception {
+        PlayerId owner;UUID returned;
         try(var f=new Fixture(path)) {
             var denied=f.terms(false);f.allowed=false;assertThrows(IllegalArgumentException.class,()->f.trades.quote(denied));assertEquals(2,f.store.transaction(tx->CashIssuance.find(tx::query,f.world(),f.lot).orElseThrow()).remaining());assertTrue(f.store.transaction(tx->tx.query("SELECT quote_id FROM npc_cash_receipts",List.of(),16)).isEmpty());
             f.allowed=true;var terms=f.terms(false);var q=f.trades.quote(terms);f.saved(terms);f.now+=31_000;
             var proof=new Custody.Evidence(Custody.EvidenceKind.UNDELIVERED,"independent-saved-HELD",NpcCashTrades.inputSource(terms),"saved-held-token");
             var claim=f.trades.returnInputs(q.id(),true,proof);assertEquals(Custody.State.CLAIM,claim.state());assertEquals(terms.inputCustody(),claim.reservationOperation());assertNotEquals(terms.operation(),claim.financialOperation());
+            owner=f.actor;returned=claim.id();
             assertEquals(Custody.State.QUARANTINED,f.store.transaction(tx->Custody.find(tx::query,f.actor,terms.inputCustody(),false).orElseThrow()).state());assertEquals(terms.exactInputItems(),claim.terms().items());
             assertEquals("ACTIVE",f.store.transaction(tx->tx.query("SELECT state FROM custody_cash_reservations WHERE custody_id=? AND lot_id=?",List.of(claim.id().toString(),f.lot.toString()),1)).getFirst().get("state"));
             assertEquals(2,f.store.transaction(tx->CashIssuance.find(tx::query,f.world(),f.lot).orElseThrow()).remaining());assertEquals(Journal.Status.DURABLY_REJECTED,f.trades.settle(NpcCashTrades.intent(f.world(),terms.operation(),f.actor)).status());assertEquals(0,f.total(ActivityFacts.Kind.GOODS_SALE));
         }
-        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());try{assertEquals(1,reopened.transaction(tx->tx.query("SELECT operation_id FROM npc_cash_returns",List.of(),16)).size());}finally{reopened.close();}
+        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());
+        try {
+            assertEquals(1,reopened.transaction(tx->tx.query("SELECT operation_id FROM npc_cash_returns",List.of(),16)).size());
+            assertTrue(Custody.reconcileBatch(reopened));
+            assertEquals(List.of(returned),reopened.transaction(tx->NpcDeliveries.page(tx::query,owner,null,1)));
+        } finally {reopened.close();}
+    }
+    @Test void restartRetainsKnownUndeliveredChangeAndQuarantinesAnUnresolvedGoodsAttempt()throws Exception {
+        PlayerId owner;UUID tender,goods,change;List<CashIssuance.Lot> outputLots;
+        try(var f=new Fixture(path)) {
+            var terms=f.terms(false);var quote=f.trades.quote(terms);f.saved(terms);
+            var outcome=f.trades.settle(NpcCashTrades.intent(f.world(),terms.operation(),f.actor));
+            assertEquals(Journal.Status.COMMITTED,outcome.status(),outcome.result().code());
+            owner=f.actor;tender=f.lot;goods=terms.outputCustody();change=terms.cashCustody();outputLots=quote.outputLots();
+            var first=f.store.transaction(tx->NpcDeliveries.page(tx::query,owner,null,1)).getFirst();
+            var second=f.store.transaction(tx->NpcDeliveries.page(tx::query,owner,first,1)).getFirst();
+            assertEquals(Set.of(goods,change),Set.of(first,second),"Consumed inputs cannot fill the claims page");
+            assertEquals(List.of(),f.store.transaction(tx->NpcDeliveries.page(tx::query,owner,second,1)));
+
+            for (var delivery : List.of(goods,change)) {
+                var action=Custody.Action.BEGIN_DELIVERY;var attempt=UUID.randomUUID();
+                var begin=new Journal.Intent(new OperationId(attempt),new RequestId(attempt),owner,action.kind(),
+                        Custody.request(delivery,attempt,Custody.Evidence.unknown(),"fixture delivery attempt"),null,null);
+                f.submit(action.kind(),Custody.registration(action,(a,i,c,r)->true,(c,e,r)->false,null,(i,c,r)->true),begin);
+                if(delivery.equals(change)) {
+                    var proof=new Custody.Evidence(Custody.EvidenceKind.UNDELIVERED,"fixture-saved-no-effect",Journal.actorKey(owner),"saved");
+                    f.submit(Custody.Action.CLAIM.kind(),Custody.registration(Custody.Action.CLAIM,(a,i,c,r)->true,(c,e,r)->e.equals(proof),null),
+                            Custody.request(change,attempt,proof,"fixture witnessed no effect"));
+                }
+            }
+        }
+        var reopened=new SqliteStorage();reopened.initialize(path.toRealPath());
+        try {
+            assertTrue(Custody.reconcileBatch(reopened));
+            assertTrue(CashIssuance.reconcileBatch(reopened));
+            var world=reopened.snapshot().worldId();
+            assertEquals(Custody.State.QUARANTINED,reopened.transaction(tx->Custody.find(tx::query,owner,goods,false).orElseThrow()).state());
+            assertEquals(List.of(change),reopened.transaction(tx->NpcDeliveries.page(tx::query,owner,null,1)));
+            assertEquals(CashIssuance.State.QUARANTINED,reopened.transaction(tx->CashIssuance.find(tx::query,world,tender).orElseThrow()).state());
+            for(var lot:outputLots)assertEquals(lot,reopened.transaction(tx->CashIssuance.find(tx::query,world,lot.id()).orElseThrow()));
+        } finally {reopened.close();}
     }
     @Test void unbankedForeignUnmarkedCashCapturesTierOneFeeAndOperatorOriginOnce()throws Exception {
         UUID original;long goods,principal,fee;

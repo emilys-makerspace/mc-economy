@@ -6,6 +6,8 @@ import ca.emilybelnavis.mcmods.economy.clock.DeadlineDispatcher;
 import ca.emilybelnavis.mcmods.economy.fx.FxService;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.simulation.activity.*;
+import ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation;
+import ca.emilybelnavis.mcmods.economy.simulation.macro.MacroProvider;
 import ca.emilybelnavis.mcmods.economy.storage.SqliteStorage;
 import java.nio.file.Path;
 import java.time.*;
@@ -31,7 +33,7 @@ class ActivityAttributionTest {
     private final AccountId source = new AccountId(UUID.randomUUID());
     private final AccountId target = new AccountId(UUID.randomUUID());
 
-    @Test void productionStartupRegistersCompleteSourceBeforeReadyWithoutInstallingRateProvider() throws Exception {
+    @Test void productionStartupRegistersCompleteSourceBeforeReadyAndLeavesRateProviderDormant() throws Exception {
         var runtime = new ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime(
                 ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration.production(wall));
         try {
@@ -42,7 +44,11 @@ class ActivityAttributionTest {
             assertTrue(runtime.<Boolean>transaction(tx -> ActivityStore.ready(tx::query)));
             assertEquals(ActivityFacts.SOURCE_MANIFEST, runtime.transaction(tx -> tx.query(
                     "SELECT sources FROM activity_activation WHERE singleton=1", List.of(), 1).getFirst().get("sources")));
-            assertEquals(13, runtime.transaction(tx -> tx.query("SELECT provider FROM financial_deadline_providers", List.of(), 64)).size());
+            assertEquals(1, runtime.transaction(tx -> tx.query(
+                    "SELECT provider FROM financial_deadline_providers WHERE provider=?", List.of(MacroProvider.PROVIDER), 1)).size());
+            assertTrue(runtime.transaction(tx -> MacroActivation.read(tx::query, runtime.snapshot().worldId())).isEmpty());
+            assertTrue(runtime.transaction(tx -> tx.query(
+                    "SELECT event_id FROM financial_deadline_events WHERE provider=?", List.of(MacroProvider.PROVIDER), 1)).isEmpty());
             assertEquals(0, runtime.transaction(tx -> tx.query("SELECT id FROM activity_observations", List.of(), 16)).size());
         } finally { runtime.close(); }
     }

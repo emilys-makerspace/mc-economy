@@ -37,8 +37,13 @@ class CreditEventsTest {
             var third=store.transaction(tx->CreditEvents.read(tx::query,renewed,16));assertEquals(1,third.events().size());assertTrue(third.events().getFirst().envelope().sequence()>envelope.sequence());
             assertThrows(IllegalArgumentException.class,()->store.transaction(tx->CreditEvents.read(tx::query,new CreditEvents.Cursor(new WorldId(UUID.randomUUID()),0,-1,cursor.frontier()),1)));
             assertThrows(IllegalArgumentException.class,()->store.transaction(tx->CreditEvents.read(tx::query,cursor,17)));
-            try(var c=DriverManager.getConnection("jdbc:sqlite:file:"+path.resolve("economy/economy.sqlite")+"?mode=ro");var q=c.createStatement();var r=q.executeQuery("EXPLAIN QUERY PLAN SELECT sequence,position FROM journal_records WHERE record_type IN('economy:a6/credit-facility','economy:a6/credit-statement','economy:a6/credit-daily-witness','economy:a6/credit-payment-allocation') AND sequence<=10 AND (sequence>0 OR (sequence=0 AND position>-1)) ORDER BY sequence,position LIMIT 17")){
-                var plan=new StringBuilder();while(r.next())plan.append(r.getString("detail"));assertTrue(plan.toString().contains("credit_event_feed"),plan.toString());
+            try(var c=DriverManager.getConnection("jdbc:sqlite:file:"+path.resolve("economy/economy.sqlite")+"?mode=ro");
+                var q=c.prepareStatement("EXPLAIN QUERY PLAN "+CreditEvents.QUERY)){
+                q.setLong(1,cursor.frontier());q.setLong(2,0);q.setInt(3,-1);q.setInt(4,17);
+                var plan=new StringBuilder();
+                try(var r=q.executeQuery()){while(r.next())plan.append(r.getString("detail")).append('\n');}
+                assertTrue(plan.toString().contains("credit_event_feed"),plan.toString());
+                assertFalse(plan.toString().contains("TEMP B-TREE"),plan.toString());
             }
         }finally{store.close();}
     }

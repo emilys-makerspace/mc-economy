@@ -18,7 +18,7 @@ public final class LedgerHistory {
     public static final int MAX_PAGE_SIZE = 63;
     static final String QUERY = """
             SELECT r.sequence,r.position,r.payload,t.transaction_id,(
-                SELECT d.payload FROM journal_records d
+                SELECT d.payload FROM journal_records d INDEXED BY ledger_rebase_latest
                 WHERE d.record_type='economy:rebase' AND d.record_version=1 AND d.sequence<=r.sequence
                 ORDER BY d.sequence DESC LIMIT 1
             ) AS denomination

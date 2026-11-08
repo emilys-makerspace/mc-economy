@@ -143,14 +143,8 @@ public final class TraderInventory {
     public static String stageInputReturn(ServerPlayer player,Custody.Case input,Custody.Case returned,
                                            Snapshot snapshot,Proof savedHeld) {
         thread(player);owner(player,snapshot.owner());Objects.requireNonNull(savedHeld);
-        if(input.state()!=Custody.State.QUARANTINED||input.financialOperation()!=null
-                ||!input.terms().owner().equals(snapshot.owner())||!input.terms().items().equals(snapshot.encode())
-                ||!input.terms().financialIntent().startsWith(snapshot.original()+"\n")
-                ||returned.state()!=Custody.State.CLAIM||!returned.reservationOperation().equals(input.id())
-                ||returned.financialOperation()==null||returned.financialOperation().equals(snapshot.original())
-                ||!returned.terms().owner().equals(snapshot.owner())||!returned.terms().items().equals(snapshot.encode())
-                ||!returned.terms().source().equals(input.terms().source())||!returned.terms().destination().equals(input.terms().source())
-                ||!savedHeld.custody.equals(input.id())||!savedHeld.world.equals(snapshot.world())||!savedHeld.phase.equals("HELD")
+        requireReturnLink(input,returned,snapshot);
+        if(!savedHeld.custody.equals(input.id())||!savedHeld.world.equals(snapshot.world())||!savedHeld.phase.equals("HELD")
                 ||(savedHeld.evidence.kind()!=Custody.EvidenceKind.RESERVATION_SAVED&&savedHeld.evidence.kind()!=Custody.EvidenceKind.UNDELIVERED)
                 ||!same(savedHeld.marker,input,snapshot.world()))
             throw new IllegalArgumentException("Saved known-undelivered original return required");
@@ -159,6 +153,57 @@ public final class TraderInventory {
         if(!marker.equals(savedHeld.marker)||!marker.getString("snapshot").equals(snapshot.encode()))throw new IllegalArgumentException("Held original return changed");
         marker.putString("phase","RETURN_CLAIM");marker.putUUID("return",returned.id());originals.put(input.id().toString(),marker);player.getPersistentData().put(INPUTS,originals);
         return "RETURN_STAGED_REQUIRES_DELIVERY_SAVE";
+    }
+
+    private static void requireReturnLink(Custody.Case input,Custody.Case returned,Snapshot snapshot) {
+        if(input.state()!=Custody.State.QUARANTINED||input.financialOperation()!=null
+                ||!input.terms().owner().equals(snapshot.owner())||!input.terms().items().equals(snapshot.encode())
+                ||!input.terms().financialIntent().startsWith(snapshot.original()+"\n")
+                ||returned.state()!=Custody.State.CLAIM||!returned.reservationOperation().equals(input.id())
+                ||returned.financialOperation()==null||returned.financialOperation().equals(snapshot.original())
+                ||!returned.terms().owner().equals(snapshot.owner())||!returned.terms().items().equals(snapshot.encode())
+                ||!returned.terms().source().equals(input.terms().source())||!returned.terms().destination().equals(input.terms().source()))
+            throw new IllegalArgumentException("Exact original return link required");
+    }
+
+    /** Recover a saved return or no-effect claim before starting a new delivery attempt. */
+    public static void prepareDelivery(ServerPlayer player,Custody.Case current,Custody.Case originalInput,WorldId world) {
+        thread(player);owner(player,current.terms().owner());
+        if(current.state()!=Custody.State.COMMITTED&&current.state()!=Custody.State.CLAIM)return;
+
+        var outputs=player.getPersistentData().getCompound(OUTPUTS);
+        String key=current.id().toString();
+        if(outputs.contains(key)) {
+            var marker=outputs.getCompound(key);
+            // CLAIM was written after independently verifying this exact attempt had no effect.
+            if(current.state()!=Custody.State.CLAIM||current.deliveryAttempt()==null||!marker.hasUUID("attempt")
+                    ||!same(marker,current,world)||!marker.getString("phase").equals("UNDELIVERED")
+                    ||!savedUndelivered(current,world,current.id()))
+                throw new IllegalArgumentException("Existing NPC delivery attempt requires reconciliation");
+            outputs.remove(key);
+            player.getPersistentData().put(OUTPUTS,outputs);
+        }
+        if(outputs.size()>=16)throw new IllegalArgumentException("NPC output receipt limit");
+
+        if(current.state()==Custody.State.CLAIM&&current.terms().items().startsWith("{")) {
+            var snapshot=decode(current.terms().items());
+            var marker=player.getPersistentData().getCompound(INPUTS).getCompound(current.reservationOperation().toString());
+            if(marker.getString("phase").equals("RETURN_CLAIM"))return;
+            // A close or restart can interrupt staging after the return claim commits.
+            if(originalInput==null||!snapshot.world().equals(world)||current.deliveryAttempt()!=null
+                    ||!savedUndelivered(current,world,originalInput.id()))
+                throw new IllegalArgumentException("Saved known-undelivered original return required");
+            requireReturnLink(originalInput,current,snapshot);
+            if(!held(player,originalInput,snapshot))throw new IllegalArgumentException("Exact held originals required");
+            stageInputReturn(player,originalInput,current,snapshot,heldReturnProof(player,originalInput,world));
+        }
+    }
+
+    private static boolean savedUndelivered(Custody.Case claim,WorldId world,UUID savedCase) {
+        var evidence=claim.evidence();
+        return evidence.kind()==Custody.EvidenceKind.UNDELIVERED
+                &&evidence.location().equals(claim.terms().destination())
+                &&evidence.saveToken().startsWith("bank-v1:"+world.value()+":"+savedCase+":");
     }
 
     /** Opaque capability minted only by a genuinely new authoritative delivery transition. */
@@ -362,6 +407,8 @@ public final class TraderInventory {
         owner(player,snapshot.owner());
         var marker=player.getPersistentData().getCompound(INPUTS).getCompound(returned.reservationOperation().toString());
         if(!marker.getString("phase").equals("RETURN_CLAIM")||!marker.hasUUID("return")||!marker.getUUID("return").equals(returned.id())
+                ||!marker.hasUUID("custody")||!marker.getUUID("custody").equals(returned.reservationOperation())
+                ||!marker.getString("items").equals(returned.terms().items())
                 ||!marker.getString("snapshot").equals(snapshot.encode())||!marker.hasUUID("world")||!marker.getUUID("world").equals(snapshot.world().value())
                 ||!marker.getString("financial").startsWith(snapshot.original()+"\n")||!returned.terms().owner().equals(snapshot.owner()))
             throw new IllegalArgumentException("Exact held original return link");

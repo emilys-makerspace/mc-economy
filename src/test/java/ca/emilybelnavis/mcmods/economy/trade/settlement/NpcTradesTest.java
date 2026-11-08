@@ -17,6 +17,7 @@ import ca.emilybelnavis.mcmods.economy.simulation.activity.*;
 import ca.emilybelnavis.mcmods.economy.simulation.model.Rational;
 import ca.emilybelnavis.mcmods.economy.storage.*;
 import ca.emilybelnavis.mcmods.economy.trade.catalog.*;
+import ca.emilybelnavis.mcmods.economy.trade.custody.NpcDeliveries;
 import ca.emilybelnavis.mcmods.economy.trade.market.*;
 import ca.emilybelnavis.mcmods.economy.trade.pricing.*;
 import ca.emilybelnavis.mcmods.economy.trade.stock.*;
@@ -33,9 +34,10 @@ import static ca.emilybelnavis.mcmods.economy.trade.settlement.NpcFacts.*;
 class NpcTradesTest {
     @TempDir Path path;
     @Test void sameCurrencyIssueRetireBridgeAndOriginalReplayRemainAtomicAcrossRestart()throws Exception {
-        UUID original;Journal.Outcome receipt;long expected;
+        UUID original, output;PlayerId owner;Journal.Outcome receipt;long expected;
         try(var f=new Fixture(path)) {
             var buy=f.quote(0,f.cad);long before=f.balance(f.cad);original=buy.terms().operation();
+            output=buy.terms().outputCustody();owner=f.actor;
             receipt=f.trades.settle(NpcTrades.intent(f.world(),original,f.actor));assertEquals(Journal.Status.COMMITTED,receipt.status(),receipt.result().code());
             expected=before-buy.price().minor();assertEquals(expected,f.balance(f.cad));assertEquals(0,f.bridge(CAD));
             assertEquals(buy.price().minor(),f.total(ActivityFacts.Kind.NPC_RETIRE));assertEquals(buy.price().minor(),f.total(ActivityFacts.Kind.GOODS_SALE));
@@ -43,6 +45,7 @@ class NpcTradesTest {
             assertEquals(receipt,f.trades.settle(NpcTrades.intent(f.world(),original,f.actor)),"Original outcome precedes expiry/admission callbacks");
             f.allowed=true;
             var sell=f.quote(1,f.cad);var payout=f.trades.settle(NpcTrades.intent(f.world(),sell.terms().operation(),f.actor));assertEquals(Journal.Status.COMMITTED,payout.status(),payout.result().code());
+            assertEquals(List.of(output),f.store.transaction(tx->NpcDeliveries.page(tx::query,owner,null,1)));
             expected+=sell.price().minor();assertEquals(expected,f.balance(f.cad));assertEquals(0,f.bridge(CAD));assertEquals(sell.price().minor(),f.total(ActivityFacts.Kind.NPC_CREATE));
             assertEquals(2,f.store.transaction(tx->tx.query("SELECT operation_id FROM npc_trade_receipts",List.of(),16)).size());
             LedgerProjection.rebuild(f.store);
@@ -53,7 +56,13 @@ class NpcTradesTest {
             }
         }
         var store=new SqliteStorage();store.initialize(path.toRealPath());
-        try {assertEquals(expected,store.transaction(tx->Settlement.posted(tx::query,UUID.nameUUIDFromBytes("npc-test-cad".getBytes(java.nio.charset.StandardCharsets.UTF_8)),CAD)).longValue());assertEquals(original,store.transaction(tx->NpcTrades.receipt(tx::query,original)).operation());}
+        try {
+            assertEquals(expected,store.transaction(tx->Settlement.posted(tx::query,UUID.nameUUIDFromBytes("npc-test-cad".getBytes(java.nio.charset.StandardCharsets.UTF_8)),CAD)).longValue());
+            assertEquals(original,store.transaction(tx->NpcTrades.receipt(tx::query,original)).operation());
+            assertTrue(Custody.reconcileBatch(store));
+            assertEquals(Custody.State.COMMITTED,store.transaction(tx->Custody.find(tx::query,owner,output,false).orElseThrow()).state());
+            assertEquals(List.of(output),store.transaction(tx->NpcDeliveries.page(tx::query,owner,null,1)));
+        }
         finally{store.close();}
     }
     @Test void foreignFeePrincipalAndStaleClockRejectionDoNotLeakMoneyOrObservations()throws Exception {

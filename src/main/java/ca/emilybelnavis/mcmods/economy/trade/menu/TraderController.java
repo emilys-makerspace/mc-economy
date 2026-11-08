@@ -13,8 +13,10 @@ import ca.emilybelnavis.mcmods.economy.pricing.ServicePricing;
 import ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig;
 import ca.emilybelnavis.mcmods.economy.simulation.model.Rational;
 import ca.emilybelnavis.mcmods.economy.storage.FoundationStore;
+import ca.emilybelnavis.mcmods.economy.storage.StorageException;
 import ca.emilybelnavis.mcmods.economy.trade.cash.*;
 import ca.emilybelnavis.mcmods.economy.trade.catalog.*;
+import ca.emilybelnavis.mcmods.economy.trade.custody.NpcDeliveries;
 import ca.emilybelnavis.mcmods.economy.trade.custody.TraderInventory;
 import ca.emilybelnavis.mcmods.economy.trade.entity.*;
 import ca.emilybelnavis.mcmods.economy.trade.market.*;
@@ -40,7 +42,9 @@ public final class TraderController {
     private TraderController() {}
     private static final Map<TraderMenu,Flow> FLOWS=new WeakHashMap<>();
     private static final Map<FoundationStore,Books> BOOKS=new WeakHashMap<>(); // confined to storage worker
+    private static final Map<ServerServices,Deque<Flow>> CLOSE_RETRIES=new IdentityHashMap<>();
     private record Books(NpcAccountFx account,NpcCashFx cash) {}
+    private record Delivery(Custody.Case current,Custody.Case originalInput) {}
     private record View(TradeCatalog.Capture catalog,StockFacts.Trader stock,MarketFacts.Binding binding,
                         MarketFacts.Market market,List<AccountIdentity> accounts,TradePriceSource.EmeraldV1 source,
                         List<TradeCatalog.Offer> cohort,String cohortHash) {}
@@ -53,17 +57,18 @@ public final class TraderController {
     /** Mutable authorization is only revoked on the server thread; workers read its atomic flag. */
     private static final class Permit {
         final AtomicBoolean live=new AtomicBoolean(true);
-        volatile String inventory; final String reputation,cohort; final UUID session,trader; final int ordinal,quantity;
+        List<ItemStack> inventory; final String reputation,cohort; final UUID session,trader; final int ordinal,quantity;
         volatile boolean capacity;
-        Permit(String inventory,String reputation,String cohort,UUID session,UUID trader,int ordinal,int quantity){this.inventory=inventory;this.reputation=reputation;this.cohort=cohort;this.session=session;this.trader=trader;this.ordinal=ordinal;this.quantity=quantity;}
+        Permit(List<ItemStack> inventory,String reputation,String cohort,UUID session,UUID trader,int ordinal,int quantity){this.inventory=inventory;this.reputation=reputation;this.cohort=cohort;this.session=session;this.trader=trader;this.ordinal=ordinal;this.quantity=quantity;}
     }
     private static final class Pending {
-        final UUID operation,input,output,cashOutput; final AtomicBoolean untouched=new AtomicBoolean(true); final TraderInventory.Snapshot snapshot; final Permit permit;
+        final UUID operation,input,output,cashOutput; final AtomicBoolean reserveStarted=new AtomicBoolean(); final TraderInventory.Snapshot snapshot; final Permit permit;
         final TradeCatalog.Offer offer; final String rail; final List<Pricing.Comparison> comparisons;
-        NpcFacts.Quote accountQuote; NpcCashFacts.Quote cashQuote; Custody.Case inputCase;
+        volatile NpcFacts.Quote accountQuote; volatile NpcCashFacts.Quote cashQuote; Custody.Case inputCase;
         List<ItemStack> outputs=List.of(); boolean held,committed;
         Pending(UUID operation,TraderInventory.Snapshot snapshot,Permit permit,TradeCatalog.Offer offer,String rail,List<Pricing.Comparison> comparisons){this.operation=operation;this.snapshot=snapshot;this.permit=permit;this.offer=offer;this.rail=rail;this.comparisons=comparisons;input=snapshot==null?null:stable(operation,"input");output=offer.side()==Pricing.Side.BUY?stable(operation,"goods"):null;cashOutput=rail.equals("cash")?stable(operation,"cash"):null;}
         long expires(){return accountQuote!=null?accountQuote.expiresMillis():cashQuote!=null?cashQuote.expiresMillis():0;}
+        UUID quoteId(){return accountQuote!=null?accountQuote.id():cashQuote!=null?cashQuote.id():null;}
     }
     public static void open(ServerPlayer player,AbstractVillager entity) {
         if(!player.server.isSameThread())throw new IllegalStateException("Server thread required");
@@ -74,22 +79,60 @@ public final class TraderController {
         if(!(player.containerMenu instanceof TraderMenu menu))return;
         var flow=new Flow(services,new PlayerId(player.getUUID()),session);FLOWS.put(menu,flow);reload(player,menu,flow);
     }
-    public static void closed(ServerPlayer player,TraderMenu menu){var flow=FLOWS.remove(menu);if(flow!=null){flow.live.set(false);if(flow.pending!=null)flow.pending.permit.live.set(false);abandonClosed(player,flow);}}
-    private static void abandonClosed(ServerPlayer player,Flow flow){
-        var pending=flow.pending;if(pending==null||pending.held||pending.committed||!pending.untouched.get()||!inventory(player).equals(pending.permit.inventory))return;
-        UUID quote=pending.accountQuote!=null?pending.accountQuote.id():pending.cashQuote!=null?pending.cashQuote.id():null;if(quote==null)return;
-        var actor=flow.actor;boolean cash=pending.cashQuote!=null;
-        // Closing destroys the only physical-reserve capability; these originals were never removed.
-        flow.services.tradeStorage(store->{NpcInputReturns.abandon(store,actor,quote,cash,pending.untouched::get);return true;});
+    public static void closed(ServerPlayer player,TraderMenu menu){
+        var flow=FLOWS.remove(menu);
+        if(flow!=null)closeFlow(flow);
     }
-    public static void stopping(MinecraftServer server){for(var entry:new ArrayList<>(FLOWS.entrySet())){var flow=entry.getValue();flow.live.set(false);if(flow.pending!=null)flow.pending.permit.live.set(false);}FLOWS.clear();}
+    private static void closeFlow(Flow flow){
+        flow.live.set(false);
+        var pending=flow.pending;
+        if(pending==null)return;
+        pending.permit.live.set(false);
+        if(pending.input!=null&&!pending.reserveStarted.get()&&pending.quoteId()!=null)abandonClosedQuote(flow);
+    }
+    private static void abandonClosedQuote(Flow flow){
+        if(flow.services.state()!=ServerServices.State.READY)return;
+        var pending=flow.pending;var actor=flow.actor;
+        flow.services.tradeStorage(store->{abandonUntouched(store,actor,pending);return true;}).whenComplete((ignored,error)->{
+            if(error instanceof StorageException storage&&storage.kind()==StorageException.Kind.OVERLOAD)
+                CLOSE_RETRIES.computeIfAbsent(flow.services,key->new ArrayDeque<>()).addLast(flow);
+        });
+    }
+    private static void abandonUntouched(FoundationStore store,PlayerId actor,Pending pending){
+        UUID quote=pending.quoteId();
+        if(quote!=null&&!pending.reserveStarted.get())
+            NpcInputReturns.abandon(store,actor,quote,pending.cashQuote!=null,()->!pending.reserveStarted.get());
+    }
+    public static void stopping(MinecraftServer server){
+        var services=Economy.serverServices(server);
+        FLOWS.values().removeIf(flow->{
+            if(flow.services!=services)return false;
+            closeFlow(flow);
+            return true;
+        });
+        CLOSE_RETRIES.remove(services);
+    }
     public static void tick(MinecraftServer server) {
+        var services=Economy.serverServices(server);
+        var retries=CLOSE_RETRIES.get(services);
+        if(retries!=null&&!retries.isEmpty()){
+            var flow=retries.removeFirst();
+            if(retries.isEmpty())CLOSE_RETRIES.remove(services);
+            abandonClosedQuote(flow);
+        }
         for(var entry:new ArrayList<>(FLOWS.entrySet())) {
             var menu=entry.getKey();var flow=entry.getValue();var player=server.getPlayerList().getPlayer(flow.actor.value());
-            if(player==null||!live(player,menu,flow)){flow.live.set(false);if(flow.pending!=null)flow.pending.permit.live.set(false);continue;}
+            if(flow.services!=services)continue;
+            if(player==null||!live(player,menu,flow)){FLOWS.remove(menu);closeFlow(flow);continue;}
             var pending=flow.pending;if(pending==null||pending.committed)continue;
-            if(!pending.held&&!inventory(player).equals(pending.permit.inventory))pending.untouched.set(false);
-            if(!witness(player,menu,pending.permit)){pending.permit.live.set(false);if(!flow.busy){flow.status="Trader or inventory changed; request a new quote";render(menu,flow);}}
+            if(!flow.busy&&!pending.reserveStarted.get()&&pending.expires()>0&&pending.expires()<=System.currentTimeMillis()){
+                cancel(player,menu,flow);
+                continue;
+            }
+            if(pending.permit.live.get()&&!witness(player,menu,pending.permit)){
+                pending.permit.live.set(false);
+                if(!flow.busy){flow.status="Trader or inventory changed; cancel the quote to continue";render(menu,flow);}
+            }
         }
     }
     public static void action(ServerPlayer player,TraderMenu menu,String action,String value) {
@@ -108,15 +151,15 @@ public final class TraderController {
                 case "confirm"->confirm(player,menu,flow);
                 case "cancel"->cancel(player,menu,flow);
                 case "claim"->claims(player,menu,flow,value);
-                case "next"->{flow.page++;render(menu,flow);}
-                case "back"->{flow.page=Math.max(0,flow.page-1);render(menu,flow);}
-                case "browse"->{flow.section="browse";reload(player,menu,flow);}
+                case "next"->{if(menu.page().equals("claims"))claimPage(player,menu,flow,value);else{flow.page++;render(menu,flow);}}
+                case "back"->{if(menu.page().equals("claims"))claimPage(player,menu,flow,"");else{flow.page=Math.max(0,flow.page-1);render(menu,flow);}}
+                case "browse"->{flow.section="browse";if(menu.page().equals("claims"))render(menu,flow);else reload(player,menu,flow);}
                 default->{}
             }
         }catch(RuntimeException failure){flow.status=message(failure);flow.busy=false;render(menu,flow);}
     }
     private static void reset(Flow flow){if(flow.pending!=null){if(flow.pending.held||flow.pending.committed||flow.pending.cashQuote!=null)throw new IllegalStateException("Finish the original delivery or claim first");flow.pending.permit.live.set(false);}flow.pending=null;}
-    private static boolean live(ServerPlayer player,TraderMenu menu,Flow flow){return flow.live.get()&&FLOWS.get(menu)==flow&&menu.session().equals(flow.session)&&Economy.serverServices(player.server)==flow.services&&TradeRuntime.enabled(player.server)&&menu.valid(player);}
+    private static boolean live(ServerPlayer player,TraderMenu menu,Flow flow){return flow.live.get()&&FLOWS.get(menu)==flow&&menu.session().equals(flow.session)&&Economy.serverServices(player.server)==flow.services&&flow.services.state()==ServerServices.State.READY&&TradeRuntime.enabled(player.server)&&menu.valid(player);}
     private static void reload(ServerPlayer player,TraderMenu menu,Flow flow) {
         if(flow.pending!=null&&(flow.pending.held||flow.pending.committed)){render(menu,flow);return;}
         reset(flow);flow.busy=true;render(menu,flow);var trader=menu.traderId();var actor=flow.actor;var world=flow.services.worldId();var config=flow.services.simulationConfig();
@@ -150,17 +193,21 @@ public final class TraderController {
         if(snapshot!=null&&!TraderInventory.matchesRequirements(player,snapshot,NpcTrades.inputItems(offer,flow.quantity)))throw new IllegalArgumentException("Exact goods inputs unavailable");
         var equivalents=flow.view.cohort().stream().filter(o->TradeCatalog.equivalent(offer,o)).toList();
         var comparisons=CatalogPricing.compare(offer,equivalents,true,flow.view.source()).comparisons();
-        String reputation=reputation(menu.entity(player),player);var permit=new Permit(inventory(player),reputation,flow.view.cohortHash(),flow.session,menu.traderId(),flow.offer,flow.quantity);
+        String reputation=reputation(menu.entity(player),player);var permit=new Permit(copyInventory(player),reputation,flow.view.cohortHash(),flow.session,menu.traderId(),flow.offer,flow.quantity);
         var pending=new Pending(original,snapshot,permit,offer,flow.rail,comparisons);flow.pending=pending;
         var actor=flow.actor;var world=flow.services.worldId();var source=flow.view.source();var revision=flow.view.catalog().revision();var account=flow.account;var cashCurrency=flow.cash;var slots=snapshot==null?List.<Deposits.Slot>of():TraderInventory.cashSlots(player,snapshot);var pricing=flow.services.servicePricing();var frozenConfig=flow.services.simulationConfig();var reputationValue=reputationValue(menu.entity(player),player,flow.offer);
         var accountTerms=flow.rail.equals("account")?new NpcFacts.Terms(original,actor,flow.session,menu.traderId(),revision,flow.offer,flow.quantity,account,source.source(),source,reputationValue,1,reputation,comparisons,pending.input,snapshot==null?"":snapshot.encode(),pending.output,original.toString(),1):null;
         var cashTerms=flow.rail.equals("cash")?new NpcCashFacts.Terms(original,actor,flow.session,menu.traderId(),revision,flow.offer,flow.quantity,cashCurrency,slots,source.source(),source,reputationValue,1,reputation,comparisons,pending.input,snapshot.encode(),pending.output,pending.cashOutput,original.toString(),1):null;
         async(player,menu,flow,flow.services.tradeMonetaryStorage(actor,store->{
             var books=books(store,pricing);if(pending.input!=null){String financial=accountTerms!=null?NpcTrades.financialIntent(world,original,actor):NpcCashTrades.financialIntent(world,original,actor);String inputSource=accountTerms!=null?NpcTrades.inputSource(accountTerms):NpcCashTrades.inputSource(cashTerms);String destination=accountTerms!=null?NpcTrades.inputDestination(accountTerms):NpcCashTrades.inputDestination(cashTerms);reserve(store,actor,pending.input,new Custody.Terms(actor,snapshot.encode(),inputSource,destination,financial),permit);}
-            if(accountTerms!=null)return (Object)new NpcTrades(store,books.account(),Clock.systemUTC(),(phase,t,q,r)->admit(permit,phase==NpcTrades.Phase.SETTLE,r,world,actor,t.trader(),frozenConfig,t.comparisons(),offer)).quote(accountTerms);
-            return (Object)new NpcCashTrades(store,books.cash(),Clock.systemUTC(),(phase,t,q,r)->admit(permit,phase==NpcCashTrades.Phase.SETTLE,r,world,actor,t.trader(),frozenConfig,t.comparisons(),offer)).quote(cashTerms);
-        }),result->{
-            if(result instanceof NpcFacts.Quote q)pending.accountQuote=q;else pending.cashQuote=(NpcCashFacts.Quote)result;
+            if(accountTerms!=null)
+                pending.accountQuote=new NpcTrades(store,books.account(),Clock.systemUTC(),(phase,t,q,r)->admit(permit,phase==NpcTrades.Phase.SETTLE,r,world,actor,t.trader(),frozenConfig,t.comparisons(),offer)).quote(accountTerms);
+            else
+                pending.cashQuote=new NpcCashTrades(store,books.cash(),Clock.systemUTC(),(phase,t,q,r)->admit(permit,phase==NpcCashTrades.Phase.SETTLE,r,world,actor,t.trader(),frozenConfig,t.comparisons(),offer)).quote(cashTerms);
+            // A close racing with booking can happen before the server thread sees the quote.
+            if(!flow.live.get()&&pending.input!=null)abandonUntouched(store,actor,pending);
+            return true;
+        }),ignored->{
             var output=new ArrayList<>(TraderItems.goods(player,offer,flow.quantity));if(pending.cashQuote!=null)for(var lot:pending.cashQuote.outputLots())output.addAll(cashStacks(lot));pending.outputs=List.copyOf(output);
             if(!TraderInventory.fitsCombined(player,snapshot,pending.outputs))throw new IllegalArgumentException("Combined goods and cash/change do not fit; inputs untouched");
             pending.permit.capacity=true;flow.busy=false;flow.status="Review the exact quote, then Confirm";render(menu,flow);
@@ -172,7 +219,16 @@ public final class TraderController {
         try{var current=view(reads,world,actor,trader,config);if(!current.cohortHash().equals(permit.cohort))return false;var cohort=current.cohort().stream().filter(o->TradeCatalog.equivalent(offer,o)).toList();return CatalogPricing.compare(offer,cohort,true,current.source()).comparisons().equals(comparisons);}catch(RuntimeException unavailable){return false;}
     }
     private static List<ItemStack> cashStacks(CashIssuance.Lot lot){var item=BuiltInRegistries.ITEM.get(ResourceLocation.parse(lot.item()));int left=lot.issued();var result=new ArrayList<ItemStack>();while(left>0){int n=Math.min(left,64);result.add(CashStackIdentity.marked(new ItemStack(item,n),lot.world(),lot.id()));left-=n;}return result;}
-    private static String inventory(ServerPlayer player){var entries=new ArrayList<String>();for(int i=0;i<36;i++)entries.add(player.getInventory().getItem(i).isEmpty()?"empty":BankingInventory.encode(player,player.getInventory().getItem(i)));return TradeCatalog.digest(String.join("|",entries));}
+    private static List<ItemStack> copyInventory(ServerPlayer player){
+        var stacks=new ArrayList<ItemStack>(36);
+        for(int slot=0;slot<36;slot++)stacks.add(player.getInventory().getItem(slot).copy());
+        return stacks;
+    }
+    private static boolean inventoryMatches(ServerPlayer player,List<ItemStack> expected){
+        for(int slot=0;slot<expected.size();slot++)
+            if(!ItemStack.matches(expected.get(slot),player.getInventory().getItem(slot)))return false;
+        return true;
+    }
     private static Rational reputationValue(AbstractVillager entity,ServerPlayer player){
         Rational value=entity instanceof net.minecraft.world.entity.npc.Villager villager?Rational.of(villager.getPlayerReputation(player)).divide(Rational.of(100)):Rational.ZERO;
         var hero=player.getEffect(net.minecraft.world.effect.MobEffects.HERO_OF_THE_VILLAGE);if(entity instanceof net.minecraft.world.entity.npc.Villager&&hero!=null)value=value.add(Rational.of(hero.getAmplifier()+1).divide(Rational.of(20)));
@@ -184,17 +240,16 @@ public final class TraderController {
         return reputationValue(entity,player).subtract(Rational.of(offer.getSpecialPriceDiff()).divide(Rational.of(original))).max(Rational.of("-0.25")).min(Rational.of("0.25"));
     }
     private static String reputation(AbstractVillager entity,ServerPlayer player){return TradeCatalog.digest(entity.getUUID()+"|"+player.getUUID()+"|"+reputationValue(entity,player)+"|"+entity.saveWithoutId(new net.minecraft.nbt.CompoundTag()).get("Gossips")+"|"+entity.getOffers().stream().map(o->o.getSpecialPriceDiff()+":"+o.getPriceMultiplier()).toList());}
-    private static boolean witness(ServerPlayer player,TraderMenu menu,Permit permit){return menu.valid(player)&&menu.session().equals(permit.session)&&NativeCatalog.matches(menu.entity(player),FLOWS.get(menu).view.catalog().offers().get(permit.ordinal))&&inventory(player).equals(permit.inventory)&&reputation(menu.entity(player),player).equals(permit.reputation);}
+    private static boolean witness(ServerPlayer player,TraderMenu menu,Permit permit){return menu.valid(player)&&menu.session().equals(permit.session)&&NativeCatalog.matches(menu.entity(player),FLOWS.get(menu).view.catalog().offers().get(permit.ordinal))&&inventoryMatches(player,permit.inventory)&&reputation(menu.entity(player),player).equals(permit.reputation);}
     private static void cancel(ServerPlayer player,TraderMenu menu,Flow flow) {
         var pending=flow.pending;if(pending==null){render(menu,flow);return;}if(pending.committed)throw new IllegalStateException("Committed trade outputs remain under Claims");
-        UUID quote=pending.accountQuote!=null?pending.accountQuote.id():pending.cashQuote!=null?pending.cashQuote.id():null;
+        UUID quote=pending.quoteId();
         if(quote==null){reset(flow);render(menu,flow);return;}
         var actor=flow.actor;boolean cash=pending.cashQuote!=null;flow.busy=true;flow.status="Closing the original quote…";render(menu,flow);
         if(!pending.held){
-            // Atomic witness remains revocable by tick until the original is permanently rejected.
-            if(!inventory(player).equals(pending.permit.inventory))throw new IllegalStateException("Restore the quoted inventory before cancelling its exact reservation");
-            var untouched=pending.untouched;untouched.set(true);
-            async(player,menu,flow,flow.services.tradeStorage(store->{NpcInputReturns.abandon(store,actor,quote,cash,untouched::get);return true;}),ignored->{pending.permit.live.set(false);flow.pending=null;flow.busy=false;flow.status="Quote cancelled; original inputs remain in inventory";render(menu,flow);});return;
+            if(pending.reserveStarted.get())throw new IllegalStateException("The original input attempt requires reconciliation");
+            pending.permit.live.set(false);
+            async(player,menu,flow,flow.services.tradeStorage(store->{abandonUntouched(store,actor,pending);return true;}),ignored->{flow.pending=null;flow.busy=false;flow.status="Quote closed; no inputs were taken";render(menu,flow);});return;
         }
         var world=flow.services.worldId();var pricing=flow.services.servicePricing();
         async(player,menu,flow,flow.services.tradeStorage(store->find(store,actor,pending.input)),input->{
@@ -224,10 +279,16 @@ public final class TraderController {
             if(pending.input==null){settle(player,menu,flow,pending);return;}
             var actor=flow.actor;
             async(player,menu,flow,flow.services.tradeStorage(store->find(store,actor,pending.input)),input->{
+                if(!pending.permit.live.get()||pending.expires()<=System.currentTimeMillis()||!witness(player,menu,pending.permit))
+                    throw new IllegalArgumentException("Quote expired or changed; inputs untouched");
                 pending.inputCase=input;
-                pending.untouched.set(false);String reason=TraderInventory.reserve(player,input,pending.snapshot,pending.outputs);
-                if(!TraderInventory.held(player,input,pending.snapshot))throw new IllegalArgumentException(reason);
-                pending.held=true;pending.permit.inventory=inventory(player);
+                pending.reserveStarted.set(true);
+                String reason=TraderInventory.reserve(player,input,pending.snapshot,pending.outputs);
+                if(!TraderInventory.held(player,input,pending.snapshot)){
+                    if(reason.equals("CAPACITY_OR_INPUT_CHANGED")||reason.equals("INPUT_RECEIPT_BOUND"))pending.reserveStarted.set(false);
+                    throw new IllegalArgumentException(reason);
+                }
+                pending.held=true;pending.permit.inventory=copyInventory(player);
                 var proof=TraderInventory.saveProof(player,input,flow.services.worldId(),true);var verifier=TraderInventory.verifier(player);
                 async(player,menu,flow,flow.services.tradeStorage(store->transition(store,actor,Custody.Action.RESERVATION_SAVED,input,proof.evidence(),verifier,pending.permit)),saved->{pending.inputCase=saved;settle(player,menu,flow,pending);});
             });
@@ -277,17 +338,25 @@ public final class TraderController {
     }
     private static void deliver(ServerPlayer player,TraderMenu menu,Flow flow,UUID id,Runnable done) {
         var actor=flow.actor;var world=flow.services.worldId();
-        async(player,menu,flow,flow.services.tradeStorage(store->find(store,actor,id)),current->{
-            if(current.state()!=Custody.State.COMMITTED&&current.state()!=Custody.State.CLAIM){done.run();return;}
+        async(player,menu,flow,flow.services.tradeStorage(store->store.transaction(tx->{
+            var current=Custody.find(tx::query,actor,id,false).orElseThrow(()->new IllegalArgumentException("Custody unavailable"));
+            if(!NpcDeliveries.isClaimable(tx::query,current))return null;
+            var input=current.state()==Custody.State.CLAIM&&current.terms().items().startsWith("{")
+                    ?Custody.find(tx::query,actor,current.reservationOperation(),false).orElseThrow():null;
+            return new Delivery(current,input);
+        })),delivery->{
+            if(delivery==null){done.run();return;}
+            var current=delivery.current();
+            TraderInventory.prepareDelivery(player,current,delivery.originalInput(),world);
             var outputs=TraderInventory.outputStacks(player,current,world);
             if(!BankingInventory.fits(player,outputs)){flow.status="Delivery retained: clear inventory space and use Claims";done.run();return;}
-            var permit=flow.live;String inventory=inventory(player);UUID operation=UUID.randomUUID();
+            var permit=flow.live;var inventory=copyInventory(player);UUID operation=UUID.randomUUID();
             var action=current.state()==Custody.State.CLAIM?Custody.Action.COLLECT:Custody.Action.BEGIN_DELIVERY;
             var intent=custodyIntent(actor,operation,action,Custody.request(id,operation,Custody.Evidence.unknown(),"authenticated merchant delivery"));
-            async(player,menu,flow,flow.services.tradeStorage(store->TraderInventory.beginDelivery(store,intent,(a,i,c,r)->permit.get()&&c.terms().owner().equals(actor)&&c.id().equals(id),(i,c,r)->permit.get())),fresh->{
+            async(player,menu,flow,flow.services.tradeStorage(store->TraderInventory.beginDelivery(store,intent,(a,i,c,r)->permit.get()&&c.equals(current),(i,c,r)->permit.get())),fresh->{
                 if(fresh==null){done.run();return;}
                 // Recheck before the saved STARTED marker; an inventory change retains an uncertain attempt.
-                if(!inventory(player).equals(inventory)){flow.status="Inventory changed; delivery retained for reconciliation";done.run();return;}
+                if(!inventoryMatches(player,inventory)){flow.status="Inventory changed; delivery retained for reconciliation";done.run();return;}
                 var started=TraderInventory.markDeliveryStart(player,fresh,world);
                 async(player,menu,flow,flow.services.tradeStorage(store->find(store,actor,id)),delivering->{
                     var proof=TraderInventory.saveProof(player,delivering,world,false);
@@ -303,18 +372,33 @@ public final class TraderController {
         });
     }
     private static void saveDeliveryState(ServerPlayer player,TraderMenu menu,Flow flow,Custody.Case current,TraderInventory.Proof proof,boolean delivered,Runnable done){
-        var verifier=TraderInventory.verifier(player);var actor=flow.actor;var permit=new Permit("","","",flow.session,menu.traderId(),0,1);
+        var verifier=TraderInventory.verifier(player);var actor=flow.actor;var permit=new Permit(List.of(),"","",flow.session,menu.traderId(),0,1);
         var action=delivered?Custody.Action.DELIVERY_SAVED:Custody.Action.CLAIM;
         async(player,menu,flow,flow.services.tradeStorage(store->transition(store,actor,action,current,proof.evidence(),verifier,permit)),saved->{if(delivered)TraderInventory.clearDelivered(player,saved,proof);else TraderInventory.clearUndeliveredClaim(player,saved,proof);done.run();});
     }
     private static void claims(ServerPlayer player,TraderMenu menu,Flow flow,String value) {
         if(value.isEmpty()) {
-            flow.busy=true;render(menu,flow);var actor=flow.actor;
-            async(player,menu,flow,flow.services.tradeStorage(store->store.transaction(tx->tx.query("SELECT id FROM custody_cases WHERE owner=? AND source LIKE 'npc-%' AND state IN ('COMMITTED','CLAIM') ORDER BY id LIMIT 14",List.of(Journal.actorKey(actor)),14))),rows->{
-                var choices=new ArrayList<TraderNetwork.Choice>();for(var row:rows)choices.add(choice("claim",row.get("id"),"Collect "+row.get("id").substring(0,8),false));choices.add(choice("browse","","Back",false));choices.add(choice("exit","","Close",false));flow.busy=false;menu.publish("claims",List.of("Committed goods and cash are retained until saved delivery.","Ambiguous attempts require operator reconciliation."),"Choose a retained delivery",false,choices);
-            });return;
+            claimPage(player,menu,flow,"");
+            return;
         }
         UUID id=UUID.fromString(value);flow.busy=true;render(menu,flow);deliver(player,menu,flow,id,()->{flow.busy=false;flow.status="Claim processed; retained cases remain recoverable";render(menu,flow);});
+    }
+    private static void claimPage(ServerPlayer player,TraderMenu menu,Flow flow,String cursor) {
+        UUID after=cursor.isEmpty()?null:UUID.fromString(cursor);
+        int pageSize=12;
+        flow.busy=true;render(menu,flow);var actor=flow.actor;
+        async(player,menu,flow,flow.services.tradeStorage(store->store.transaction(tx->NpcDeliveries.page(tx::query,actor,after,pageSize+1))),ids->{
+            var choices=new ArrayList<TraderNetwork.Choice>();
+            for(var id:ids.stream().limit(pageSize).toList())
+                choices.add(choice("claim",id.toString(),"Collect "+id.toString().substring(0,8),false));
+            if(after!=null)choices.add(choice("back","","First page",false));
+            if(ids.size()>pageSize)choices.add(choice("next",ids.get(pageSize-1).toString(),"More claims",false));
+            choices.add(choice("browse","","Back",false));
+            choices.add(choice("exit","","Close",false));
+            flow.busy=false;
+            menu.publish("claims",List.of("Committed goods and cash are retained until saved delivery.","Ambiguous attempts require operator reconciliation."),
+                    ids.isEmpty()?"No retained deliveries on this page":"Choose a retained delivery",false,choices);
+        });
     }
     private static Custody.Case reserve(FoundationStore store,PlayerId actor,UUID id,Custody.Terms terms,Permit permit){
         var intent=custodyIntent(actor,id,Custody.Action.RESERVE,Custody.reserveRequest(terms));var registration=Custody.registration(Custody.Action.RESERVE,(a,i,c,r)->permit.live.get()&&c.id().equals(id)&&c.terms().equals(terms),(c,e,r)->false,null);
@@ -330,9 +414,7 @@ public final class TraderController {
     private static UUID stable(UUID operation,String purpose){return UUID.nameUUIDFromBytes(("economy:trader-ui:v1|"+operation+"|"+purpose).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
     private static <T>void async(ServerPlayer player,TraderMenu menu,Flow flow,CompletionStage<T> stage,Consumer<T> success){
         stage.whenComplete((value,error)->player.server.execute(()->{
-            if(!live(player,menu,flow)){
-                if(error==null&&flow.pending!=null){if(value instanceof NpcFacts.Quote quote)flow.pending.accountQuote=quote;else if(value instanceof NpcCashFacts.Quote quote)flow.pending.cashQuote=quote;if(value instanceof NpcFacts.Quote||value instanceof NpcCashFacts.Quote)abandonClosed(player,flow);}return;
-            }
+            if(!live(player,menu,flow))return;
             try{if(error!=null)throw new CompletionException(error);success.accept(value);}catch(RuntimeException failure){flow.busy=false;flow.status=message(failure);render(menu,flow);}
         }));
     }
