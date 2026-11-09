@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "economy:item/banking/lakeward_cantonal_credit_orbit_t1"
-  }
-}

@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "economy:item/banking/cedar_parcel_debit_t1"
-  }
-}

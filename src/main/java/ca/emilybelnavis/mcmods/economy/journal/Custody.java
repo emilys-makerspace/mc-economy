@@ -335,9 +335,10 @@ public final class Custody {
                 var owner=debit!=null?debit.owner():credit.owner();
                 var custody=debit!=null?debit.custodyId():credit.custodyId();
                 var items=debit!=null?ca.emilybelnavis.mcmods.economy.card.IssuedCards.deliveryItems(debit):ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.deliveryItems(credit);
+                int tier=debit!=null?debit.tier():credit.tier();
                 if(!custody.equals(current.id()) || !owner.equals(current.terms().owner())
                         || !id.equals(current.reservationOperation()) || !id.equals(current.financialOperation())
-                        || !current.terms().items().equals(items)
+                        || !(current.terms().items().equals(items) || current.terms().items().equals(items+"_t"+tier))
                         || !current.terms().source().equals("issued-card:"+id)
                         || !current.terms().destination().equals(actorKey(owner)))return false;
                 var outcome=reads.query("""

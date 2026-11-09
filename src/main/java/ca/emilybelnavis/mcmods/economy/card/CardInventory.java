@@ -30,11 +30,12 @@ public final class CardInventory {
         var fields=lines[1].split("\\|",-1);
         if(fields.length!=3)throw new IllegalArgumentException("CARD_DELIVERY_FORMAT");
         var world=new WorldId(canonical(fields[0]));var token=canonical(fields[1]);
-        if((CardDesigns.byId(fields[2]).isEmpty() && CreditCardDesigns.byId(fields[2]).isEmpty())||!delivery.id().equals(token)
+        String item=CardDesigns.legacyAliases().getOrDefault(fields[2],CreditCardDesigns.legacyAliases().getOrDefault(fields[2],fields[2]));
+        if((CardDesigns.byId(item).isEmpty() && CreditCardDesigns.byId(item).isEmpty())||!delivery.id().equals(token)
                 ||!token.equals(delivery.financialOperation())||!delivery.terms().source().equals("issued-card:"+token)
                 ||!delivery.terms().destination().equals(Journal.actorKey(delivery.terms().owner())))
             throw new IllegalArgumentException("CARD_DELIVERY_BINDING");
-        return new Delivery(world,token,fields[2]);
+        return new Delivery(world,token,item);
     }
     public static Result deliverOnce(ServerPlayer player,WorldId expectedWorld,Custody.Case delivery) {
         thread(player);

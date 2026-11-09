@@ -130,6 +130,67 @@ class BrandedHardwareResourcesTest {
             assertEquals(0, json(RESOURCES.resolve("data/economy/loot_table/blocks/" + id + ".json")).getAsJsonArray("pools").size());
     }
 
+    @Test void wideConsoleSurfacesDoNotFlickerAndControlsFaceTheUser() throws IOException {
+        var models = new java.util.ArrayList<Path>();
+        for (int cell = 0; cell < 4; cell++)
+            models.add(ASSETS.resolve("models/block/branch_kiosk_wide_shape_" + cell + ".json"));
+        models.add(ASSETS.resolve("models/block/branch_kiosk_wide_inventory.json"));
+        for (var bank : InstitutionCatalog.banks()) {
+            String key = bank.id().key().substring("economy:bank/".length());
+            models.add(ASSETS.resolve("models/block/banking/" + key + "_kiosk_wide_inventory.json"));
+        }
+        for (var path : models) {
+            var tops = new java.util.ArrayList<JsonObject>();
+            var keys = new java.util.HashMap<String, JsonObject>();
+            var monitor = new java.util.ArrayList<JsonObject>();
+            for (var value : json(path).getAsJsonArray("elements")) {
+                var element = value.getAsJsonObject();
+                var faces = element.getAsJsonObject("faces");
+                if (faces.has("north") && List.of("#screen", "#bezel").contains(
+                        faces.getAsJsonObject("north").get("texture").getAsString()))
+                    monitor.add(element);
+                if (faces.has("up")) {
+                    var top = faces.getAsJsonObject("up");
+                    for (var other : tops) {
+                        boolean sameHeight = coordinate(element, "to", 1) == coordinate(other, "to", 1);
+                        boolean overlapX = overlaps(element, other, 0);
+                        boolean overlapZ = overlaps(element, other, 2);
+                        assertFalse(sameHeight && overlapX && overlapZ, path + " overlapping top faces");
+                    }
+                    tops.add(element);
+                    String texture = top.get("texture").getAsString();
+                    if (texture.startsWith("#key_")) {
+                        keys.put(texture, element);
+                        assertEquals(180, top.get("rotation").getAsInt(), path + " upright key label");
+                    }
+                }
+                if (faces.has("north") && faces.getAsJsonObject("north").get("texture").getAsString().equals("#reader"))
+                    for (String side : List.of("up", "down", "south", "east", "west"))
+                        assertEquals("#metal", faces.getAsJsonObject(side).get("texture").getAsString(), path.toString());
+            }
+            if (!keys.isEmpty()) {
+                assertEquals(12, keys.size(), path.toString());
+                double keypadBack = keys.values().stream().mapToDouble(key -> coordinate(key, "to", 2)).max().orElseThrow();
+                for (var part : monitor)
+                    assertTrue(coordinate(part, "from", 2) > keypadBack,
+                            path + " screen and bezel must both sit behind the entire PIN pad");
+                assertTrue(coordinate(keys.get("#key_1"), "from", 0) > coordinate(keys.get("#key_3"), "from", 0),
+                        path + " digits increase left to right from the front");
+                assertTrue(coordinate(keys.get("#key_1"), "from", 2) > coordinate(keys.get("#key_cancel"), "from", 2),
+                        path + " function keys are nearest the user");
+            }
+        }
+    }
+
+    private static double coordinate(JsonObject element, String bound, int axis) {
+        return element.getAsJsonArray(bound).get(axis).getAsDouble();
+    }
+
+    private static boolean overlaps(JsonObject a, JsonObject b, int axis) {
+        return Math.max(coordinate(a, "from", axis), coordinate(b, "from", axis))
+                < Math.min(coordinate(a, "to", axis), coordinate(b, "to", axis));
+    }
+
     @Test void cosmeticKioskDropsResolveEveryBankWithoutEmbeddingAuthority() throws IOException {
         var overrides = json(ASSETS.resolve("models/item/branch_kiosk.json")).getAsJsonArray("overrides");
         assertEquals(23, overrides.size());

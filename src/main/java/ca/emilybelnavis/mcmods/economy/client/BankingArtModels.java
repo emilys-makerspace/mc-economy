@@ -25,13 +25,9 @@ public final class BankingArtModels {
     public static void forEachModel(Consumer<String> consumer) {
         for (var bank : InstitutionCatalog.banks()) {
             String key = bank.id().key().substring("economy:bank/".length());
-            for (int tier = 1; tier <= 2; tier++) {
-                if (tier == 1 ? !bank.tier1() : !bank.tier2()) continue;
-                consumer.accept("item/banking/" + key + "_debit_t" + tier);
-                for (var network : bank.networks()) {
-                    consumer.accept("item/banking/" + key + "_credit_"
-                            + network.name().toLowerCase(Locale.ROOT) + "_t" + tier);
-                }
+            consumer.accept("item/banking/" + key + "_debit");
+            for (var network : bank.networks()) {
+                consumer.accept("item/banking/" + key + "_credit_" + network.name().toLowerCase(Locale.ROOT));
             }
             for (String kind : new String[]{"atm", "teller", "kiosk"}) {
                 consumer.accept("item/banking/" + key + "_" + kind);

@@ -179,7 +179,8 @@ def generate():
                                 'particle': 'economy:block/banker_desk/oak_veneer'},
         'elements': inventory_parts,
         'display': {
-            'gui': {'rotation': [25, 225, 0], 'translation': [-3, -3, 0], 'scale': [.45, .45, .45]},
+            # Center the rotated two-wide model about the inventory slot, with padding.
+            'gui': {'rotation': [25, 225, 0], 'translation': [2.26, -1.25, 0], 'scale': [.4, .4, .4]},
             'ground': {'translation': [0, 2, 0], 'scale': [.25, .25, .25]},
             'fixed': {'scale': [.5, .5, .5]},
         },

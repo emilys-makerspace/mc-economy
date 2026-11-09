@@ -4,6 +4,24 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-08
 
+### Banker creative items
+
+- Centered the Banker Desk inventory icon and reduced its display scale to fit within its slot.
+
+- Added a Banker Spawn Egg to the Economy and Spawn Eggs creative tabs.
+- Added the Banker Desk to the Economy tab alongside its existing Functional Blocks entry.
+
+### Card cleanup
+
+- Removed tier-specific debit and credit items and artwork. Each bank now has one debit appearance and one credit appearance per supported network.
+- Existing saved cards and pending deliveries resolve to the current cards without changing their tokens or account eligibility.
+
+### Terminal model fixes
+
+- Fixed flickering overlapping header surfaces on wide banking consoles.
+- Recessed the wide console monitor, lower bezel and header behind the worktop controls to keep the PIN pad visible.
+- Corrected card-reader fascia mapping and turned the raised PIN pad layout and labels toward the user across all bank appearances.
+
 ### A10-03 — Small-window and GUI-scale usability
 
 - Added responsive banker, trader and collection folios with complete text/status scrolling, paged choices and reserved payment-input space.

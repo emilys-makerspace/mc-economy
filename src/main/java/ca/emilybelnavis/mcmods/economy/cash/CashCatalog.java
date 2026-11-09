@@ -175,6 +175,8 @@ public final class CashCatalog {
                 .icon(() -> new ItemStack(CASH.get("cad_bill_20_horizontal").item().get()))
                 .displayItems((parameters, output) -> {
                     output.accept(ca.emilybelnavis.mcmods.economy.collection.CollectionCatalog.SPAWN_EGG.get());
+                    output.accept(ca.emilybelnavis.mcmods.economy.banker.entity.BankerCatalog.SPAWN_EGG.get());
+                    output.accept(ca.emilybelnavis.mcmods.economy.banker.desk.DeskCatalog.ITEM.get());
                     CASH.values().forEach(value -> output.accept(value.item().get()));
                     CardCatalog.collectibles().forEach(value -> output.accept(value.item().get()));
                 }).build());

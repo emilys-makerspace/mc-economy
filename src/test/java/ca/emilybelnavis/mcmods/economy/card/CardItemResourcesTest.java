@@ -19,7 +19,7 @@ class CardItemResourcesTest {
             if(bank.tier1())expected.add(CardDesigns.id(bank.id(),1));
             if(bank.tier2())expected.add(CardDesigns.id(bank.id(),2));
         }
-        assertEquals(28,expected.size());assertEquals(expected,new HashSet<>(CardDesigns.all().stream().map(CardDesigns.Design::id).toList()));
+        assertEquals(23,expected.size());assertEquals(expected,new HashSet<>(CardDesigns.all().stream().map(CardDesigns.Design::id).toList()));
         var lang=JsonParser.parseString(Files.readString(ASSETS.resolve("lang/en_us.json"))).getAsJsonObject();
         for(var entry:CardDesigns.all()) {
             assertFalse(entry.id().contains("credit"));
@@ -45,22 +45,30 @@ class CardItemResourcesTest {
         }
     }
 
-    @Test void debitCollectiblesHaveOneUntieredAppearancePerIssuerWhileOldIdentitiesRemainValid() throws Exception {
-        var visible = CardDesigns.collectibles();
-        assertEquals(InstitutionCatalog.banks().size(), visible.size());
-        assertEquals(visible.size(), visible.stream().map(CardDesigns.Design::issuer).distinct().count());
+    @Test void bothProductsHaveOnlyUntieredItemsAndRetiredNamesResolveForSavedDeliveries() throws Exception {
+        assertEquals(23, CardDesigns.all().size());
+        assertEquals(36, CreditCardDesigns.all().size());
+        assertEquals(CardDesigns.all(), CardDesigns.collectibles());
         var lang = JsonParser.parseString(Files.readString(ASSETS.resolve("lang/en_us.json"))).getAsJsonObject();
+        var aliases = new HashMap<>(CardDesigns.legacyAliases());
+        aliases.putAll(CreditCardDesigns.legacyAliases());
+        assertEquals(74, aliases.size());
+        var world=new WorldId(UUID.randomUUID());var token=UUID.randomUUID();var owner=new PlayerId(UUID.randomUUID());
+        for (var alias : aliases.entrySet()) {
+            String oldItem=alias.getKey().substring("economy:".length());
+            String currentItem=alias.getValue().substring("economy:".length());
+            assertFalse(currentItem.matches(".*_t[12]$"));
+            assertFalse(Files.exists(ASSETS.resolve("models/item/"+oldItem+".json")));
+            assertTrue(Files.isRegularFile(ASSETS.resolve("models/item/"+currentItem+".json")));
+            assertFalse(lang.get("item.economy."+currentItem).getAsString().contains("Tier"));
+            var saved=delivery(world,token,token,owner,alias.getKey(),"issued-card:"+token,Journal.actorKey(owner));
+            assertEquals(new CardInventory.Delivery(world,token,alias.getValue()),CardInventory.decode(saved));
+        }
         for (var bank : InstitutionCatalog.banks()) {
-            var designs = CardDesigns.all().stream().filter(design -> design.issuer().equals(bank.id())).toList();
-            byte[] first = null;
-            for (var design : designs) {
-                assertTrue(CardDesigns.byId(design.id()).isPresent(), "existing debit identity remains recognized");
-                String item = design.id().substring("economy:".length());
-                assertEquals(bank.name() + " Debit Card", lang.get("item.economy." + item).getAsString());
-                var texture = Files.readAllBytes(ASSETS.resolve("textures/item/banking/" + item.substring("issued_".length()) + ".png"));
-                if (first != null) assertArrayEquals(first, texture, "account tier must not change debit art");
-                first = texture;
-            }
+            if (!bank.tier1() || !bank.tier2()) continue;
+            assertEquals(CardDesigns.id(bank.id(),1),CardDesigns.id(bank.id(),2));
+            for (var network : bank.networks())
+                assertEquals(CreditCardDesigns.id(bank.id(),network.key(),1),CreditCardDesigns.id(bank.id(),network.key(),2));
         }
     }
 
@@ -79,7 +87,7 @@ class CardItemResourcesTest {
     }
     @Test void custodyPayloadMustMatchProtectedCaseAndIssuanceOperation() {
         var world=new WorldId(UUID.randomUUID());var token=UUID.randomUUID();var owner=new PlayerId(UUID.randomUUID());
-        String item="economy:issued_crownstone_debit_t1";
+        String item="economy:issued_crownstone_debit";
         var valid=delivery(world,token,token,owner,item,"issued-card:"+token,Journal.actorKey(owner));
         assertEquals(new CardInventory.Delivery(world,token,item),CardInventory.decode(valid));
         assertThrows(IllegalArgumentException.class,()->CardInventory.decode(delivery(world,UUID.randomUUID(),token,owner,item,"issued-card:"+token,Journal.actorKey(owner))));

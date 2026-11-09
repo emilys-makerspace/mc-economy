@@ -86,6 +86,22 @@ class IssuedCardsTest {
             assertEquals(Custody.State.COMMITTED,f.store.transaction(tx->Custody.find(tx::query,actor,token,false).orElseThrow().state()));
         }
     }
+    @Test void savedTierSpecificDeliveryRemainsClaimableDuringStartupRecovery() throws Exception {
+        try(var f=new Fixture(true)) {
+            var token=f.first();
+            String legacy=IssuedCards.deliveryItems(token)+"_t"+token.tier();
+            f.store.transaction(tx->{
+                tx.execute("UPDATE custody_cases SET items=? WHERE id=?",List.of(legacy,token.id().toString()));
+                return null;
+            });
+            assertTrue(Custody.reconcileBatch(f.store));
+            var claim=f.store.transaction(tx->Custody.find(tx::query,actor,token.id(),false).orElseThrow());
+            assertEquals(Custody.State.CLAIM,claim.state());
+            assertEquals(legacy,claim.terms().items(),"original custody terms remain intact");
+            assertEquals(IssuedCards.itemId(token),CardInventory.decode(claim).item());
+        }
+    }
+
     @Test void replacementFeeAndRevocationCommitTogetherAndReplayChargesOnce() throws Exception {
         try(var f=new Fixture(true)) {
             var old=f.first();var request=f.request(true,old.id(),f.quote(2500));var original=intent(IssuedCards.ISSUE,request.request());var engine=f.engine(request,f.fee());

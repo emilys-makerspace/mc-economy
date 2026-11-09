@@ -14,10 +14,9 @@ for key,name,currency,tier,networks in rows:
     bank=next(b for b in brands if b['key']==key)
     nets=re.findall(r'Network\.(\w+)',networks)
     assert (bank['name'],bank['currency'],bank['tier'],bank['networks'])==(name,currency,tier,nets)
-    for t in ([1,2] if tier=='HYBRID' else [2] if tier=='TIER2_ONLY' else [1]):
-        expected.add(f'{key}_debit_t{t}')
-        expected.update(f'{key}_credit_{n.lower()}_t{t}' for n in nets)
-assert expected=={c['key'] for c in manifest['cards']} and len(expected)==74
+    expected.add(f'{key}_debit')
+    expected.update(f'{key}_credit_{n.lower()}' for n in nets)
+assert expected=={c['key'] for c in manifest['cards']} and len(expected)==59
 assert len(manifest['networks'])==4 and len(manifest['issuers'])==23
 assert all(not c['registered'] and not c['financial_authority'] for c in manifest['cards'])
 lang=json.loads((ASSETS/'lang/en_us.json').read_text())
@@ -79,4 +78,4 @@ for bank in manifest['hardware']['banks']:
                 assert json.loads(local(ref,'models','.json').read_text())['elements']==json.loads((ASSETS/'models/block'/f'{original}.json').read_text())['elements']
 assert png(local(manifest['agent']['texture'],'textures','.png'))==(64,64)
 assert manifest==json.loads((HERE/'resource_inventory.json').read_text())
-print(f'PASS: 23 issuers, 4 networks, 74 approved cards, 69 hardware families, {len(seen)} model nodes')
+print(f'PASS: 23 issuers, 4 networks, 59 approved cards, 69 hardware families, {len(seen)} model nodes')

@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "economy:item/banking/jade_terrace_credit_orbit_t1"
-  }
-}

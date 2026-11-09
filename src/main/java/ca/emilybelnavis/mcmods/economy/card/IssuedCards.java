@@ -123,7 +123,7 @@ public final class IssuedCards {
     }
     public static Status effectiveStatus(Token token,long now) {return token.status()==Status.ACTIVE && now>=token.expiresAt()?Status.EXPIRED:token.status();}
     public static boolean freeRenewal(Token token,long now) {return now>=Math.subtractExact(token.expiresAt(),RENEWAL_WINDOW);}
-    public static String itemId(Token token) {return "economy:issued_"+token.issuer().key().substring("economy:bank/".length())+"_debit_t"+token.tier();}
+    public static String itemId(Token token) {return CardDesigns.id(token.issuer(),token.tier());}
     public static String deliveryItems(Token token) {return "issued-card-v1\n"+token.world().value()+"|"+token.id()+"|"+itemId(token);}
     public static Journal.CanonicalRequest revokeRequest(UUID token,long revision,PlayerId owner) {
         if(revision<1)throw new IllegalArgumentException("Token revision");
