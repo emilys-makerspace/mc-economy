@@ -209,6 +209,9 @@ public final class BankingDashboardClient {
                 case 22 -> { if (fresh(menu) && offered(menu, "brand_confirm", BANK)) { send(menu, "brand_confirm", BANK); next(23); } }
                 case 23 -> { if (fresh(menu) && menu.page().equals("settings")) { send(menu, "configure", "BOTH CAD"); next(24); } }
                 case 24 -> {
+                    if (fresh(menu) && menu.page().equals("settings_review") && offered(menu,"configure_confirm","")) {
+                        send(menu,"configure_confirm",""); return;
+                    }
                     if (fresh(menu) && menu.page().equals("settings")) {
                         UUID uuid = client.player.getUUID(); server.execute(() -> {
                             var player = server.getPlayerList().getPlayer(uuid); player.closeContainer(); BankingController.open(player, TELLER);
@@ -461,10 +464,10 @@ public final class BankingDashboardClient {
     private void finish(Minecraft client, boolean success) {
         if (stopped) return; stopped = true;
         try {
-            String evidence = success ? "PASS fresh integrated client; protocol9 owner dashboard, bound Crownstone/CAD, native primary opening; explicitly seeded CAD100 funding operation " + fundingOperation
+            String evidence = success ? "PASS fresh integrated client; protocol12 owner dashboard, bound Crownstone/CAD, native primary opening; explicitly seeded CAD100 funding operation " + fundingOperation
                     + "; original recent posting; kiosk restrictions and teller FX/Payments; structured withdrawal REVIEW/explicit confirm/COMPLETED operation " + withdrawalOperation + " receipt " + withdrawalReceipt
                     + "; separately observed CAD20 physical cash; controlled injected absent-original " + absentOperation + " lookup preserved CAD80 and created no outcome. Two post-render screenshots, GUI scale2. Local single-client evidence only; no latency/multiplayer/restart/debt claim.\n" : failure + "\n";
-            if (success && historyMode) evidence = "PASS fresh integrated client; protocol10 native History row/detail/filter/date/family widgets; original withdrawal operation " + withdrawalOperation
+            if (success && historyMode) evidence = "PASS fresh integrated client; protocol12 native History row/detail/filter/date/family widgets; original withdrawal operation " + withdrawalOperation
                     + " receipt " + withdrawalReceipt + "; detail/back stable generation/high-water; currency/type/UTC reset generation; EFFECTIVE and DAILY CAD/USD directed history; read-only journal head " + historyHead
                     + " retained; CAD80 bank and independently observed CAD20 cash. Explicit fixture CAD100 funding " + fundingOperation + ". Three post-render History screenshots plus reused setup captures, GUI scale2. Local single-client evidence only; no latency/multiplayer/restart/debt claim.\n";
             String prefix = historyMode ? "banking-history" : "banking-dashboard";

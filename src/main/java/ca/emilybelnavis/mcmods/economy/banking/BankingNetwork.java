@@ -17,7 +17,7 @@ public final class BankingNetwork {
     public static final Set<String> ACTIONS = Set.of("home", "payments", "manage_accounts", "setup", "accounts", "accounts_next", "account_select", "account_open", "account_close_preview", "account_close_confirm",
             "history", "history_next", "fx", "exchange_preview", "exchange_confirm", "bank_retry", "deposit",
             "deposit_preview", "deposit_confirm", "withdraw", "withdraw_preview", "withdraw_confirm", "withdraw_mix", "withdraw_mix_change", "withdraw_mix_review", "withdraw_mix_reset", "shop",
-            "buy_preview", "buy_confirm", "claims", "claims_next", "collect", "settings", "configure", "banking", "price", "retry", "cancel", "branch_open", "branch_assign", "branch_switch", "branch_accept", "branch_close", "branch_products", "brand_preview", "brand_confirm", "cards", "card_select", "card_preview", "card_confirm", "card_lost", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next");
+            "buy_preview", "buy_confirm", "claims", "claims_next", "collect", "settings", "configure", "configure_confirm", "banking", "price", "retry", "cancel", "branch_open", "branch_assign", "branch_switch", "branch_accept", "branch_close", "branch_products", "brand_preview", "brand_confirm", "cards", "card_select", "card_preview", "card_confirm", "card_lost", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next");
     private BankingNetwork() {}
     public record Action(int menuId, UUID session, long revision, String action, String value) implements CustomPacketPayload {
         public static final Type<Action> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("economy", "banking_action"));
@@ -136,7 +136,7 @@ public final class BankingNetwork {
     }
     public static void initialize(IEventBus bus) { bus.addListener(BankingNetwork::register); }
     private static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("11");
+        var registrar = event.registrar("12");
         registrar.playToServer(Action.TYPE, Action.CODEC, (request, context) -> context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof BankingMenu menu
                     && menu.containerId == request.menuId()

@@ -29,7 +29,7 @@ public final class BankingMenu extends AbstractContainerMenu {
                 "claims_next", "collect", "retry", "cancel", "cards", "card_select", "card_lost", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next");
         private static final Set<String> REGISTER_ACTIONS = Set.of("home", "shop", "buy_preview", "buy_confirm", "price", "claims",
                 "claims_next", "collect", "retry", "cancel");
-        private static final Set<String> ADMIN_ACTIONS = Set.of("kiosk_upgrade", "settings", "configure", "bank_retry", "cancel", "banking", "brand_preview", "brand_confirm");
+        private static final Set<String> ADMIN_ACTIONS = Set.of("kiosk_upgrade", "settings", "configure", "configure_confirm", "bank_retry", "cancel", "banking", "brand_preview", "brand_confirm");
 
         public boolean allows(String action) {
             if (ca.emilybelnavis.mcmods.economy.foundation.TerminalMenus.ACTIONS.contains(action)) return this == KIOSK || this == ATM || this == TELLER || this == CARD;

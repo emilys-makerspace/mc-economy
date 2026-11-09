@@ -207,7 +207,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             case "credit_profile", "credit_history", "credit_facility", "credit_statements" -> {
                 button(10,188,296,UiTextClient.component(ui("ui.client.actions")),()->openChooser("finance_choices"));
             }
-            case "brand_review", "card_review" -> {
+            case "brand_review", "card_review", "settings_review" -> {
                 for (var choice : menu.choices()) {
                     var control = button(160, 188, 146, UiTextClient.component(choice.label()), () -> send(choice.action(), choice.value()));
                     control.active = !blocked() && (!confirmation(choice.action()) || reviewed());
@@ -283,6 +283,8 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 }
             }
             case "settings" -> {
+                if (!choices("settings").isEmpty())
+                    button(10, 76, 296, UiTextClient.component(ui("ui.admin.settings.refresh")), () -> send("settings", ""));
                 button(10, 188, 136, UiTextClient.component(ui("ui.client.use_terminal")), () -> send("banking", ""));
                 if (!choices("brand_preview").isEmpty())
                     button(10, 76, 296, UiTextClient.component(ui("ui.client.choose_brand")), () -> openChooser("brand_preview"));
@@ -296,7 +298,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                         };
                         rebuild();
                     });
-                    var save = button(160, 188, 146, text("action.configure"),
+                    var save = button(160, 188, 146, UiTextClient.component(ui("ui.admin.settings.review_action")),
                             () -> send("configure", serviceMode + ";" + String.join(",", acceptedCurrencies) + ";all"));
                     save.active = !menu.busy() && (serviceMode.equals("DISABLED") || !acceptedCurrencies.isEmpty());
                 }

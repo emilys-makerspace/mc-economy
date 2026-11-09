@@ -464,3 +464,16 @@ if (providers.gradleProperty('debtCompositeProbe').isPresent()) {
         }
     }
 }
+
+// Opt-in focused native Admin settings witness; release jars exclude probe classes.
+if (providers.gradleProperty('adminSettingsProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.adminSettingsProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'admin-settings-failed.txt').exists() || !new File(root, 'admin-settings-passed.txt').exists())
+                throw new GradleException('Native Admin settings witness did not pass')
+        }
+    }
+}

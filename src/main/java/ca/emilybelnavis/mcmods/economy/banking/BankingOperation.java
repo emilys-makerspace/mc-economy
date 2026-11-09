@@ -69,7 +69,7 @@ public final class BankingOperation {
     }
     /** Finite control identity, never a translated label or status-text heuristic. */
     public static boolean confirmation(String action) {
-        return Set.of("deposit_confirm", "withdraw_confirm", "exchange_confirm", "buy_confirm", "account_close_confirm",
+        return Set.of("configure_confirm", "deposit_confirm", "withdraw_confirm", "exchange_confirm", "buy_confirm", "account_close_confirm",
                 "brand_confirm", "card_confirm", "branch_accept", "finance_credit_confirm", "finance_credit_raise_ok",
                 "finance_credit_repl_ok", "finance_credit_pay_ok", "finance_credit_lost_ok", "finance_loan_confirm", "finance_loan_pay_confirm",
                 "finance_debt_confirm", "credit_adv_confirm", "auto_confirm").contains(action);

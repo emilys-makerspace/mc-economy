@@ -27,7 +27,7 @@ import net.minecraft.server.level.ServerPlayer;
 public final class BankingAccounts {
     private static final String PENDING = "economy_banking_pending";
     private static final Set<String> ACTIONS = Set.of("setup", "accounts", "accounts_next", "manage_accounts", "account_select", "account_open", "account_close_preview", "account_close_confirm",
-            "history", "history_next", "fx", "exchange_preview", "exchange_confirm", "settings", "kiosk_upgrade", "configure", "bank_retry", "branch_open", "branch_assign", "branch_switch", "branch_accept", "branch_close", "branch_products", "brand_preview", "brand_confirm", "cards", "card_select", "card_preview", "card_confirm", "card_lost", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next");
+            "history", "history_next", "fx", "exchange_preview", "exchange_confirm", "settings", "kiosk_upgrade", "configure", "configure_confirm", "bank_retry", "branch_open", "branch_assign", "branch_switch", "branch_accept", "branch_close", "branch_products", "brand_preview", "brand_confirm", "cards", "card_select", "card_preview", "card_confirm", "card_lost", "credit_profile", "credit_history", "credit_next", "credit_facilities", "credit_facilities_next", "credit_facility", "credit_statements", "credit_statements_next");
     private static final Map<BankingMenu, State> STATES = new WeakHashMap<>();
     private static final class State {
         AccountId cardAccount;
@@ -44,6 +44,8 @@ public final class BankingAccounts {
         LedgerService.BranchContext branchView;
         String pendingBrand;
         long brandRevision;
+        TerminalPolicy.Snapshot settingsView;
+        TerminalSettingsReview settingsReview;
         AccountId selected;
         String accountCursor;
         String historyCursor;
@@ -116,8 +118,9 @@ public final class BankingAccounts {
                             message->{if(audience.player().server.getPlayerList().getPlayer(audience.player().getUUID())==audience.player())audience.player().displayClientMessage(UiText.component(audience.player(), message),false);});
                     audience.player().closeContainer();
                 }
-                case "settings" -> settings(audience, services);
+                case "settings" -> settings(audience, services, state);
                 case "configure" -> configure(audience, services, grant, state, value);
+                case "configure_confirm" -> configureConfirm(audience, services, grant, state);
                 case "bank_retry" -> retry(audience, services, grant, state);
                 default -> { }
             }
@@ -835,7 +838,8 @@ public final class BankingAccounts {
             if(action.equals("brand_preview")) {
                 var bank=InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(value));
                 state.pendingBrand=bank.id().key();state.brandRevision=current.revision();
-                reply(audience,"brand_review",List.of(UiText.t("ui.bank.bind_this_machine_to.24936f")+bank.name()+"?",UiText.t("ui.bank.native_currency.16da54")+bank.baseCurrency().code(),
+                var scope = TerminalSettingsReview.scope(current);
+                reply(audience,"brand_review",List.of(scope.get(0), scope.get(1), UiText.t("ui.bank.bind_this_machine_to.24936f")+bank.name()+"?",UiText.t("ui.bank.native_currency.16da54")+bank.baseCurrency().code(),
                         UiText.t("ui.bank.existing_settings_are_retained_as_legacy_metad.d5f15b"),UiText.t("ui.bank.cash_service_will_be_disabled_enable_native_ca.69457f"),
                         UiText.t("ui.bank.pending_cash_custody_work_must_finish_before_b.eb817b")),UiText.t("ui.bank.confirm_native_currency_change.c1bff9"),List.of(new BankingNetwork.Choice("brand_confirm",bank.id().key(),UiText.t("ui.bank.confirm_bank_binding.48478d"),false)));return;
             }
@@ -852,7 +856,9 @@ public final class BankingAccounts {
         });
     }
 
-    private static void settings(Audience audience, ServerServices services) {
+    private static void settings(Audience audience, ServerServices services, State state) {
+        state.settingsReview = null;
+        state.settingsView = null;
         audience.menu().setBusy(true);
         var actor = new PlayerId(audience.player().getUUID()); boolean operator = audience.player().hasPermissions(2);
         services.ledger().terminalSettings(actor, (who, reads) -> operator, audience.menu().anchor()).whenComplete((found, error) -> {
@@ -862,18 +868,19 @@ public final class BankingAccounts {
             if (!terminal.generation().equals(audience.menu().generation()) || !terminal.active()) {
                 reply(audience, "settings", List.of(UiText.t("ui.bank.reopen_this_terminal_to_see_its_current_settin.470c89")), UiText.t("ui.bank.terminal_changed.420747"), List.of()); return;
             }
+            state.settingsView = terminal;
             var binding=terminal.binding();
             boolean bound=binding!=null && binding.bound();
             String identity=bound?InstitutionCatalog.require(binding.institution()).name()+" — "+binding.nativeCurrency().code():UiText.t("ui.bank.unbound_bank_bank_selection_required.0d05f5");
             var lines=new ArrayList<String>();lines.add(identity);
-            lines.add(UiText.t("ui.bank.generation.33e7ab")+terminal.generation());lines.add(UiText.t("ui.bank.revision.80ccf1")+terminal.revision()+"; kind: "+terminal.kind());
-            lines.add(UiText.t("ui.bank.migration.98ee3c")+(bound?binding.migrationState():"UNBOUND_BANK"));
+            lines.addAll(TerminalSettingsReview.scope(terminal));
+            lines.add(UiText.t("ui.admin.binding."+(bound?binding.migrationState().name().toLowerCase(Locale.ROOT):"unbound")));
             lines.add(UiText.t("ui.bank.cash.f016dc")+deliveryLabel(terminal.settings().mode())+UiText.t("ui.bank.f9f879217a"));
             var controls=new ArrayList<BankingNetwork.Choice>();
             if(terminal.kind()!=TerminalPolicy.Kind.REGISTER)controls.add(new BankingNetwork.Choice("brand_preview","",UiText.t("ui.bank.select_bank_brand.73c40b"),false));
             if(bound && terminal.kind()!=TerminalPolicy.Kind.KIOSK && terminal.kind()!=TerminalPolicy.Kind.REGISTER) {
                 String form=terminal.settings().mode().name()+";"+binding.nativeCurrency().code()+";all";
-                controls.add(new BankingNetwork.Choice("configure",form,UiText.t("ui.bank.save_native_currency_settings.220f48"),true));
+                controls.add(new BankingNetwork.Choice("configure",form,UiText.t("ui.admin.settings.review_action"),true));
             }
             var position=new net.minecraft.core.BlockPos(terminal.anchor().x(),terminal.anchor().y(),terminal.anchor().z());
             var physical=audience.player().serverLevel().getBlockState(position);
@@ -887,31 +894,62 @@ public final class BankingAccounts {
         });
     }
     private static void configure(Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state, String value) {
-        var actor = new PlayerId(audience.player().getUUID());
-        boolean operator = audience.player().hasPermissions(2);
+        if (audience.menu().access()!=BankingMenu.Access.ADMIN || !audience.menu().page().equals("settings")
+                || audience.menu().choices().stream().noneMatch(c -> c.action().equals("configure")))
+            throw new IllegalArgumentException("Settings not offered");
+        var shown = state.settingsView;
+        state.settingsReview = null;
         audience.menu().setBusy(true);
-        services.ledger().terminalSettings(actor, (who, reads) -> operator, audience.menu().anchor()).whenComplete((found, error) -> {
+        boolean operator = audience.player().hasPermissions(2);
+        services.ledger().terminalSettings(grant.actor(), (who, reads) -> operator, audience.menu().anchor()).whenComplete((found, error) -> {
             if (!audience.live()) return;
-            if (error != null || found.isEmpty()) { reply(audience, "settings", List.of(UiText.t("ui.bank.only_the_owner_or_an_operator_may_edit_setting.9e0d86")), UiText.t("ui.bank.owner_access_required.a11bd4")); return; }
+            if (error != null || found.isEmpty()) { unavailable(audience,"settings"); return; }
             try {
-                var current = found.orElseThrow();
-                if (!current.generation().equals(audience.menu().generation())) throw new IllegalArgumentException("Placement changed");
-                var settings = parseSettings(value, current.kind());
-                var operation = new OperationId(UUID.randomUUID()); var attempt = new RequestId(UUID.randomUUID());
-                var request = TerminalPolicy.configureRequest(current.anchor(), current.generation(), current.revision(), settings);
-                var intent = new Journal.Intent(operation, attempt, actor, TerminalPolicy.Action.CONFIGURE.kind(), request, null, null);
-                var authority=KioskAdmission.authority(audience.player(),audience.menu(),current,intent);
-                start(audience, services, grant, state, intent, fresh -> {
-                    boolean live = audience.menu().valid(audience.player());
-                    boolean currentOperator = audience.player().hasPermissions(2);
-                    return services.ledger().terminalPolicy(TerminalPolicy.Action.CONFIGURE,
-                            (who, kind) -> who.equals(actor), authority,
-                            (who, reads) -> currentOperator, null).submit(intent);
-                }, "settings");
-            } catch (IllegalArgumentException invalid) { reply(audience, "settings",
-                    List.of(UiText.t("ui.bank.enter_both_cad_deposit_cad_withdraw_cad_or_off.77aa77")), UiText.t("ui.bank.check_the_setting_and_try_again.74e64e")); }
+                if (shown == null) throw new TerminalSettingsReview.Stale();
+                var review = TerminalSettingsReview.capture(shown, found.orElseThrow(), parseSettings(value, shown.kind()));
+                var lines = review.lines(CashCatalog.all());
+                state.settingsReview = review;
+                reply(audience, "settings_review", lines, UiText.t("ui.admin.settings.ready"),
+                        List.of(new BankingNetwork.Choice("configure_confirm", "", UiText.t("ui.admin.settings.confirm"), false)));
+            } catch (TerminalSettingsReview.Stale stale) { staleSettings(audience, state); }
+            catch (IllegalArgumentException invalid) {
+                reply(audience, "settings", List.of(UiText.t("ui.admin.settings.native_only")),
+                        UiText.t("ui.bank.check_the_setting_and_try_again.74e64e"), List.of());
+            }
         });
     }
+
+    private static void configureConfirm(Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state) {
+        if (audience.menu().access()!=BankingMenu.Access.ADMIN || !audience.menu().page().equals("settings_review")
+                || !offered(audience, "configure_confirm", "") || state.settingsReview==null)
+            throw new IllegalArgumentException("Settings review required");
+        var review = state.settingsReview;
+        audience.menu().setBusy(true);
+        boolean operator = audience.player().hasPermissions(2);
+        services.ledger().terminalSettings(grant.actor(), (who, reads) -> operator, audience.menu().anchor()).whenComplete((found, error) -> {
+            if (!audience.live()) return;
+            if (error != null || found.isEmpty()) { unavailable(audience,"settings"); return; }
+            try {
+                var request = review.request(found.orElseThrow());
+                var operation = new OperationId(UUID.randomUUID()); var attempt = new RequestId(UUID.randomUUID());
+                var intent = new Journal.Intent(operation, attempt, grant.actor(), TerminalPolicy.Action.CONFIGURE.kind(), request, null, null);
+                var authority = KioskAdmission.authority(audience.player(), audience.menu(), review.shown(), intent);
+                start(audience, services, grant, state, intent, fresh -> services.ledger().terminalPolicy(
+                        TerminalPolicy.Action.CONFIGURE, (who, kind) -> who.equals(grant.actor()), authority,
+                        (who, reads) -> operator, null).submit(intent), "settings");
+                state.settingsReview = null;
+            } catch (TerminalSettingsReview.Stale stale) { staleSettings(audience, state); }
+        });
+    }
+
+    private static void staleSettings(Audience audience, State state) {
+        state.settingsReview = null;
+        state.settingsView = null;
+        reply(audience, "settings", List.of(UiText.t("ui.admin.settings.stale")),
+                UiText.t("ui.bank.terminal_changed.420747"), List.of(
+                        new BankingNetwork.Choice("settings", "", UiText.t("ui.admin.settings.refresh"), false)));
+    }
+
     static TerminalPolicy.Settings parseSettings(String value, TerminalPolicy.Kind kind) {
         return parseSettings(value, kind, CashCatalog.all());
     }
@@ -1107,6 +1145,7 @@ public final class BankingAccounts {
     }
     static String failureMessage(String code) {
         return switch (code) {
+            case "TERMINAL_STALE" -> UiText.t("ui.admin.settings.stale");
             case "PRICING_QUOTE_STALE", "FX_PRICING_REQUIRED", "FX_PROVIDER_STALE" -> UiText.t("ui.bank.account_service_or_pricing_changed_review_a_fr.1a880a");
             case "YIELD_SETTLEMENT_REQUIRED", "YIELD_FUNDING_UNAVAILABLE" -> UiText.t("ui.bank.earned_deposit_yield_must_be_settled_before_cl.16a68f");
             case "BRANCH_REQUIRED" -> UiText.t("ui.bank.visit_the_account_institution_s_branded_branch.4e6008");
@@ -1177,7 +1216,7 @@ public final class BankingAccounts {
         case "REVOKED" -> UiText.t("ui.bank.state.revoked");
         default -> String.valueOf(value);
     }; }
-    private static String deliveryLabel(Object value) { return switch (String.valueOf(value)) {
+    static String deliveryLabel(Object value) { return switch (String.valueOf(value)) {
         case "BOTH" -> UiText.t("ui.bank.state.both");
         case "DEPOSIT" -> UiText.t("ui.bank.state.deposit");
         case "WITHDRAW" -> UiText.t("ui.bank.state.withdraw");

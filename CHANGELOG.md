@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-09
 
+### Administration
+
+- Terminal cash settings now show an explicit review before saving and refuse drafts based on an older revision, with a direct refresh action.
+- Added English and French terminal setup and legacy FX command guidance; queued FX edits lose authority when the operator session is revoked while committed original operations remain recoverable.
+- Banking clients and servers now use wire12 and must be updated together.
+
 ### Integration API
 
 - Added authenticated simulation history pages with explicit financial-day cursors and immutable API-owned captured values.

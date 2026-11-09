@@ -6,7 +6,7 @@ No additional mods are required; SQLite JDBC is bundled. Each world stores its e
 
 ## First startup
 
-New worlds initialize automatically and offer the first connected player a world-currency chooser. Use `/economy choose CAD` to select a currency, with tab completion and lowercase support. Read the upgrade procedure below before opening an existing economy world with a newer schema.
+New worlds initialize automatically and offer the first connected player a world-currency chooser. Use `/economy choose CAD` to select a currency, with tab completion and lowercase support. Only the current chooser lease holder can confirm this first selection; an operator command does not grant another player that lease. `/economy choose` is not a general command for changing an already selected world currency. Read the upgrade procedure below before opening an existing economy world with a newer schema.
 
 ## Scheduling configuration
 
@@ -38,7 +38,29 @@ After a world has an opening FX publication, in-game operators with permission l
 Enter the baseline in permanent-reference units per major unit of the selected currency.
 The edit takes effect at the next UTC midnight. Variation and pull each accept 0–1,000,000 ppm.
 Bounds accept 0–999,999 ppm, with the resulting band limited to 0.000000000001–1,000,000.
-For an uncertain result, repeat the same command with the same operation UUID.
+Review the exact currency and all four values in the command before submitting. This is a direct operator command, not a terminal screen confirmation. It requires the actual connected operator player; console automation and `/execute as` cannot supply that player's authority. At most16 edits can be pending. Disconnect, demotion, death or session replacement revokes queued authority for new effects. A committed original remains recoverable by the same operation UUID and identical command, even if the current pending policy changed. Do not invent another UUID to recover an uncertain outcome.
+
+Once currency-prime activation or retirement of the legacy daily-FX system is configured, this legacy edit is refused with `FX_TAKEOVER_CONFIGURED`. Use the existing `/economy macro status` and future `pause`, `manual` or `config` paths described below. The refusal does not erase saved policies or permit editing the permanent reference. Core FX admission/refusal/retry messages are localized in UK English, Canadian French and French; technical diagnostic identifiers remain stable.
+
+## Terminal administration and reviewed settings
+
+Owners sneak-right-click their physical terminal with an empty hand. A connected permission-level2 operator can use `/economy admin config` while looking at a loaded terminal within five blocks; it opens the same existing terminal settings surface. `/economy admin binding` inspects the looked-at terminal within six blocks, returning at most six lines of scope, placement, geometry, bank/native currency, cash mode and blocking-work guidance. It neither changes configuration nor edits an account. The separate global admin GUI remains deferred.
+
+| Existing surface/path | Authority and action |
+| --- | --- |
+| World-currency chooser / `/economy choose <currency>` | Current first-player lease; initial selection only. No arbitrary world-currency reset. |
+| Physical terminal Settings | Placement owner or currently authorized operator; same menu, placement, dimension, reach and live session. |
+| Bank selection → confirmation | Review the exact terminal position/revision and bank/native currency. Existing binding and pending-custody rules still apply. |
+| ATM/teller cash mode → **Review settings** → **Confirm these settings** | Review this terminal's position/revision, mode, currency and every bill/coin appearance before one configuration commit. Preview alone writes nothing. |
+| Stale-settings refusal → **Refresh settings** | Reload current state, review again, then confirm. A stale draft never silently applies to a newer revision; refresh itself writes nothing. |
+| Branch account opening/assignment/switch/eligible closure | Use the current branch-offered owner flow and its review/proof. Terminal ownership or operator status alone does not make a customer's account yours. Recover original outcomes and protected payout/Claims through their current services. |
+| `/economy status` | Safe availability/progress; does not disclose another owner's balances or arbitrary backend exceptions. |
+| `/economy diagnostics [calendar [after <cursor>]]` | Existing operator/console gate; cached bounded technical samples, with calendar pages of eight. |
+| Credit/loan/debt owner inspection commands below | Player-backed operator inspection, separately audited and bounded; inspection grants are not owner mutation grants. |
+
+Settings review retains the displayed placement/revision. Another edit, replacement or removal invalidates it. Closing or navigating away discards the review. Every confirmation still uses the current owner/operator checks, revocable physical lease and authoritative journal revision check. Refreshing or inspecting does not advance financial time, create money, cancel a pending delivery or compensate an uncertain physical effect.
+
+Configuration, bank-binding and FX mutations retain their original canonical operations and journal/audit records. Preserve the original operation ID for uncertain work and use existing outcome recovery before attempting a new operation. Detailed financial inspection pages remain audited; terminal hardware inspection is a read of terminal metadata, not a new customer-account audit route. Do not edit the database or force-return money/items to resolve ambiguity.
 
 ## Wider kiosks and legacy upgrades
 

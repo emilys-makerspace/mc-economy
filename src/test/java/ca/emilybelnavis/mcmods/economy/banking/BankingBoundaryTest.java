@@ -10,6 +10,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class BankingBoundaryTest {
     private static final UUID SESSION = UUID.randomUUID();
 
+    @Test void settingsConfirmationIsAnOfferedAdminReviewOnly() {
+        assertTrue(BankingMenu.Access.ADMIN.allows("configure_confirm"));
+        for (var access : BankingMenu.Access.values()) if (access != BankingMenu.Access.ADMIN)
+            assertFalse(access.allows("configure_confirm"));
+        var choice = new BankingNetwork.Choice("configure_confirm", "", "Confirm", false);
+        var operation = BankingOperation.offered(false, List.of(choice));
+        assertEquals(BankingOperation.State.REVIEW, operation.state());
+        assertNotNull(operation.reviewId());
+        assertDoesNotThrow(() -> new BankingNetwork.Action(1, SESSION, 1, "configure_confirm", ""));
+    }
+
     @Test void issuanceAndReplacementRequireKioskButLostReportingAndClaimsRemainOwnerActions() {
         for(var access:List.of(BankingMenu.Access.ATM,BankingMenu.Access.TELLER,BankingMenu.Access.CARD)) {
             assertTrue(access.allows("cards"));assertTrue(access.allows("card_lost"));

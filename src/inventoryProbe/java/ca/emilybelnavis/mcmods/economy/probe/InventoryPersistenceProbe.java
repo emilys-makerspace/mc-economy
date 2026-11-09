@@ -33,7 +33,7 @@ public final class InventoryPersistenceProbe {
     }
 
     private void tick(ServerTickEvent.Post event) {
-        if (Boolean.getBoolean("economy.debtCompositeProbe")) return;
+        if (Boolean.getBoolean("economy.adminSettingsProbe") || Boolean.getBoolean("economy.debtCompositeProbe")) return;
         if (Boolean.getBoolean("economy.multiplayerProbe")) { if (!ran) ran = MultiplayerProbe.tick(event.getServer()); return; }
         if (ran || Boolean.getBoolean("economy.layoutProbe") || Boolean.getBoolean("economy.bankingHistoryProbe") || Boolean.getBoolean("economy.bankingDashboardProbe") || Boolean.getBoolean("economy.referenceTraderProbe") || Boolean.getBoolean("economy.valuationApiProbe") || Boolean.getBoolean("economy.variantProbe") || Boolean.getBoolean("economy.brewingProbe") || Boolean.getBoolean("economy.recipeProbe") || Boolean.getBoolean("economy.valuationProbe") || System.getProperty("economy.financeWorld") != null) return;
         if (Boolean.getBoolean("economy.villageBankAcceptance")) {

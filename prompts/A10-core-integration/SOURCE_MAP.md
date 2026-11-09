@@ -1,5 +1,7 @@
 # A10 source map — checkpoint baseline and implementation links
 
+A10-07 delivery: [administration contract](../../.codex/architecture/administration.md) and [evidence](../../.codex/verification/A10-07.md) record explicit reviewed settings, stale refusal/refresh and bounded live FX submission authority. Banking wire12 adds strict configure_confirm; both endpoints must update. Schema54 was already present at entry; APIs2/1/1 and History1 remain.
+
 A10-06 delivery: [public API contracts](../../.codex/architecture/public-api-contracts.md) and [consumer reference](../../docs/API_REFERENCE.md) inventory unchanged BankingIntegration2/EconomicSimulationIntegration1/ItemValuationIntegration1 and add EconomicSimulationHistory1 through ServerServices.simulationHistory(). The API-owned saved-plan pages carry original financial day/boundary, record version, exact values and explicit exclusive cursors; legacy signatures and meaning remain supported. [Evidence](../../.codex/verification/A10-06.md). Historical preparation baseline below is retained.
 
 A10-02-02 installs [owner history](../../.codex/architecture/owner-history.md) under banking wire10/schema53: original-fact projection/bootstrap, frozen filtered pages, captured details, separate historical FX and updated dashboard recent reads. Its [verification](../../.codex/verification/A10-02-02.md) supersedes history-gap descriptions in the A10-01 baseline below. Legacy LedgerHistory/API contracts remain unchanged.

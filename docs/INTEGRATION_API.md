@@ -48,16 +48,16 @@ Generated branches expose ordinary authenticated kiosk services. Branches and st
 | Versioned surface | Current version | Scope |
 | --- | --- | --- |
 | `BankingIntegration` | 2 | Server financial integration interface. |
-| Banking menu transport | 10 | Offered actions bound to the current player, menu, session and revision. |
+| Banking menu transport | 12 | Offered actions bound to the current player, menu, session and revision. |
 | Banker dialogue transport | 1 | Explicit questions and fresh routing to physical banking access. |
 | Trader menu transport | 1 | Bounded server-offered actions; no client prices or financial authority. |
 | `EconomicSimulationIntegration` | 1 | Existing cached snapshots and legacy selected-plan history. |
 | `EconomicSimulationHistory` | 1 | Additive API-owned selected-plan pages with explicit financial-day cursors. |
 | `ItemValuationIntegration` | 1 | Authenticated immutable item-reference reads, history and typed provider contributions. |
 | `BranchPlans` serialization | 1 | Internal captured source, provider, geometry and placement provenance. |
-| World storage schema | 53 | Internal projections, migration validation and journal recovery. |
+| World storage schema | 54 | Internal projections, migration validation and journal recovery. |
 
-Banking transport10 retains bounded dashboard/operation state and adds frozen owner-history queries, captured detail and a distinct historical FX view. Schema53 contains an additive original-fact read projection; old LedgerHistory ascending cursor semantics remain unchanged. Paired endpoints must use the same wire version; financial canonical requests and persisted intent meanings are unchanged. UI original-outcome lookup never automatically resubmits after absence. The transport and persistence versions describe their respective protocols. Integrations use the server API and current grants for financial operations. World storage upgrades follow the stopped-world complete-backup procedure in the server guide.
+Banking transport12 adds the offered owner-settings review/confirmation action to the current wire11 baseline. Update client and server together: older action allowlists cannot decode the new confirmation safely. Existing dashboard/history/query meanings and persisted operation requests remain unchanged. Schema53 contains an additive original-fact read projection; old LedgerHistory ascending cursor semantics remain unchanged. Paired endpoints must use the same wire version; financial canonical requests and persisted intent meanings are unchanged. UI original-outcome lookup never automatically resubmits after absence. The transport and persistence versions describe their respective protocols. Integrations use the server API and current grants for financial operations. World storage upgrades follow the stopped-world complete-backup procedure in the server guide.
 
 ## Downstream consumers
 
