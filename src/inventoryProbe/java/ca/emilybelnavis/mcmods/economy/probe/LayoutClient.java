@@ -38,27 +38,37 @@ public final class LayoutClient {
       int scale) {}
 
   private final List<Case> cases =
-      Boolean.getBoolean("economy.layoutSupplement")
+      Boolean.getBoolean("economy.layoutTerminalCurrent")
           ? List.of(
-              new Case("supplement-home", "home", "en_gb", 1280, 720, 2),
-              new Case("supplement-accounts", "accounts", "en_gb", 1280, 720, 2),
-              new Case("supplement-tooltip", "collection_tooltip", "fr_ca", 960, 720, 3))
-          : List.of(
-              new Case("normal-banking", "banking", "en_gb", 1280, 720, 2),
-              new Case("normal-banker", "banker", "en_gb", 1280, 720, 2),
-              new Case("normal-collection", "collection", "en_gb", 1280, 720, 2),
-              new Case("normal-trader", "trader", "en_gb", 1280, 720, 2),
-              new Case("small-fr-ca-review", "banking", "fr_ca", 960, 720, 3),
-              new Case("small-fr-ca-banker", "banker", "fr_ca", 960, 720, 3),
-              new Case("small-fr-ca-collection", "collection", "fr_ca", 960, 720, 3),
-              new Case("small-fr-ca-trader", "trader", "fr_ca", 960, 720, 3),
-              new Case("small-fr-ca-history", "history", "fr_ca", 960, 720, 3),
-              new Case("small-fr-ca-history-detail", "history_detail", "fr_ca", 960, 720, 3),
-              new Case("small-fr-fr-review", "banking", "fr_fr", 960, 720, 3),
-              new Case("stale-review", "stale", "fr_fr", 960, 720, 3),
-              new Case("draft-normal", "draft", "fr_fr", 1280, 720, 2),
-              new Case("draft-small", "resize", "fr_fr", 960, 720, 3),
-              new Case("draft-large", "resize", "fr_fr", 1920, 1080, 3));
+              new Case("normal-current-home", "current_home", "en_gb", 1280, 720, 2),
+              new Case("small-current-home", "current_home", "fr_ca", 960, 720, 3),
+              new Case("small-current-accounts", "current_accounts", "fr_ca", 960, 720, 3),
+              new Case("small-current-bank-history", "current_bank", "fr_ca", 960, 720, 3),
+              new Case("small-current-credit-history", "current_credit", "fr_fr", 960, 720, 3),
+              new Case("small-current-withdrawal-sources", "current_sources", "fr_fr", 960, 720, 3),
+              new Case("small-current-cash-mix", "current_mix", "fr_ca", 960, 720, 3),
+              new Case("small-current-final-review", "current_review", "fr_fr", 960, 720, 3))
+          : Boolean.getBoolean("economy.layoutSupplement")
+              ? List.of(
+                  new Case("supplement-home", "home", "en_gb", 1280, 720, 2),
+                  new Case("supplement-accounts", "accounts", "en_gb", 1280, 720, 2),
+                  new Case("supplement-tooltip", "collection_tooltip", "fr_ca", 960, 720, 3))
+              : List.of(
+                  new Case("normal-banking", "banking", "en_gb", 1280, 720, 2),
+                  new Case("normal-banker", "banker", "en_gb", 1280, 720, 2),
+                  new Case("normal-collection", "collection", "en_gb", 1280, 720, 2),
+                  new Case("normal-trader", "trader", "en_gb", 1280, 720, 2),
+                  new Case("small-fr-ca-review", "banking", "fr_ca", 960, 720, 3),
+                  new Case("small-fr-ca-banker", "banker", "fr_ca", 960, 720, 3),
+                  new Case("small-fr-ca-collection", "collection", "fr_ca", 960, 720, 3),
+                  new Case("small-fr-ca-trader", "trader", "fr_ca", 960, 720, 3),
+                  new Case("small-fr-ca-history", "history", "fr_ca", 960, 720, 3),
+                  new Case("small-fr-ca-history-detail", "history_detail", "fr_ca", 960, 720, 3),
+                  new Case("small-fr-fr-review", "banking", "fr_fr", 960, 720, 3),
+                  new Case("stale-review", "stale", "fr_fr", 960, 720, 3),
+                  new Case("draft-normal", "draft", "fr_fr", 1280, 720, 2),
+                  new Case("draft-small", "resize", "fr_fr", 960, 720, 3),
+                  new Case("draft-large", "resize", "fr_fr", 1920, 1080, 3));
   private final long started = System.nanoTime();
   private final StringBuilder evidence =
       new StringBuilder(
@@ -185,7 +195,8 @@ public final class LayoutClient {
       }
       if (wait == 28 && !interacted) {
         interacted = true;
-        reachEnd(current);
+        if (c.screen().startsWith("current_")) reachCurrentEnd(current, c);
+        else reachEnd(current);
         boolean scroll = current.mouseScrolled(current.width / 2.0, current.height / 2.0, 0, -1);
         current.keyPressed(GLFW.GLFW_KEY_PAGE_DOWN, 0, 0);
         if (c.screen().equals("stale")) invalidateReview(c);
@@ -293,6 +304,7 @@ public final class LayoutClient {
   }
 
   private Screen screen(Minecraft client, Case c) {
+    if (c.screen().startsWith("current_")) return terminalCurrentScreen(client, c);
     var inventory = client.player.getInventory();
     UUID session = UUID.randomUUID();
     var lines = terms(c.language());
@@ -434,6 +446,217 @@ public final class LayoutClient {
         client.player.containerMenu = m;
         return new BankingScreen(m, inventory, Component.literal("Crownstone Bank · CAD"));
       }
+    }
+  }
+
+  private Screen terminalCurrentScreen(Minecraft client, Case c) {
+    var inventory = client.player.getInventory();
+    var menu =
+        new BankingMenu(
+            81,
+            inventory,
+            new TerminalPolicy.Anchor("minecraft:overworld", 0, 80, 0),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            BankingMenu.Access.TELLER);
+    var lines = new ArrayList<String>();
+    var choices = new ArrayList<BankingNetwork.Choice>();
+    String page;
+    var operation = BankingOperation.View.ready();
+    switch (c.screen()) {
+      case "current_home" -> {
+        page = "home";
+        lines.add("Crownstone Bank · CAD");
+        for (String[] entry :
+            List.of(
+                new String[] {"accounts", "my_accounts"},
+                new String[] {"deposit", "deposit"},
+                new String[] {"withdraw", "withdrawal"},
+                new String[] {"payments", "bill_payments"},
+                new String[] {"manage_accounts", "branch_services"}))
+          choices.add(
+              new BankingNetwork.Choice(
+                  entry[0], "", text("ui.terminal." + entry[1], c.language()), false));
+      }
+      case "current_accounts", "current_sources" -> {
+        page = c.screen().equals("current_accounts") ? "terminal_accounts" : "withdraw_sources";
+        lines.add(
+            text(
+                c.screen().equals("current_sources")
+                    ? "ui.terminal.withdraw.choose"
+                    : "ui.terminal.account.settings",
+                c.language()));
+        for (int n = 0; n < 8; n++) {
+          String label =
+              (n + 1)
+                  + ". "
+                  + text("ui.terminal.account.bank", c.language(), "CAD")
+                  + " · Crownstone Bank · "
+                  + text("ui.terminal.account.settings", c.language());
+          choices.add(
+              new BankingNetwork.Choice(
+                  c.screen().equals("current_accounts")
+                      ? "terminal_account"
+                      : "terminal_withdraw_bank",
+                  UUID.randomUUID().toString(),
+                  label,
+                  n == 2));
+        }
+      }
+      case "current_bank", "current_credit" -> {
+        page = "account_overview";
+        boolean credit = c.screen().equals("current_credit");
+        lines.add(UiText.money(new Money(EconomyCurrency.CAD, credit ? 54321 : 123456)));
+        lines.add(UiText.money(new Money(EconomyCurrency.CAD, credit ? 195679 : 98765)));
+        lines.add(
+            UiText.t(
+                credit ? "ui.terminal.account.pending" : "ui.terminal.account.holds",
+                new Money(EconomyCurrency.CAD, credit ? 0 : 24691)));
+        String[] activities = {"withdrawal", "fx", "payment", "advance_fee", "interest"};
+        for (int n = 0; n < 5; n++)
+          lines.add(
+              UiText.t(
+                  "ui.terminal.history.movement",
+                  UiText.t(n % 2 == 0 ? "ui.terminal.history.debit" : "ui.terminal.history.credit"),
+                  UiText.t("ui.terminal.activity." + activities[n]),
+                  new Money(EconomyCurrency.CAD, 12345 + n * 100)));
+        lines.add(UiText.t("ui.terminal.history.page", 12, 24));
+        choices.add(new BankingNetwork.Choice("terminal_history_prev", "", "←", false));
+        choices.add(new BankingNetwork.Choice("terminal_history_next", "", "→", false));
+        for (String line : lines) {
+          String rendered = UiTextClient.render(line);
+          require(
+              rendered.indexOf('\u001e') < 0
+                  && rendered.indexOf('\u001f') < 0
+                  && !rendered.contains("ui.terminal.")
+                  && rendered.length() <= 240,
+              "Typed account rows resolve within published bounds before rendering");
+        }
+        require(UiTextClient.render(lines.get(7)).contains("CAD"), "Fifth row retains currency");
+      }
+      case "current_mix" -> {
+        page = "withdraw_mix";
+        var denominations =
+            ca.emilybelnavis.mcmods.economy.cash.CashCatalog.all().stream()
+                .filter(d -> d.currency() == EconomyCurrency.CAD && !d.id().endsWith("_horizontal"))
+                .sorted(
+                    Comparator.comparingLong(
+                            ca.emilybelnavis.mcmods.economy.cash.CashCatalog.Denomination
+                                ::minorUnits)
+                        .reversed())
+                .limit(8)
+                .toList();
+        require(denominations.size() == 8, "Eight current cash denominations");
+        lines.add(text("ui.bank.selected.ae3c35", c.language()) + textMoney(c.language(), 0));
+        lines.add(text("ui.bank.remaining.5c9d2e", c.language()) + textMoney(c.language(), 6000));
+        for (var denomination : denominations)
+          choices.add(
+              new BankingNetwork.Choice(
+                  "withdraw_mix_change",
+                  "economy:" + denomination.id(),
+                  textMoney(c.language(), denomination.minorUnits()) + " × 0",
+                  false));
+      }
+      case "current_review" -> {
+        page = "withdraw";
+        lines.add(text("ui.bank.cash.f016dc", c.language()) + textMoney(c.language(), 6000));
+        lines.add(text("ui.bank.bank_debit.c90280", c.language()) + textMoney(c.language(), 6000));
+        int[] counts = {1, 2, 2, 3, 3, 4};
+        long[] denominations = {2000, 1000, 500, 200, 100, 25};
+        for (int n = 0; n < counts.length; n++)
+          lines.add(counts[n] + " × " + textMoney(c.language(), denominations[n]));
+        lines.add(
+            text("ui.bank.the_entire_batch_needs.37a744", c.language())
+                + 6
+                + text("ui.bank.free_inventory_slots.e38c98", c.language()));
+        lines.add(
+            text("ui.bank.choose_confirm_withdrawal_to_debit_and_receive.7bc402", c.language()));
+        choices.add(
+            new BankingNetwork.Choice(
+                "account_select",
+                UUID.randomUUID().toString(),
+                text("ui.terminal.account.bank", c.language(), "CAD") + " · Crownstone Bank",
+                true));
+        choices.add(
+            new BankingNetwork.Choice(
+                "withdraw_confirm",
+                "60.00",
+                text("screen.economy.action.withdraw_confirm", c.language()),
+                false));
+        choices.add(
+            new BankingNetwork.Choice(
+                "withdraw_mix", "", text("ui.client.cash_select", c.language()), false));
+        operation =
+            BankingOperation.View.of(
+                BankingOperation.State.REVIEW, "screen.economy.operation.review");
+      }
+      default -> throw new IllegalStateException("Finite current terminal case");
+    }
+    menu.applyClientSnapshot(1, page, lines, "", false, choices, operation, null);
+    client.player.containerMenu = menu;
+    return new BankingScreen(menu, inventory, Component.literal("Crownstone Bank · CAD"));
+  }
+
+  private static String textMoney(String language, long minor) {
+    return UiText.render(UiText.money(new Money(EconomyCurrency.CAD, minor)), language);
+  }
+
+  private void reachCurrentEnd(Screen screen, Case c) {
+    // Only scroll/focus widgets are activated. Offered financial and page actions are inspected,
+    // never sent by this presentation fixture.
+    var down = control(screen, "▼");
+    if (down.isPresent()) {
+      var target = down.orElseThrow();
+      for (int n = 0; n < screen.children().size() * 2 && screen.getFocused() != target; n++)
+        screen.keyPressed(GLFW.GLFW_KEY_TAB, 0, 0);
+      require(screen.getFocused() == target, "Current terminal scroll is keyboard reachable");
+      screen.keyPressed(GLFW.GLFW_KEY_SPACE, 0, 0);
+      for (int n = 0; n < 100; n++) control(screen, "▼").ifPresent(Button::onPress);
+    }
+    screen.keyPressed(GLFW.GLFW_KEY_PAGE_DOWN, 0, 0);
+    if (c.screen().equals("current_mix")) {
+      require(scrollValue(screen) == 3, "Final cash denomination row reached");
+      require(
+          control(screen, text("ui.client.review_mix", c.language())).isPresent(),
+          "Final cash review reachable");
+      require(
+          control(screen, text("ui.client.default_mix", c.language())).isPresent(),
+          "Default mix reachable");
+    }
+    if (c.screen().equals("current_accounts") || c.screen().equals("current_sources"))
+      require(scrollValue(screen) == 2, "Last of eight current account choices reached");
+    if (c.screen().equals("current_bank") || c.screen().equals("current_credit")) {
+      require(
+          control(screen, "←").isPresent() && control(screen, "→").isPresent(),
+          "Account history footer controls reachable");
+      try {
+        var label = BankingScreen.class.getDeclaredMethod("terminalLabel", String.class);
+        label.setAccessible(true);
+        require(
+            label.invoke(null, "Available").equals(text("ui.terminal.available", c.language())),
+            "Generic localized Available heading");
+      } catch (ReflectiveOperationException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+    if (c.screen().equals("current_review"))
+      require(
+          reviewed(screen)
+              && control(screen, text("screen.economy.action.withdraw_confirm", c.language()))
+                  .isPresent(),
+          "Final reviewed withdrawal confirmation reachable without sending");
+    evidence
+        .append(c.name())
+        .append(" current terminal scroll/final controls checked; no offered action sent.\n");
+  }
+
+  private static int scrollValue(Screen screen) {
+    try {
+      var field = BankingScreen.class.getDeclaredField("scroll");
+      field.setAccessible(true);
+      return field.getInt(screen);
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException(e);
     }
   }
 

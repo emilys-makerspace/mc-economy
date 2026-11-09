@@ -1075,22 +1075,8 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     g.drawString(font, terminalLabel("Current Balance"), 14, 43, MUTED, false);
     g.drawString(font, UiTextClient.component(lines.get(0)), 14, 57, TEXT, false);
     if (!lines.get(1).isBlank()) {
-      g.drawString(
-          font,
-          terminalLabel(
-              lines.get(2).startsWith("Pending") ? "Available Credit" : "Available Balance"),
-          172,
-          43,
-          MUTED,
-          false);
-      g.drawString(
-          font,
-          Component.literal(
-              UiTextClient.render(lines.get(1)).replaceFirst("^Available Credit: ", "")),
-          172,
-          57,
-          TEXT,
-          false);
+      g.drawString(font, terminalLabel("Available"), 172, 43, MUTED, false);
+      g.drawString(font, UiTextClient.component(lines.get(1)), 172, 57, TEXT, false);
       g.pose().pushPose();
       g.pose().scale(.8f, .8f, 1);
       g.drawString(
@@ -1105,13 +1091,21 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     g.fill(10, 88, 306, 202, theme.accent());
     g.fill(11, 89, 305, 201, BankingTheme.CREAM);
     for (int i = 3; i < Math.min(lines.size() - 1, 8); i++) {
-      var parts = lines.get(i).split("\t", 2);
+      var parts = UiTextClient.render(lines.get(i)).split("\t", 2);
       int y = 98 + (i - 3) * 20;
-      g.drawString(font, font.plainSubstrByWidth(parts[0], 136), 16, y, TEXT, false);
+      int amountWidth = parts.length == 2 ? font.width(parts[1]) : 0;
+      g.drawString(
+          font,
+          font.plainSubstrByWidth(parts[0], Math.max(0, 274 - amountWidth - 8)),
+          16,
+          y,
+          TEXT,
+          false);
       if (parts.length == 2)
         g.drawString(font, parts[1], 298 - font.width(parts[1]), y, TEXT, false);
     }
-    g.drawString(font, lines.getLast(), 158 - font.width(lines.getLast()) / 2, 215, TEXT, false);
+    String footer = UiTextClient.render(lines.getLast());
+    g.drawString(font, footer, 158 - font.width(footer) / 2, 215, TEXT, false);
   }
 
   private String statusText() {

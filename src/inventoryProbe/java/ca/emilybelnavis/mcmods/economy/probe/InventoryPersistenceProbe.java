@@ -28,6 +28,14 @@ public final class InventoryPersistenceProbe {
   private boolean ran;
 
   public InventoryPersistenceProbe(net.neoforged.bus.api.IEventBus bus) {
+    if (Boolean.getBoolean("economy.operationsRestoreProbe")) {
+      OperationsRestoreProbe.register();
+      return;
+    }
+    if (Boolean.getBoolean("economy.operationsProbe")) {
+      OperationsProbe.register();
+      return;
+    }
     if (Boolean.getBoolean("economy.valuationApiProbe")) ValuationApiClient.register(bus);
     NeoForge.EVENT_BUS.addListener(this::tick);
   }

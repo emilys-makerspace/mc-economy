@@ -1,5 +1,7 @@
 # Terminal UI verification — 2026-11-09
 
+A10-09 addendum: the later [current-terminal localization and native witness](A10-09.md) now supplies normal/minimum French Home/accounts/history/withdrawal-source/cash/review rendering and controls. The original no-native/manual limitation below describes this task's initial delivery; it is not the current visual acceptance status. Accounting/closure evidence below is reused, not rerun by that presentation witness.
+
 Java21; Minecraft1.21.1 / NeoForge21.1.252 retained, with main mod source set registered and SQLite on development runtimes. Main agent owned all sequential Gradle checks.
 
 - `./gradlew help --task runClient`: passed.

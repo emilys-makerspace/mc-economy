@@ -1,0 +1,31 @@
+PASS
+Native layout-only presentation fixture; no service origination, accounting, socket multiplayer or financial confirmation.
+Start case index=0; earlier cases, if skipped, require separately recorded prior native evidence.
+normal-current-home language=en_gb window=640x360 framebuffer=1280x720 scale=2.0 logical=640x360
+normal-current-home current terminal scroll/final controls checked; no offered action sent.
+normal-current-home Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+small-current-home language=fr_ca window=480x360 framebuffer=960x720 scale=3.0 logical=320x240
+small-current-home current terminal scroll/final controls checked; no offered action sent.
+small-current-home Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+small-current-accounts language=fr_ca window=480x360 framebuffer=960x720 scale=3.0 logical=320x240
+small-current-accounts current terminal scroll/final controls checked; no offered action sent.
+small-current-accounts Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+small-current-bank-history language=fr_ca window=480x360 framebuffer=960x720 scale=3.0 logical=320x240
+small-current-bank-history current terminal scroll/final controls checked; no offered action sent.
+small-current-bank-history Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+small-current-credit-history language=fr_fr window=480x360 framebuffer=960x720 scale=3.0 logical=320x240
+small-current-credit-history current terminal scroll/final controls checked; no offered action sent.
+small-current-credit-history Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+small-current-withdrawal-sources language=fr_fr window=480x360 framebuffer=960x720 scale=3.0 logical=320x240
+small-current-withdrawal-sources current terminal scroll/final controls checked; no offered action sent.
+small-current-withdrawal-sources Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+small-current-cash-mix language=fr_ca window=480x360 framebuffer=960x720 scale=3.0 logical=320x240
+small-current-cash-mix current terminal scroll/final controls checked; no offered action sent.
+small-current-cash-mix Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+small-current-final-review language=fr_fr window=480x360 framebuffer=960x720 scale=3.0 logical=320x240
+small-current-final-review current terminal scroll/final controls checked; no offered action sent.
+small-current-final-review Tab focus; keyboard scroll activation; repeated body scroll and final choice page reached; mouseHandled=true
+
+LAYOUT_CLIENT_PASS 16 completed render frames
+[12:51:55] [Server thread/INFO] [ca.em.mc.ec.Economy/]: Economy complete-world clean shutdown recorded
+BUILD SUCCESSFUL in 47s

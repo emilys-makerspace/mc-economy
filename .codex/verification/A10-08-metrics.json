@@ -1,0 +1,281 @@
+{
+  "scope": "20 synthetic service owners; zero network clients; normal production clock",
+  "java": "21.0.12.1+1-LTS-4",
+  "javaVendor": "Oracle Corporation",
+  "maxHeapBytes": 4294967296,
+  "schedulingDefaults": {
+    "calculationWorkers": 2,
+    "storageQueueCapacity": 256,
+    "calculationQueueCapacity": 64,
+    "callbackBudgetMillis": 1,
+    "sqliteLockTimeoutMillis": 5000,
+    "drainSeconds": 30,
+    "debugGui": false
+  },
+  "backgroundBefore": [
+    "Simulation WARMUP_COMPLETE_DAY_REQUIRED mode=UNAVAILABLE coverage=0/7 baseline=0/7 ageMs=62823944",
+    "Activation A=1794246395896 F=1794247595896 H=1794268800000",
+    "Config=null policyRevision=0 source=v1:merchant,register,loan,credit,debt,fx,operator,cash;npc=declared",
+    "financialDayMillis=1200000; windowDays<=7; baselineDays<=7; currencies=11; eventChildren=26+completion; pendingPolicies<=16; historyPage<=16; prime=0..25%; step<=0.10 percentage points; FX ordered-pair step<=0.5%; anchor=50..200%"
+  ],
+  "economicBefore": {
+    "completedSequence": 0,
+    "outstandingIntervals": 0,
+    "waitingForWall": false,
+    "ready": true
+  },
+  "actorCountersBeforeSample": {
+    "setup.primary-submit": 20,
+    "dashboard-read": 60,
+    "history-read": 60,
+    "setup.denomination-read": 3,
+    "setup.secondary-submit": 20,
+    "setup.trader-catalog-stock-market": 20,
+    "account-list": 40,
+    "setup.trading-submit": 20,
+    "trader-confirm": 20,
+    "setup.funding-submit": 20,
+    "setup.readiness-yield": 170,
+    "setup.branch-review": 20,
+    "payment-confirm": 40,
+    "trader-review": 20,
+    "fx-confirm": 20,
+    "setup.primary-read": 20,
+    "fx-review": 40,
+    "payment-review": 60
+  },
+  "warmupCompleted": 240,
+  "actorCountersAfterSample": {
+    "setup.primary-submit": 20,
+    "dashboard-read": 180,
+    "history-read": 180,
+    "setup.denomination-read": 3,
+    "setup.secondary-submit": 20,
+    "setup.trader-catalog-stock-market": 20,
+    "account-list": 100,
+    "setup.trading-submit": 20,
+    "trader-confirm": 80,
+    "setup.funding-submit": 20,
+    "setup.readiness-yield": 170,
+    "setup.branch-review": 20,
+    "payment-confirm": 160,
+    "trader-review": 80,
+    "fx-confirm": 80,
+    "setup.primary-read": 20,
+    "fx-review": 160,
+    "payment-review": 240
+  },
+  "backgroundAfter": [
+    "Simulation WARMUP_COMPLETE_DAY_REQUIRED mode=UNAVAILABLE coverage=0/7 baseline=0/7 ageMs=63243793",
+    "Activation A=1794246395896 F=1794247595896 H=1794268800000",
+    "Config=null policyRevision=0 source=v1:merchant,register,loan,credit,debt,fx,operator,cash;npc=declared",
+    "financialDayMillis=1200000; windowDays<=7; baselineDays<=7; currencies=11; eventChildren=26+completion; pendingPolicies<=16; historyPage<=16; prime=0..25%; step<=0.10 percentage points; FX ordered-pair step<=0.5%; anchor=50..200%"
+  ],
+  "economicAfter": {
+    "completedSequence": 0,
+    "outstandingIntervals": 0,
+    "waitingForWall": false,
+    "ready": true
+  },
+  "burstRecoveryMs": 100.192792,
+  "idleDrainMs": 300.011958,
+  "reconciliation": "20 owners; exact CAD/USD expected balances and immutable journal sums; zero reservations; 320 original transactions/outcomes unchanged; foreign owner reads denied; 80 distinct protected output custody and stock effects (no physical delivery witness)",
+  "actorCounters": {
+    "trader-review": 80,
+    "dashboard-read": 180,
+    "history-read": 180,
+    "setup.secondary-submit": 20,
+    "reconcile.immutable-history-page": 40,
+    "fx-confirm": 80,
+    "setup.trader-catalog-stock-market": 20,
+    "setup.trading-submit": 20,
+    "setup.readiness-yield": 170,
+    "reconcile.foreign-owner": 20,
+    "setup.denomination-read": 3,
+    "trader-confirm": 80,
+    "setup.primary-read": 20,
+    "fx-review": 160,
+    "setup.primary-submit": 20,
+    "reconcile.original-lookup": 320,
+    "reconcile.cad-funds": 20,
+    "reconcile.usd-funds": 20,
+    "payment-confirm": 160,
+    "setup.funding-submit": 20,
+    "reconcile.independent-stock-custody-transactions": 1,
+    "account-list": 100,
+    "payment-review": 240,
+    "setup.branch-review": 20
+  },
+  "completedActions": 840,
+  "sampleActions": 600,
+  "latencies": {
+    "tick_sample": {
+      "count": 6001,
+      "p50Ms": 0.049583,
+      "p95Ms": 0.130583,
+      "p99Ms": 0.181375,
+      "maxMs": 20.864916
+    },
+    "tick_warmup": {
+      "count": 2400,
+      "p50Ms": 0.06475,
+      "p95Ms": 0.187709,
+      "p99Ms": 0.267125,
+      "maxMs": 5.492375
+    },
+    "financial_financial.trade": {
+      "count": 60,
+      "p50Ms": 50.003625,
+      "p95Ms": 50.106,
+      "p99Ms": 50.128375,
+      "maxMs": 50.128375
+    },
+    "native_tick_warmup": {
+      "count": 2401,
+      "p50Ms": 0.031667,
+      "p95Ms": 0.084417,
+      "p99Ms": 0.142416,
+      "maxMs": 1.799167
+    },
+    "action_financial.fx": {
+      "count": 60,
+      "p50Ms": 149.988167,
+      "p95Ms": 150.065333,
+      "p99Ms": 150.109917,
+      "maxMs": 150.109917
+    },
+    "action_financial.trade": {
+      "count": 60,
+      "p50Ms": 100.010167,
+      "p95Ms": 100.084167,
+      "p99Ms": 100.150583,
+      "maxMs": 100.150583
+    },
+    "action_read.dashboard": {
+      "count": 120,
+      "p50Ms": 49.970042,
+      "p95Ms": 50.078708,
+      "p99Ms": 50.109708,
+      "maxMs": 50.187666
+    },
+    "financial_financial.payment": {
+      "count": 120,
+      "p50Ms": 49.973458,
+      "p95Ms": 50.075667,
+      "p99Ms": 50.114875,
+      "maxMs": 50.139
+    },
+    "native_tick_sample": {
+      "count": 6002,
+      "p50Ms": 0.025458,
+      "p95Ms": 0.054958,
+      "p99Ms": 0.113458,
+      "maxMs": 20.8115
+    },
+    "action_review.payment": {
+      "count": 60,
+      "p50Ms": 49.958208,
+      "p95Ms": 50.049625,
+      "p99Ms": 50.187666,
+      "maxMs": 50.187666
+    },
+    "native_tick_recovery": {
+      "count": 1620,
+      "p50Ms": 0.021125,
+      "p95Ms": 0.047667,
+      "p99Ms": 0.089708,
+      "maxMs": 0.164708
+    },
+    "action_review.fx": {
+      "count": 60,
+      "p50Ms": 49.968834,
+      "p95Ms": 50.058417,
+      "p99Ms": 50.093041,
+      "maxMs": 50.093041
+    },
+    "action_read.history": {
+      "count": 120,
+      "p50Ms": 99.993667,
+      "p95Ms": 100.080875,
+      "p99Ms": 100.107084,
+      "maxMs": 100.347792
+    },
+    "tick_recovery": {
+      "count": 1620,
+      "p50Ms": 0.038834,
+      "p95Ms": 0.117459,
+      "p99Ms": 0.194083,
+      "maxMs": 57.425167
+    },
+    "financial_financial.fx": {
+      "count": 60,
+      "p50Ms": 50.011958,
+      "p95Ms": 50.097417,
+      "p99Ms": 50.117083,
+      "maxMs": 50.117083
+    },
+    "native_tick_idle": {
+      "count": 202,
+      "p50Ms": 0.028792,
+      "p95Ms": 0.088,
+      "p99Ms": 0.156584,
+      "maxMs": 0.188292
+    },
+    "action_financial.payment": {
+      "count": 120,
+      "p50Ms": 100.007083,
+      "p95Ms": 100.114875,
+      "p99Ms": 100.121,
+      "maxMs": 100.136792
+    },
+    "tick_idle": {
+      "count": 202,
+      "p50Ms": 0.054917,
+      "p95Ms": 0.179333,
+      "p99Ms": 0.277625,
+      "maxMs": 1.44575
+    }
+  },
+  "status": "PASSED",
+  "shutdownMs": 255.90375,
+  "shutdownState": "STOPPED",
+  "shutdownFailure": "none",
+  "unresolvedAtShutdown": 0,
+  "quantileNote": "Independent nearest-rank recomputation from retained raw arrays; recovery includes final artifact-write tick. Future fixture freezes arrays to keep original summary and raw counts aligned.",
+  "jvmHeapArguments": [
+    "-Xms2G",
+    "-Xmx4G"
+  ],
+  "queues": {
+    "storage": {
+      "capacity": 257,
+      "maxDepth": 20,
+      "maxQueuedAgeMs": 0.141958,
+      "maxActiveAgeMs": 0.15625
+    },
+    "calculation": {
+      "capacity": 65,
+      "maxDepth": 0,
+      "maxQueuedAgeMs": 0.0,
+      "maxActiveAgeMs": 0.0
+    },
+    "publication": {
+      "capacity": 323,
+      "maxDepth": 0,
+      "maxQueuedAgeMs": 0.0,
+      "maxActiveAgeMs": 0.0
+    }
+  },
+  "maxOutstanding": 20,
+  "sampleServiceCalls": {
+    "dashboard-read": 120,
+    "history-read": 120,
+    "account-list": 60,
+    "trader-confirm": 60,
+    "payment-confirm": 120,
+    "trader-review": 60,
+    "fx-confirm": 60,
+    "fx-review": 120,
+    "payment-review": 180
+  }
+}

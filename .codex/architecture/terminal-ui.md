@@ -1,6 +1,6 @@
 # ATM and kiosk navigation — 2026-11-09
 
-Banking protocol11 carries the new finite actions; schema53 and public API versions remain unchanged.
+Banking protocol11 introduced these finite actions; current protocol12 adds the separately reviewed settings confirmation. Current schema54 and public API versions remain unchanged by this navigation layer. [A10-09 acceptance](a10-acceptance.md) records subsequent localization and native layout evidence; historical task checks retain their original versions.
 
 `TerminalMenus` replaces dense terminal Home summaries with direct services, bank-scoped bank/credit/loan accounts, five-row activity pages, bill selection and grouped kiosk services. ATM login requires an owned usable held card; credit and other-bank cards restrict ATM navigation to withdrawal. Remote credit-card My Accounts is scoped to its facility. History preserves original posting currencies. Credit draws commit atomically; there is no pending-charge model, so Pending is zero.
 

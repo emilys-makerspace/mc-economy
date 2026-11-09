@@ -1,0 +1,22 @@
+{
+  "world": {
+    "databaseSha256": "6615e7c3ab218421bfd5f76ce52a7a98e9e8eb956be49612d949b54f9a215517",
+    "worldId": "7dd926bf-0dfb-4a82-af12-054683fe893a",
+    "schema": 54,
+    "quickCheck": "ok",
+    "journalHead": 651,
+    "transactions": 651,
+    "traderReceipts": 80,
+    "balancesSha256": "d7a3aed4c24efa7607bb21e92f50a054bd3e0303939fd276b0e8390f2681d2d4"
+  },
+  "restored-world": {
+    "databaseSha256": "6615e7c3ab218421bfd5f76ce52a7a98e9e8eb956be49612d949b54f9a215517",
+    "worldId": "7dd926bf-0dfb-4a82-af12-054683fe893a",
+    "schema": 54,
+    "quickCheck": "ok",
+    "journalHead": 651,
+    "transactions": 651,
+    "traderReceipts": 80,
+    "balancesSha256": "d7a3aed4c24efa7607bb21e92f50a054bd3e0303939fd276b0e8390f2681d2d4"
+  }
+}

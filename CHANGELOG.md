@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-09
 
+### Terminal navigation localization
+
+- Added English and French text for current bank-scoped account, service and activity pages, including balances, holds, primary-bank instructions and paging.
+- Account activity now renders localized typed amounts and footers correctly. Available funds/credit display no longer depends on English status prefixes.
+- Updated player guidance for current terminal services, captured fees, original-outcome recovery and the qualified local testing limits.
+
 ### Administration
 
 - Terminal cash settings now show an explicit review before saving and refuse drafts based on an older revision, with a direct refresh action.

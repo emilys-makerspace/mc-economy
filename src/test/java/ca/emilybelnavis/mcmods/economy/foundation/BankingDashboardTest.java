@@ -7,6 +7,7 @@ import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.api.Money;
 import ca.emilybelnavis.mcmods.economy.api.PartyRef;
 import ca.emilybelnavis.mcmods.economy.banking.BankingDashboardView.Availability;
+import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.storage.SqliteStorage;
 import java.nio.file.Path;
@@ -98,12 +99,25 @@ class BankingDashboardTest {
                 9,
                 terminalHistory.lines().size(),
                 "Three balances, five transactions and page counter");
-            assertEquals("Page 1 of 2", terminalHistory.lines().getLast());
+            assertEquals("Page 1 of 2", UiText.render(terminalHistory.lines().getLast(), "en_gb"));
+            for (var language : List.of("en_gb", "fr_ca", "fr_fr")) {
+              var rendered =
+                  terminalHistory.lines().stream()
+                      .map(line -> UiText.render(line, language))
+                      .toList();
+              assertTrue(rendered.getFirst().contains("CAD"));
+              assertTrue(rendered.get(3).contains("CAD"));
+              assertTrue(rendered.getLast().contains("1") && rendered.getLast().contains("2"));
+              assertTrue(
+                  rendered.stream()
+                      .noneMatch(line -> UiText.isDeferred(line) || line.contains("ui.terminal.")));
+              if (!language.equals("en_gb")) assertNotEquals("Page 1 of 2", rendered.getLast());
+            }
             assertEquals("terminal_history_next", terminalHistory.choices().getFirst().action());
             var secondPage =
                 TerminalMenus.detail(
                     tx::query, owner, "", "bank/" + account.value(), 1, capturedAt);
-            assertEquals("Page 2 of 2", secondPage.lines().getLast());
+            assertEquals("Page 2 of 2", UiText.render(secondPage.lines().getLast(), "en_gb"));
             assertEquals("terminal_history_prev", secondPage.choices().getFirst().action());
             assertThrows(
                 java.util.NoSuchElementException.class,

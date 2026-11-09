@@ -117,43 +117,63 @@ Offline time and skipping the night do not advance the replacement wait. Replace
 
 ## Schema upgrades
 
-New worlds initialize automatically. Worlds on schemas 1 through 53 require a validated complete-world backup before upgrading to schema 54. Prepare it while Minecraft is fully stopped:
+Use Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Update the server and connecting clients together: the current banking transport is version 12, and older endpoints cannot use it. Keep the old mod, configuration and complete-world backup until the new server has reached readiness and stopped cleanly. An upgrade is not permission to reset the world or remove its economy data.
+
+New worlds initialize automatically. Worlds on schemas 1 through 53 require a validated complete-world backup before the current additive schema 54 upgrade. Stop the server normally, wait for the process to exit and prepare the backup:
 
 ```sh
 ./gradlew prepareEconomyUpgrade -PeconomyWorld=/absolute/path/to/world
 ```
 
-Backups are placed beside the world in `<world-name>-economy-upgrade-backups/`. Then start Minecraft normally. Missing or changed backups prevent upgrades; they do not erase data. The utility refuses a world whose Minecraft or economy ownership lock is held. It does not copy a running world.
+Backups are placed beside the world in `<world-name>-economy-upgrade-backups/`. Keep that backup directory at its recorded location through the upgrade, then start Minecraft normally. The upgrade receipt binds the backup to the stopped source database and identity; changing the source after preparation requires a new preparation. Missing or changed backups prevent upgrades; they do not erase data. The utility refuses a world whose Minecraft or economy ownership lock is held and does not copy a running world. Do not bypass a refusal by deleting locks, editing a receipt or altering schema records. A pre-upgrade receipt alone is not a clean general-restore backup.
 
 ## Complete-world backup and restore
 
-Stop Minecraft normally and wait for the log message `Economy complete-world clean shutdown recorded`. Then create a backup:
+1. Stop new player activity and retain the original operation UUIDs for any uncertain actions. Use the normal server `stop` command, or Save and Quit for an integrated world. Economy stops admitting new work and drains accepted work within the configured deadline (30 seconds by default).
+2. Wait for the process to exit and the log message `Economy complete-world clean shutdown recorded`. `Economy foundation stopped; drained=true` alone is not the complete-world certificate: Minecraft saves and the post-save identity/checkpoint check must also finish.
+3. Create the backup while the world remains stopped:
 
 ```sh
 ./gradlew backupEconomyWorld -PeconomyWorld=/absolute/path/to/world
 ```
 
-Backups include the world and economy together, with checksums, version/identity information, journal position, and economic checkpoint. They appear under the sibling `<world-name>-economy-upgrade-backups/<backup-id>/` directory.
+Backups include the world and economy together, with a file inventory/checksums, format/schema/identity information, journal position and economic checkpoint. They appear under the sibling `<world-name>-economy-upgrade-backups/<backup-id>/` directory. Preserve the entire backup directory, including its receipts and manifests. Keep Minecraft player, entity, container and chunk saves with the economy database from the same snapshot; a database-only copy or a mixture of snapshots is not a supported backup. Do not remove a WAL file or copy files from a running world.
 
-Restore into a **new, separate directory**:
+Restore into a **new, separate directory** whose parent already exists, outside the backup directory. Keep the current world stopped and intact while checking the copy:
 
 ```sh
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 54 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
+The restore command validates the receipt, full inventory/checksums, supported format/schema, world identity, journal and economic checkpoints, and offline financial invariants. It validates the staged copy again before publishing the new destination and refuses an existing destination. A successful command reports the restored destination, world ID, journal position and economic checkpoint; retain that output with the backup record. Restore supports clean schema 4 through 54 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup before starting the newer server.
 
-There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination.
+Switching the server's selected world to the restored copy is a separate operator action. Start only that selected copy with the matching mod/configuration, check readiness as described below and stop it normally before treating the recovery as established. A successful offline restore does not establish runtime readiness. Do not run the original and restored copies concurrently: they retain the same economy world identity. A restore returns to the snapshot; it cannot retain player actions or financial outcomes recorded after that backup.
 
-Economy requests become available after startup recovery and required catch-up. Ordinary Minecraft can continue during that work. With an economic system registered, ongoing catch-up processes UTC intervals in chronological order and gates affected writes until current. Sleep and `/time` do not advance economic time. Daily FX starts at the UTC midnight after the world’s opening publication. A fresh world offers the first connected player a denomination chooser.
+There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination. Preserve failure output and the source backup; choose a fresh destination for a later attempt after resolving the reported cause. Do not publish an incomplete staging directory manually.
+
+## Recovery readiness and shutdown troubleshooting
+
+After upgrade or restore, use `/economy status` and authorized `/economy diagnostics` to check storage availability, failure code/correlation, journal/checkpoints, queue age and calendar progress. Economy requests become available after startup recovery and required catch-up; a responsive Minecraft server alone does not establish economy readiness. Ordinary Minecraft can continue during that work. With an economic system registered, ongoing catch-up processes UTC intervals in chronological order and gates affected writes until current. Compare successive timestamped diagnostic samples when checking progress. Sleep and `/time` do not advance economic time. Daily FX starts at the UTC midnight after the world’s opening publication. A fresh world offers the first connected player a denomination chooser.
+
+If startup is unavailable or catch-up stops progressing, retain the first logged error, correlation and diagnostic samples, stop normally, and preserve the world and backup. Check the matching Java/mod/configuration, free space and reported lock, checksum, identity or readiness cause before restarting. Do not edit journal facts, advance the host clock, enlarge queues or reset the database to force readiness. Storage/schema corruption and malformed provenance require diagnosis; retrying a player mutation cannot fix them.
+
+An interrupted or disconnected action has an uncertain outcome until its original operation is resolved. Use its existing owner receipt/lookup or authorized bounded diagnostic path before creating a fresh reviewed action. A committed original is not reversed by disconnect or shutdown. Do not issue compensating money, restore cash, move custody records or resubmit with a new UUID merely because a callback or item presentation was not observed.
+
+If the log reports unresolved shutdown work, `drained=false`, a save/post-save failure or `Complete-world clean shutdown not certified`, do not describe that stop as clean or edit the clean-witness file. The general backup utility refuses missing or mismatched clean evidence. Preserve the files and logs, resolve the cause, then let the same world recover and complete a normal stop before creating a clean backup. Increasing the drain deadline does not establish that previously unresolved work completed.
 
 Legacy economy databases are not imported. Incompatible, corrupt, or mismatched identity data makes the economy unavailable while ordinary Minecraft play can continue. Preserve the files and inspect the logged error rather than deleting them.
 
 Storage requires filesystem support for exclusive file locks, atomic file publication, and directory synchronization. These checks have been exercised on macOS; other platforms have not been runtime-tested.
 
+## Operational reference measurements
+
+A local dedicated test on the Apple M5 Pro/24GB reference Mac, with a2–4GiB Java21 heap and sparse flat world, passed the fixed20-synthetic-owner workload:2 top-level actions/s, a300-second sample and one20-request burst. Owner history p95 was100.081ms; confirmation-to-financial-outcome p95 was at most50.106ms. The sample reconciled balances, original receipts, trader stock and protected custody, then stopped cleanly. [Measurement scope and results](../.codex/verification/A10-08.md) retain the exact workload, quantiles and restore evidence.
+
+This is service capacity evidence, not20 connected players, physical-delivery throughput or a minimum-hardware specification. No natural background publication occurred during the sample. Populated worlds, rendering, network clients and storage conditions can change observed performance. Use authorized diagnostics to observe queue depth/age and readiness on the actual server; retain controlled overload refusals rather than enlarging queues to hide them.
+
 ## Server integrations
 
-Server integrations can consume `ca.emilybelnavis.mcmods.economy.api.BankingIntegration` version 1 through the server ledger service. It exposes versioned prime, owner valuation and fee quotes, physically authorized credit payment entry points and fixed/variable/secured capability reporting. Financial authority and existing journal/custody rules apply to integrations. A village structure, desk, banker or branded appearance does not issue an integration grant. Use authenticated server context and the existing account and physical-service checks. The interface declares `VERSION = 1` and reports it through `version()`. [BankingIntegration source](../src/main/java/ca/emilybelnavis/mcmods/economy/api/BankingIntegration.java).
+Server integrations can consume `ca.emilybelnavis.mcmods.economy.api.BankingIntegration` version 2 through the server ledger service. It exposes versioned prime, owner valuation and fee quotes, physically authorized credit payment entry points and fixed/variable/secured capability reporting. Financial authority and existing journal/custody rules apply to integrations. A village structure, desk, banker or branded appearance does not issue an integration grant. Use authenticated server context and the existing account and physical-service checks. The interface declares `VERSION = 2` and reports it through `version()`. [BankingIntegration source](../src/main/java/ca/emilybelnavis/mcmods/economy/api/BankingIntegration.java).
 
 See the [server integration contract](INTEGRATION_API.md) for entry points, version boundaries and downstream consumers.
 

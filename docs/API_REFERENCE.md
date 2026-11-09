@@ -2,6 +2,8 @@
 
 Minecraft1.21.1, NeoForge21.1.252, Java21. These are trusted server-mod contracts. Client packets, UUIDs and copied DTOs grant no financial authority. See the [integration guide](INTEGRATION_API.md) for product and provider rules.
 
+The [qualified core acceptance matrix](../.codex/architecture/a10-acceptance.md) records reused checks and runtime limits. [Downstream handoff](../.codex/architecture/a10-downstream.md) keeps B-series products and optional third-party modules separate; core acceptance changes no signature, capability or financial authority.
+
 ## Acquisition and compatibility
 
 Call `Economy.serverServices(server)` on the server thread. It can return `null` outside an active Economy lifecycle. Require `ServerServices.State.READY` before requesting work. READY means foundation availability; it does not imply that scheduled finance, rates, item valuation or a physical terminal is currently usable.

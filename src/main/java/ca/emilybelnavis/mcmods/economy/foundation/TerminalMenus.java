@@ -95,8 +95,7 @@ public final class TerminalMenus {
                 if (error != null || account.isEmpty()) {
                   audience.reply(
                       "withdraw_sources",
-                      List.of(
-                          "A bank account in the card's currency is required for this cash advance."),
+                      List.of(UiText.t("ui.terminal.advance_requires_account")),
                       "",
                       List.of());
                   return;
@@ -113,7 +112,11 @@ public final class TerminalMenus {
       String[] parts = value.split("/", 2);
       // Re-offer only the selected debt to the existing reviewed repayment flow.
       String target = parts[0].equals("credit") ? "finance_credit_pay" : "finance_loan_view";
-      menu.publish("payments", List.of(), "", List.of(choice(target, parts[1], "Continue")));
+      menu.publish(
+          "payments",
+          List.of(),
+          "",
+          List.of(choice(target, parts[1], UiText.t("ui.terminal.continue"))));
       if (parts[0].equals("credit"))
         CreditMenus.terminalPayment(player, menu, UUID.fromString(parts[1]));
       else LoanMenus.action(player, menu, target, parts[1]);
@@ -159,7 +162,11 @@ public final class TerminalMenus {
                       new View(
                           "terminal_accounts",
                           List.of(),
-                          List.of(choice("terminal_account", key, "Credit Account")),
+                          List.of(
+                              choice(
+                                  "terminal_account",
+                                  key,
+                                  UiText.t("ui.terminal.account.credit_short"))),
                           Set.of(key)));
                 }
               }
@@ -201,10 +208,7 @@ public final class TerminalMenus {
               if (!audience.live()) return;
               if (error != null || found.isEmpty()) {
                 audience.reply(
-                    "accounts",
-                    List.of("This service is unavailable. Please try again."),
-                    "",
-                    List.of());
+                    "accounts", List.of(UiText.t("ui.terminal.unavailable")), "", List.of());
                 return;
               }
               var view = found.orElseThrow();
@@ -307,20 +311,27 @@ public final class TerminalMenus {
           choice(
               bills ? "terminal_bill" : "terminal_account",
               key,
-              activity(row.get("kind")) + " Account · " + row.get("currency")));
+              accountLabel(row.get("kind"), row.get("currency"))));
     }
     if (page > 0)
       choices.add(
-          choice("terminal_accounts_page", Integer.toString(page - 1), "← Previous Accounts"));
+          choice(
+              "terminal_accounts_page",
+              Integer.toString(page - 1),
+              UiText.t("ui.terminal.accounts.previous")));
     if (rows.size() > 6)
-      choices.add(choice("terminal_accounts_page", Integer.toString(page + 1), "More Accounts →"));
+      choices.add(
+          choice(
+              "terminal_accounts_page",
+              Integer.toString(page + 1),
+              UiText.t("ui.terminal.accounts.next")));
     return new View(
         bills ? "payments" : "terminal_accounts",
         choices.isEmpty()
             ? List.of(
                 bills
-                    ? "You have no bills with this bank."
-                    : "You have no accounts with this bank.")
+                    ? UiText.t("ui.terminal.accounts.no_bills")
+                    : UiText.t("ui.terminal.accounts.empty"))
             : List.of(),
         choices,
         offered);
@@ -358,7 +369,7 @@ public final class TerminalMenus {
           choice(
               "terminal_withdraw_bank",
               account.id().value().toString(),
-              "Bank Account · " + account.currency().code()));
+              accountLabel("bank", account.currency().code())));
     for (var facility : CreditFacilities.history(reads, owner, null, 16))
       if (facility.status() == CreditFacilities.Status.ACTIVE
           && (access == BankingMenu.Access.ATM
@@ -369,12 +380,12 @@ public final class TerminalMenus {
             choice(
                 "terminal_withdraw_credit",
                 facility.id().toString(),
-                "Credit Account · " + facility.currency().code()));
+                accountLabel("credit", facility.currency().code())));
     return new View(
         "withdraw_sources",
         choices.isEmpty()
-            ? List.of("No account is available for withdrawal.")
-            : List.of("Choose an account to withdraw from."),
+            ? List.of(UiText.t("ui.terminal.withdraw.empty"))
+            : List.of(UiText.t("ui.terminal.withdraw.choose")),
         choices,
         Set.of());
   }
@@ -392,12 +403,19 @@ public final class TerminalMenus {
           var provider = BankProviders.find(reads, owner, primary.id()).orElse(null);
           if (provider != null && provider.bankKey().equals(bank))
             rows.add(
-                choice("branch_switch", primary.id().value().toString(), "Change Primary Bank"));
-          else rows.add(choice("terminal_primary", "", "Assign This Bank as Primary"));
+                choice(
+                    "branch_switch",
+                    primary.id().value().toString(),
+                    UiText.t("ui.terminal.primary.change")));
+          else rows.add(choice("terminal_primary", "", UiText.t("ui.terminal.primary.assign")));
         }
         for (var a : accounts) {
           if (!a.primary())
-            rows.add(choice("branch_close", a.id().value().toString(), "Close Account"));
+            rows.add(
+                choice(
+                    "branch_close",
+                    a.id().value().toString(),
+                    UiText.t("ui.terminal.account.close")));
         }
       }
       case "terminal_primary" -> {
@@ -407,33 +425,33 @@ public final class TerminalMenus {
         if (target.baseCurrency() != primary.currency() || !target.tier1())
           return new View(
               page,
-              List.of(
-                  "Your primary bank must offer a standard account in "
-                      + primary.currency().code()
-                      + "."),
+              List.of(UiText.t("ui.terminal.primary.currency_required", primary.currency().code())),
               rows,
               Set.of());
         var provider = BankProviders.find(reads, owner, primary.id()).orElseThrow();
         String id = primary.id().value().toString();
         if (provider.bankKey().equals(bank)) {
-          rows.add(choice("branch_switch", id, "Change Primary Bank"));
-          return new View(page, List.of("This is already your primary bank."), rows, Set.of());
+          rows.add(choice("branch_switch", id, UiText.t("ui.terminal.primary.change")));
+          return new View(page, List.of(UiText.t("ui.terminal.primary.already")), rows, Set.of());
         }
         if (provider.bankKey().equals(BankProviders.UNASSIGNED_PROVIDER)) {
-          rows.add(choice("branch_assign", id, "Confirm Primary Bank"));
+          rows.add(choice("branch_assign", id, UiText.t("ui.terminal.primary.confirm")));
           return new View(
-              page, List.of("Assign your main account to " + target.name() + "."), rows, Set.of());
+              page,
+              List.of(UiText.t("ui.terminal.primary.assign_review", target.name())),
+              rows,
+              Set.of());
         }
         var pending =
             reads.query(
                 "SELECT target_key FROM bank_provider_switches WHERE account_id=?", List.of(id), 1);
         if (!pending.isEmpty() && pending.getFirst().get("target_key").equals(bank)) {
-          rows.add(choice("branch_accept", id, "Confirm Primary Bank"));
+          rows.add(choice("branch_accept", id, UiText.t("ui.terminal.primary.confirm")));
           return new View(
               page,
               List.of(
-                  "Complete your primary bank change to " + target.name() + ".",
-                  "Your old debit card will be cancelled. Issue a new card here afterwards."),
+                  UiText.t("ui.terminal.primary.complete_review", target.name()),
+                  UiText.t("ui.terminal.primary.card_cancelled")),
               rows,
               Set.of());
         }
@@ -443,16 +461,16 @@ public final class TerminalMenus {
         return new View(
             page,
             List.of(
-                "First visit " + source + " and choose Account Settings, then Change Primary Bank.",
-                "Select " + target.name() + ", then return here to confirm."),
+                UiText.t("ui.terminal.primary.visit_source", source),
+                UiText.t("ui.terminal.primary.return_target", target.name())),
             rows,
             Set.of());
       }
       case "terminal_credit" -> {
         page = "credit_services";
-        rows.add(choice("finance_credit_apply", "", "Apply for Credit"));
-        rows.add(choice("credit_profile", "", "Credit Profile"));
-        rows.add(choice("finance_report", "", "Credit Report"));
+        rows.add(choice("finance_credit_apply", "", UiText.t("ui.terminal.credit.apply")));
+        rows.add(choice("credit_profile", "", UiText.t("ui.terminal.credit.profile")));
+        rows.add(choice("finance_report", "", UiText.t("ui.terminal.credit.report")));
         if (CreditFacilities.history(reads, owner, null, 16).stream()
             .anyMatch(
                 f ->
@@ -460,28 +478,29 @@ public final class TerminalMenus {
                         && f.status() == CreditFacilities.Status.ACTIVE
                         && f.access() == CreditFacilities.Access.ENABLED
                         && f.requirements().stream().noneMatch(r -> r.unmetMinor() > 0)))
-          rows.add(choice("finance_credit_raise", "", "Request Credit Limit Increase"));
+          rows.add(choice("finance_credit_raise", "", UiText.t("ui.terminal.credit.increase")));
       }
       case "terminal_loans" -> {
         page = "loan_services";
-        rows.add(choice("finance_loan_apply", "", "Apply for a Loan"));
-        rows.add(choice("credit_profile", "", "Credit Profile"));
-        rows.add(choice("finance_report", "", "Credit Report"));
+        rows.add(choice("finance_loan_apply", "", UiText.t("ui.terminal.loan.apply")));
+        rows.add(choice("credit_profile", "", UiText.t("ui.terminal.credit.profile")));
+        rows.add(choice("finance_report", "", UiText.t("ui.terminal.credit.report")));
       }
       case "terminal_cards" -> {
         page = "card_services";
-        rows.add(choice("cards", "", "Bank Cards"));
-        rows.add(choice("finance_credit_cards", "", "Credit Cards"));
-        rows.add(choice("claims", "", "Collect Cards and Cash"));
+        rows.add(choice("cards", "", UiText.t("ui.terminal.cards.bank")));
+        rows.add(choice("finance_credit_cards", "", UiText.t("ui.terminal.cards.credit")));
+        rows.add(choice("claims", "", UiText.t("ui.terminal.cards.collect")));
       }
       default -> {
-        if (accounts.isEmpty()) rows.add(choice("branch_open", "", "Open a Bank Account"));
+        if (accounts.isEmpty())
+          rows.add(choice("branch_open", "", UiText.t("ui.terminal.account.open")));
         if (!accounts.isEmpty() || AccountCatalog.primary(reads, owner).isPresent())
-          rows.add(choice("terminal_settings", "", "Account Settings"));
-        rows.add(choice("terminal_credit", "", "Credit Services"));
-        rows.add(choice("terminal_loans", "", "Loan Services"));
-        rows.add(choice("terminal_cards", "", "Card Services"));
-        rows.add(choice("fx", "", "Currency Exchange"));
+          rows.add(choice("terminal_settings", "", UiText.t("ui.terminal.account.settings")));
+        rows.add(choice("terminal_credit", "", UiText.t("ui.terminal.services.credit")));
+        rows.add(choice("terminal_loans", "", UiText.t("ui.terminal.services.loan")));
+        rows.add(choice("terminal_cards", "", UiText.t("ui.terminal.services.card")));
+        rows.add(choice("fx", "", UiText.t("ui.terminal.services.fx")));
       }
     }
     return new View(page, List.of(), rows, Set.of());
@@ -509,7 +528,9 @@ public final class TerminalMenus {
       lines.add(money(currency, funds.postedMinorUnits()));
       lines.add(money(currency, funds.availableMinorUnits()));
       lines.add(
-          "Holds: " + money(currency, funds.reservedMinorUnits() + funds.restrictedMinorUnits()));
+          UiText.t(
+              "ui.terminal.account.holds",
+              new Money(currency, funds.reservedMinorUnits() + funds.restrictedMinorUnits())));
       var rows =
           reads.query(
               "SELECT sequence,position,minor,currency,service FROM owner_history WHERE world_id=? AND owner_id=? AND account_id=? ORDER BY sequence DESC,position DESC LIMIT 5 OFFSET ?",
@@ -522,11 +543,11 @@ public final class TerminalMenus {
       for (var row : rows) {
         long amount = Long.parseLong(row.get("minor"));
         lines.add(
-            (amount < 0 ? "DEBIT" : "CREDIT")
-                + " - "
-                + activity(row.get("service"))
-                + "\t"
-                + money(EconomyCurrency.fromCode(row.get("currency")), Math.abs(amount)));
+            UiText.t(
+                "ui.terminal.history.movement",
+                UiText.t(amount < 0 ? "ui.terminal.history.debit" : "ui.terminal.history.credit"),
+                activity(row.get("service")),
+                new Money(EconomyCurrency.fromCode(row.get("currency")), Math.abs(amount))));
       }
       long count =
           Long.parseLong(
@@ -549,8 +570,8 @@ public final class TerminalMenus {
       var view = CreditDiagnostics.facility(reads, owner, id, now).orElseThrow();
       currency = f.currency();
       lines.add(money(currency, view.currentBalanceMinor()));
-      lines.add("Available Credit: " + money(currency, view.availableCreditMinor()));
-      lines.add("Pending: " + money(currency, 0));
+      lines.add(money(currency, view.availableCreditMinor()));
+      lines.add(UiText.t("ui.terminal.account.pending", new Money(currency, 0)));
       fact = CreditFacilities.EVENT_FACT;
     } else {
       var loan =
@@ -601,11 +622,19 @@ public final class TerminalMenus {
         amount = Math.addExact(Long.parseLong(detail[1]), Long.parseLong(detail[2]));
       else amount = Long.parseLong(detail[0]);
       lines.add(
-          (parts[0].equals("loan")
-                  ? "Payment - " + date(Long.parseLong(values.get(2)))
-                  : (kind.equals("REPAYMENT") ? "CREDIT" : "DEBIT") + " - " + activity(kind))
-              + "\t"
-              + money(currency, amount));
+          parts[0].equals("loan")
+              ? UiText.t(
+                  "ui.terminal.history.loan_payment",
+                  date(Long.parseLong(values.get(2))),
+                  new Money(currency, amount))
+              : UiText.t(
+                  "ui.terminal.history.movement",
+                  UiText.t(
+                      kind.equals("REPAYMENT")
+                          ? "ui.terminal.history.credit"
+                          : "ui.terminal.history.debit"),
+                  activity(kind),
+                  new Money(currency, amount)));
     }
     long count =
         Long.parseLong(
@@ -625,7 +654,7 @@ public final class TerminalMenus {
     var choices = new ArrayList<BankingNetwork.Choice>();
     if (page > 0) choices.add(choice("terminal_history_prev", "", "←"));
     if (page + 1 < total) choices.add(choice("terminal_history_next", "", "→"));
-    lines.add("Page " + (page + 1) + " of " + total);
+    lines.add(UiText.t("ui.terminal.history.page", page + 1, total));
     return new View("account_overview", lines, choices, Set.of());
   }
 
@@ -641,11 +670,38 @@ public final class TerminalMenus {
     return Instant.ofEpochMilli(at).atZone(ZoneOffset.UTC).toLocalDate().toString();
   }
 
+  private static String accountLabel(String kind, String currency) {
+    return UiText.t(
+        "ui.terminal.account."
+            + switch (kind) {
+              case "bank" -> "bank";
+              case "credit" -> "credit";
+              case "loan" -> "loan";
+              default -> throw new IllegalArgumentException("Account kind");
+            },
+        currency);
+  }
+
   private static String activity(String value) {
-    String text = value.substring(value.lastIndexOf(':') + 1).replace('_', ' ').replace('/', ' ');
-    return text.isEmpty()
-        ? "Transaction"
-        : text.substring(0, 1).toUpperCase(Locale.ROOT)
-            + text.substring(1).toLowerCase(Locale.ROOT);
+    String name = value.substring(value.lastIndexOf(':') + 1).toLowerCase(Locale.ROOT);
+    String key =
+        switch (name) {
+          case "same_currency", "pay", "transfer", "payments" -> "transfer";
+          case "ledger" -> "account";
+          case "loans" -> "loan";
+          case "fx", "fx_settlement", "exchange" -> "fx";
+          case "deposits", "deposit" -> "deposit";
+          case "withdrawals", "withdrawal" -> "withdrawal";
+          case "merchant_payment", "register_sales", "draw_purchase" -> "purchase";
+          case "npc_trades", "npc_cash_trades", "npc_trade", "npc_cash" -> "trade";
+          case "repayment", "payment" -> "payment";
+          case "draw_advance" -> "advance";
+          case "daily_interest" -> "interest";
+          case "advance_fees" -> "advance_fee";
+          case "credit" -> "credit";
+          case "debit" -> "debit";
+          default -> "transaction";
+        };
+    return UiText.t("ui.terminal.activity." + key);
   }
 }

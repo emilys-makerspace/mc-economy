@@ -541,11 +541,33 @@ if (providers.gradleProperty('layoutProbe').isPresent()) {
     tasks.named('runClient') {
         systemProperty 'economy.layoutProbe', 'true'
         systemProperty 'economy.layoutSupplement', providers.gradleProperty('layoutSupplement').isPresent().toString()
+        systemProperty 'economy.layoutTerminalCurrent', providers.gradleProperty('layoutTerminalCurrent').isPresent().toString()
         systemProperty 'economy.layoutStartCase', providers.gradleProperty('layoutStartCase').getOrElse('0')
         doLast {
             def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
             if (new File(root, 'layout-failed.txt').exists() || !new File(root, 'layout-passed.txt').exists())
                 throw new GradleException('Native finite layout witness did not pass')
+        }
+    }
+}
+
+// Explicit A10-08 service-actor workload, excluded from normal builds and CI.
+if (providers.gradleProperty('operationsProbe').isPresent() || providers.gradleProperty('operationsRestoreProbe').isPresent()) {
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
+    tasks.named('runServer') {
+        def restore = providers.gradleProperty('operationsRestoreProbe').isPresent()
+        systemProperty(restore ? 'economy.operationsRestoreProbe' : 'economy.operationsProbe', 'true')
+        systemProperty 'economy.operationsRoot', file(providers.gradleProperty('economyRunRoot').get()).absolutePath
+        jvmArguments.addAll('-Xms2G', '-Xmx4G')
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get())
+            def marker = restore ? 'operations-restore' : 'operations'
+            if (new File(root, marker + '-failed.txt').exists() || !new File(root, marker + '-passed.txt').exists())
+                throw new GradleException('Core operations workload did not pass')
         }
     }
 }
