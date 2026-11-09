@@ -1141,11 +1141,11 @@
   "ui.finance.credituse.1": "Saisir le montant de l’avance",
   "ui.finance.credituse.2": "Tenez votre carte de crédit active et sélectionnez un compte vous appartenant dans Mes comptes.",
   "ui.finance.credituse.3": "L’avance crédite ce compte. Le retrait d’espèces exige un examen et une confirmation distincts.",
-  "ui.finance.credituse.4": "Les avances restantes sont limitées à 20 % de votre limite de crédit. Aucun frais d’avance. Saisie : chiffres ASCII, point décimal « . », sans séparateur de milliers.",
+  "ui.finance.credituse.4": "Les avances et leurs frais sont limités à 20 % de votre limite de crédit. Frais de base : 3,00 CAD; GAB d’une autre banque : 2,50 CAD. Conversion au taux courant, arrondie au 0,25 le plus proche (25 JPY).",
   "ui.finance.credituse.5": "Examiner l’avance",
   "ui.finance.credituse.6": "Avance : {0}",
   "ui.finance.credituse.7": "Taux annuel d’avance : {0} %",
-  "ui.finance.credituse.8": "Les intérêts courent quotidiennement dès l’avance. Aucun délai de grâce ni frais d’avance.",
+  "ui.finance.credituse.8": "Les intérêts courent quotidiennement dès l’avance, frais compris. Aucun délai de grâce.",
   "ui.finance.credituse.9": "Cela crédite le compte bancaire sélectionné. Les espèces exigent un retrait distinct.",
   "ui.finance.credituse.10": "Confirmer l’avance",
   "ui.finance.credituse.11": "Avance indisponible",
@@ -1682,5 +1682,8 @@
   "item.economy.issued_mariner_crest_credit_wayline": "Mariner Crest Wayline Credit Card",
   "item.economy.mariner_crest_credit_keystone": "Mariner Crest Keystone Credit Card",
   "item.economy.issued_mariner_crest_credit_keystone": "Mariner Crest Keystone Credit Card",
-  "item.economy.banker_spawn_egg": "Œuf d’apparition de banquier"
+  "item.economy.banker_spawn_egg": "Œuf d’apparition de banquier",
+  "ui.finance.credituse.advance_fee": "Frais d’avance : {0}",
+  "ui.finance.credituse.total": "Ajout au solde de la carte : {0}",
+  "ui.bank.atm_fee": "Frais de GAB : {0}"
 }

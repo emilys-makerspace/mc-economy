@@ -1,5 +1,7 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.BankingController;
+
 import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
@@ -102,8 +104,8 @@ public final class FinanceCollections {
             if (!audience.live()) return;
             if (error != null || found.isEmpty()) { unavailable(audience); return; }
             state.selected = found.orElseThrow();
-            var lines = caseLines(state.selected);
-            if (!DebtLifecycle.demands(state.selected, System.currentTimeMillis())) {
+            var lines = caseLines(state.selected, BankingController.services(audience.player()).financialMillis());
+            if (!DebtLifecycle.demands(state.selected, BankingController.services(audience.player()).financialMillis())) {
                 audience.reply("finance_debt", lines,UiText.t("ui.finance.financecollections.6"), List.of(choice("finance_debt_home", "",UiText.t("ui.finance.financecollections.7"))));
                 return;
             }
@@ -144,7 +146,7 @@ public final class FinanceCollections {
     private static void preview(FinanceMenuSupport.Audience audience, ServerServices services,
                                 PartyAuthorization.Grant grant, State state, String value) {
         requireOffered(audience, "finance_debt_amount", "");
-        if (state.selected == null || state.funding == null || !DebtLifecycle.demands(state.selected, System.currentTimeMillis()))
+        if (state.selected == null || state.funding == null || !DebtLifecycle.demands(state.selected, BankingController.services(audience.player()).financialMillis()))
             throw new IllegalStateException("Case unavailable");
         long amount = CreditMenus.paymentAmount(value, state.selected.currency());
         if (amount > state.selected.debtMinor()) throw new IllegalArgumentException("Payment exceeds debt");
@@ -174,7 +176,7 @@ public final class FinanceCollections {
     }
 
     private static void review(FinanceMenuSupport.Audience audience, State state) {
-        var lines = new ArrayList<>(caseLines(state.selected));
+        var lines = new ArrayList<>(caseLines(state.selected, BankingController.services(audience.player()).financialMillis()));
         lines.add(UiText.t("ui.finance.financecollections.13", money(state.selected.currency(), state.payment.amountMinor())));
         if (state.fx == null) {
             lines.add(UiText.t("ui.finance.financecollections.14", money(state.selected.currency(), state.payment.amountMinor())));
@@ -196,7 +198,7 @@ public final class FinanceCollections {
     private static void confirm(FinanceMenuSupport.Audience audience, ServerServices services,
                                 PartyAuthorization.Grant grant, State state) {
         requireOffered(audience, "finance_debt_confirm", "");
-        if (state.payment == null || audience.menu().revision() != state.previewRevision || System.currentTimeMillis() >= expires(state))
+        if (state.payment == null || audience.menu().revision() != state.previewRevision || BankingController.services(audience.player()).financialMillis() >= expires(state))
             throw new IllegalStateException("Collection quote stale");
         if (state.fx == null) {
             var quote = state.payment;
@@ -209,8 +211,7 @@ public final class FinanceCollections {
         }
     }
 
-    private static List<String> caseLines(DebtRecords.Case debt) {
-        long now = System.currentTimeMillis();
+    private static List<String> caseLines(DebtRecords.Case debt, long now) {
         return List.of(CreditReport.label(debt.kind()) + " · " + creditor(debt),UiText.t("ui.finance.financecollections.20", money(debt.currency(), debt.debtMinor())),UiText.t("ui.finance.financecollections.21", CreditReport.label(DebtLifecycle.caseState(debt))),UiText.t("ui.finance.financecollections.22", CreditReport.label(DebtLifecycle.bureauStatus(debt, now))),UiText.t("ui.finance.financecollections.23", Instant.ofEpochMilli(debt.defaultAt())),UiText.t("ui.finance.financecollections.24", Instant.ofEpochMilli(debt.collectionExpires())),UiText.t("ui.finance.financecollections.25", Instant.ofEpochMilli(debt.reportExpires())),UiText.t("ui.finance.financecollections.26"));
     }
 

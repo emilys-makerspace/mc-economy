@@ -23,6 +23,9 @@ import ca.emilybelnavis.mcmods.economy.foundation.FxAdminCommands;
 import ca.emilybelnavis.mcmods.economy.foundation.LedgerCommands;
 import ca.emilybelnavis.mcmods.economy.foundation.DenominationChooser;
 import java.time.Clock;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.io.IOException;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
 
@@ -37,6 +40,7 @@ public final class Economy {
     private static final Logger LOGGER = LogUtils.getLogger();
     private final Map<MinecraftServer, DenominationChooser> choosers = new IdentityHashMap<>();
     private static final Map<MinecraftServer, ServerServices> servers = new IdentityHashMap<>();
+    private static final Map<MinecraftServer, Clock> fixtureClocks = Collections.synchronizedMap(new java.util.WeakHashMap<>());
     private final Set<MinecraftServer> invalidConfiguration = Collections.newSetFromMap(new IdentityHashMap<>());
     private static final SchedulingMetrics.Queue NO_QUEUE = new SchedulingMetrics.Queue(0, 0, 0);
     private static final SchedulingMetrics NO_METRICS = new SchedulingMetrics(NO_QUEUE, NO_QUEUE, NO_QUEUE,
@@ -77,6 +81,36 @@ public final class Economy {
     public static ServerServices serverServices(MinecraftServer server) {
         if (!server.isSameThread()) throw new IllegalStateException("Requires server thread");
         return servers.get(server);
+    }
+
+    /** Trusted release-excluded fixture hook; no packet, command or production configuration exposes this. */
+    public static void installFixtureClock(MinecraftServer server, Clock clock) {
+        if (!server.isSameThread() || !Boolean.getBoolean("economy.debtCompositeProbe") || servers.containsKey(server))
+            throw new IllegalStateException("Fixture clock requires explicit pre-start fixture lifecycle");
+        java.util.Objects.requireNonNull(clock);
+        try {
+            Path world = server.getWorldPath(LevelResource.ROOT).toRealPath();
+            Path saves = world.getParent();
+            Path client = saves == null ? null : saves.getParent();
+            Path run = client == null ? null : client.getParent();
+            String name = world.getFileName().toString();
+            String prefix = "economy-debt-composite-";
+            if (run == null || run.getParent() == null || !saves.getFileName().toString().equals("saves")
+                    || !client.getFileName().toString().equals("client")
+                    || !run.getParent().equals(Path.of("/private/tmp").toRealPath())
+                    || !run.getFileName().toString().startsWith("economy-a10-05-")
+                    || run.getFileName().toString().equals("economy-a10-05-")
+                    || !name.startsWith(prefix)
+                    || !java.util.UUID.fromString(name.substring(prefix.length())).toString().equals(name.substring(prefix.length()))
+                    || Files.exists(world.resolve("economy")))
+                throw new IllegalStateException("Fresh guarded debt-composite world required");
+            synchronized (fixtureClocks) {
+                if (fixtureClocks.containsKey(server)) throw new IllegalStateException("Fixture clock already installed");
+                fixtureClocks.put(server, clock);
+            }
+        } catch (IOException | IllegalArgumentException invalid) {
+            throw new IllegalStateException("Fresh guarded debt-composite world required", invalid);
+        }
     }
 
     public static boolean canChooseWorld(net.minecraft.server.level.ServerPlayer player, java.util.UUID lease) {
@@ -148,13 +182,14 @@ public final class Economy {
             return;
         }
         ca.emilybelnavis.mcmods.economy.trade.entity.TradeRuntime.configure(server,simulation.traders());
-        var runtime = new FoundationRuntime(FoundationRuntime.Configuration.production(Clock.systemUTC(), calendar), scheduling.sqliteLockTimeoutMillis(),simulation);
-        servers.put(server, new ServerServices(server.getWorldPath(LevelResource.ROOT), runtime, scheduling));
+        Clock financialClock = fixtureClocks.getOrDefault(server, Clock.systemUTC());
+        var runtime = new FoundationRuntime(FoundationRuntime.Configuration.production(financialClock, calendar), scheduling.sqliteLockTimeoutMillis(),simulation);
+        servers.put(server, new ServerServices(server.getWorldPath(LevelResource.ROOT), runtime, scheduling, financialClock));
         servers.get(server).onDenominationChange(()->ca.emilybelnavis.mcmods.economy.village.GenerationRuntime.denominationChanged(server));
         runtimes.put(server, runtime);
         ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.start(server, servers.get(server),
                 FMLPaths.CONFIGDIR.get().resolve("economy-valuation.json"));
-        choosers.put(server, new DenominationChooser(servers.get(server), runtime, Clock.systemUTC()));
+        choosers.put(server, new DenominationChooser(servers.get(server), runtime, financialClock));
         activeChoosers.put(server, choosers.get(server));
         LOGGER.info("Economy foundation initializing");
     }
@@ -192,6 +227,7 @@ public final class Economy {
         }
     }
     private void stopping(ServerStoppingEvent event) {
+        fixtureClocks.remove(event.getServer());
         ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
         ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.stopping(event.getServer());
         ca.emilybelnavis.mcmods.economy.foundation.ValuationCommands.stopping(event.getServer());
@@ -220,6 +256,7 @@ public final class Economy {
         }
     }
     private void stopped(ServerStoppedEvent event) {
+        fixtureClocks.remove(event.getServer());
         ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
         invalidConfiguration.remove(event.getServer());
         ca.emilybelnavis.mcmods.economy.institution.KioskAdmission.stopped(event.getServer());

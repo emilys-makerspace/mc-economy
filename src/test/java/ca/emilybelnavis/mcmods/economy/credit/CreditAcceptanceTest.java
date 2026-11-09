@@ -73,9 +73,12 @@ class CreditAcceptanceTest {
         try(var f=new Fixture(EconomyCurrency.CAD)){
             var line=f.issue();var id=line.id();long anchor=line.anchor();
             assertEquals("CREDIT_DRAWN",f.draw(id,CreditFacilities.DrawKind.PURCHASE,12300).result().code());assertEquals("CREDIT_DRAWN",f.draw(id,CreditFacilities.DrawKind.ADVANCE,10000).result().code());
+            assertEquals(-300,f.balance(FinancialAccounts.Role.INCOME),"Issuer earns the advance fee before daily interest");
             f.catchup(anchor+CreditFacilities.DAY);line=f.get(id);
-            assertEquals(new BigDecimal("0.067548626373626374"),line.purchase().periodEarnedMajor());assertEquals(new BigDecimal("0.060412087912087912"),line.advance().periodEarnedMajor());
-            assertEquals("CREDIT_REPAID",f.pay(id,5000).result().code());line=f.get(id);assertEquals(12300,line.purchase().principalMinor());assertEquals(5013,line.advance().principalMinor());assertEquals(0,line.purchase().interestMinor());assertEquals(0,line.advance().interestMinor());
+            // The CAD 3.00 advance fee is financed and earns interest with the CAD 100.00 proceeds.
+            assertEquals(10300,line.advance().principalMinor());
+            assertEquals(new BigDecimal("0.067548626373626374"),line.purchase().periodEarnedMajor());assertEquals(new BigDecimal("0.062224450549450549"),line.advance().periodEarnedMajor());
+            assertEquals("CREDIT_REPAID",f.pay(id,5000).result().code());line=f.get(id);assertEquals(12300,line.purchase().principalMinor());assertEquals(5313,line.advance().principalMinor());assertEquals(0,line.purchase().interestMinor());assertEquals(0,line.advance().interestMinor());
             assertEquals("CREDIT_DRAWN",f.draw(id,CreditFacilities.DrawKind.PURCHASE,5000).result().code());line=f.get(id);var expectedP=earned(f.currency,line.purchase());var expectedA=earned(f.currency,line.advance());
             f.catchup(anchor+2*CreditFacilities.DAY);var changed=f.get(id);assertEquals(0,changed.purchase().periodEarnedMajor().subtract(line.purchase().periodEarnedMajor()).compareTo(expectedP));assertEquals(0,changed.advance().periodEarnedMajor().subtract(line.advance().periodEarnedMajor()).compareTo(expectedA));
             long debt=changed.owedMinor(),before=f.store.lastCommittedSequence();assertEquals("CREDIT_FRESH_PAYOFF_REQUIRED",f.pay(id,debt+1).result().code());assertEquals(debt,f.get(id).owedMinor());assertEquals(before,f.store.lastCommittedSequence(),"A durable rejection must not add a financial journal transaction");

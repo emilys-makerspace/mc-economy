@@ -16,7 +16,6 @@ import ca.emilybelnavis.mcmods.economy.storage.FoundationStore;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import java.math.BigInteger;
-import java.time.Clock;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
@@ -45,7 +44,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         this.services = services;
         this.store = store;
         this.pricing = services.servicePricing();
-        this.quotes = new FxRequests(services, store, Clock.systemUTC());
+        this.quotes = new FxRequests(services, store, services.financialClock());
     }
 
     public record CreditProfileView(Optional<ca.emilybelnavis.mcmods.economy.credit.CreditProfiles.Profile> profile,
@@ -79,12 +78,12 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             PartyAuthorization.Grant grant,UUID after,int limit) {
         requireOwner(grant);
         if(limit<1 || limit>16)throw new IllegalArgumentException("Facility diagnostic page bounds");
-        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.ownerPage(reads,grant.target(),after,limit,System.currentTimeMillis())));
+        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.ownerPage(reads,grant.target(),after,limit,services.financialMillis())));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.FacilityView>> creditFacilityView(
             PartyAuthorization.Grant grant,UUID facility) {
         requireOwner(grant);
-        return services.readAccounts(grant,false,reads->ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.facility(reads,grant.target(),facility,System.currentTimeMillis()));
+        return services.readAccounts(grant,false,reads->ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.facility(reads,grant.target(),facility,services.financialMillis()));
     }
     /** Audits every operator page before any private facility data is read. */
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.OperatorView>> inspectCreditFacility(
@@ -94,7 +93,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         var cursor=after==null?ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.EventCursor.start():after;
         return services.inspectAccountsDuringCatchup(inspection,Map.of("domain","credit-facility","facility",facility.toString(),
                 "after",after==null?"":after.toString(),"limit",Integer.toString(limit)),live,
-                reads->ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.inspect(reads,inspection.target(),facility,System.currentTimeMillis(),cursor,limit));
+                reads->ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.inspect(reads,inspection.target(),facility,services.financialMillis(),cursor,limit));
     }
 
     /** PartyOperation restores this same owner field from the grant; retain the original canonical bytes. */
@@ -126,7 +125,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         var player=((PartyRef.Player)owner.owner()).id();
         boolean reconciled=new ca.emilybelnavis.mcmods.economy.credit.CreditLiabilities().read(reads,owner.world(),player,java.time.Instant.ofEpochMilli(now)).available()
                 &&new ca.emilybelnavis.mcmods.economy.loan.LoanLiabilities().read(reads,owner.world(),player,java.time.Instant.ofEpochMilli(now)).available();
-        var tier=pricing.valuation().tierEligibility(owner.world(),Clock.systemUTC()).current(reads,owner);
+        var tier=pricing.valuation().tierEligibility(owner.world(),services.financialClock()).current(reads,owner);
         long loanExposure=0;boolean blocked=false;
         try {var denomination=RebaseSettlement.denomination(reads).orElseThrow();loanExposure=ca.emilybelnavis.mcmods.economy.loan.Loans.exposure(reads,owner,denomination.currency(),fx,now);blocked=ca.emilybelnavis.mcmods.economy.loan.Loans.blocked(reads,owner,now);}
         catch(IllegalArgumentException|IllegalStateException unavailable){reconciled=false;}
@@ -136,23 +135,23 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.IssueRequest request) {
         requireOwner(grant);
         var handler=ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.issuance(grant.target(),request,
-                pricing.valuation().tierEligibility(grant.target().world(),Clock.systemUTC()),this::creditInputs,System::currentTimeMillis);
+                pricing.valuation().tierEligibility(grant.target().world(),services.financialClock()),this::creditInputs,services::financialMillis);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.ISSUE,operation,attempt,unboundCreditRequest(grant,request.request()),ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(handler),null);
     }
     public JournalService.Submission increaseCreditFacility(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,
             ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.IncreaseRequest request) {
         requireOwner(grant);
         var handler=ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.increase(grant.target(),request,
-                pricing.valuation().tierEligibility(grant.target().world(),Clock.systemUTC()),this::creditInputs,System::currentTimeMillis);
+                pricing.valuation().tierEligibility(grant.target().world(),services.financialClock()),this::creditInputs,services::financialMillis);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.INCREASE,operation,attempt,unboundCreditRequest(grant,request.request()),ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(handler),null);
     }
     @Override public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.pricing.PricingPolicy.Policy>> prime(PartyAuthorization.Grant grant) {
         requireOwner(grant);
-        return services.readAccounts(grant, false, reads -> Optional.of(ca.emilybelnavis.mcmods.economy.pricing.PricingPolicy.current(reads, System.currentTimeMillis())));
+        return services.readAccounts(grant, false, reads -> Optional.of(ca.emilybelnavis.mcmods.economy.pricing.PricingPolicy.current(reads, services.financialMillis())));
     }
     @Override public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.Policy>> prime(PartyAuthorization.Grant grant,EconomyCurrency currency) {
         requireOwner(grant);Objects.requireNonNull(currency);
-        return services.readAccounts(grant,false,reads->{long now=System.currentTimeMillis();
+        return services.readAccounts(grant,false,reads->{long now=services.financialMillis();
             return ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.ready(reads,grant.target().world(),now)
                     ?ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.current(reads,grant.target().world(),currency,now):Optional.empty();
         });
@@ -160,7 +159,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     @Override public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.Policy>> primeAt(PartyAuthorization.Grant grant,EconomyCurrency currency,long effectiveMillis) {
         requireOwner(grant);Objects.requireNonNull(currency);
         return services.readAccounts(grant,false,reads->{
-            if(effectiveMillis<0||effectiveMillis>System.currentTimeMillis())throw new IllegalArgumentException("Past/current prime instant required");
+            if(effectiveMillis<0||effectiveMillis>services.financialMillis())throw new IllegalArgumentException("Past/current prime instant required");
             return ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.ready(reads,grant.target().world(),effectiveMillis)
                     ?ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.current(reads,grant.target().world(),currency,effectiveMillis):Optional.empty();
         });
@@ -168,7 +167,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     @Override public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.pricing.WealthValuation.Snapshot>> valuation(PartyAuthorization.Grant grant) {
         var actor = requireOwner(grant);
         return services.readAccounts(grant, false, reads -> Optional.of(pricing.valuation().snapshot(reads,
-                grant.target().world(), actor, java.time.Instant.now())));
+                grant.target().world(), actor, services.financialClock().instant())));
     }
     @Override public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.pricing.ServicePricing.Quote>> feeQuote(
             PartyAuthorization.Grant grant, ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId institution,
@@ -177,7 +176,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         if (service == ca.emilybelnavis.mcmods.economy.pricing.ServicePricing.Service.TRADING)
             throw new IllegalArgumentException("TRADING_UNAVAILABLE");
         return services.readAccounts(grant, false, reads -> {
-            var now = java.time.Instant.now();
+            var now = services.financialClock().instant();
             return Optional.of(pricing.quote(reads, grant.target().world(), actor, institution, service, principal, now, now.plusSeconds(30)));
         });
     }
@@ -197,7 +196,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         requireOwner(grant);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.autopay.Autopay.CONFIGURE,operation,attempt,
                 unboundCreditRequest(grant,request.request()),
-                ca.emilybelnavis.mcmods.economy.autopay.Autopay.configuration(grant.target(),request,System::currentTimeMillis),null);
+                ca.emilybelnavis.mcmods.economy.autopay.Autopay.configuration(grant.target(),request,services::financialMillis),null);
     }
 
     public record CreditDrawQuote(ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
@@ -208,7 +207,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             TerminalPolicy.Anchor anchor, UUID generation, AccountId funding, long amount, boolean purchase) {
         var actor = requireOwner(grant);
         return services.readAccounts(grant, false, reads -> {
-            long now = System.currentTimeMillis();
+            long now = services.financialMillis();
             var card = ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.usableToken(reads, grant.target().world(), actor, token, now).orElseThrow();
             var facility = ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.find(reads, card.facility()).filter(f -> f.party().equals(grant.target())).orElseThrow();
             var terminal = TerminalPolicy.find(reads, grant.target().world(), anchor, actor, true).orElseThrow();
@@ -235,7 +234,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             var request = new ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest(grant.target().world(), actor,
                     facility.id(), token, card.network(), purchase ? ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawKind.PURCHASE
                     : ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawKind.ADVANCE, destination, principal,
-                    facility.revision(), card.revision(), destinationRevision, profile.revision(), UUID.randomUUID(), expires);
+                    facility.revision(), card.revision(), destinationRevision, profile.revision(), UUID.randomUUID(), expires, purchase ? null : ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.AdvanceFees.capture(reads, facility, terminal));
             return Optional.of(new CreditDrawQuote(request, terminal, facility));
         });
     }
@@ -246,7 +245,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         requireOwner(grant);
         if (request.kind() != ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawKind.ADVANCE)
             throw new IllegalArgumentException("Use atomic register checkout for purchases");
-        var handler=ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.draw(grant.target(),request,this::creditInputs,proof,System::currentTimeMillis);
+        var handler=ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.draw(grant.target(),request,this::creditInputs,proof,services::financialMillis);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DRAW,operation,attempt,unboundCreditRequest(grant,request.request()),ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(handler),null);
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.RepaymentRequest>> quoteCreditRepayment(
@@ -256,7 +255,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             var f=ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.find(reads,facility).filter(v->v.party().equals(grant.target())).orElseThrow();
             var a=AccountCatalog.find(reads,grant.target(),funding).orElseThrow();
             if(a.currency()!=f.currency() || amountMinor<=0 || amountMinor>f.owedMinor())throw new IllegalArgumentException("Fresh repayment amount/currency required");
-            long now=System.currentTimeMillis();long expires=Math.min(Math.addExact(now,30_000),Math.min(f.nextDay(),f.nextStatement()));
+            long now=services.financialMillis();long expires=Math.min(Math.addExact(now,30_000),Math.min(f.nextDay(),f.nextStatement()));
             return Optional.of(new ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.RepaymentRequest(grant.target().world(),actor,facility,funding,amountMinor,
                     f.revision(),a.revision(),ca.emilybelnavis.mcmods.economy.pricing.WealthValuation.ledgerRevision(reads,funding.value()),UUID.randomUUID(),expires));
         });
@@ -273,7 +272,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
                         new FxQuotes.Pair(source.funding().currency(),source.facility().currency()),
                         new Money(source.facility().currency(),amountMinor))
                     .thenCompose(fx->services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.credit.CreditRepaymentFx.capture(
-                            reads,grant.target(),source.facility(),source.funding(),amountMinor,fx,System.currentTimeMillis()))))
+                            reads,grant.target(),source.facility(),source.funding(),amountMinor,fx,services.financialMillis()))))
                     .thenApply(Optional::orElseThrow);
             });
     }
@@ -281,13 +280,13 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             ca.emilybelnavis.mcmods.economy.credit.CreditRepaymentFx.Quote quote) {
         requireOwner(grant);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.REPAY,operation,attempt,unboundCreditRequest(grant,quote.canonical()),
-                ca.emilybelnavis.mcmods.economy.credit.CreditRepaymentFx.registration(grant.target(),quote,quotes::requireFresh,System::currentTimeMillis),null);
+                ca.emilybelnavis.mcmods.economy.credit.CreditRepaymentFx.registration(grant.target(),quote,quotes::requireFresh,services::financialMillis),null);
     }
     public JournalService.Submission repayCredit(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,
             ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.RepaymentRequest request) {
         requireOwner(grant);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.REPAY,operation,attempt,unboundCreditRequest(grant,request.request()),
-                ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.repayment(grant.target(),request,System::currentTimeMillis),null);
+                ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.repayment(grant.target(),request,services::financialMillis),null);
     }
     public JournalService.Submission revokeCreditCard(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,UUID token,long revision) {
         var actor=requireOwner(grant);
@@ -300,7 +299,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         var actor=requireOwner(grant);
         var request=ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.closeRequest(grant.target().world(),actor,facility,revision);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.CLOSE,operation,attempt,unboundCreditRequest(grant,request),
-                ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.closure(grant.target(),facility,revision,System::currentTimeMillis),null);
+                ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.closure(grant.target(),facility,revision,services::financialMillis),null);
     }
     public CompletionStage<ca.emilybelnavis.mcmods.economy.card.IssuedCards.FeeQuote> quoteCreditCardReplacement(
             PartyAuthorization.Grant grant,UUID facility,AccountId funding) {
@@ -313,14 +312,14 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
                 CompletionStage<FxQuotes.Quote> fx=source.funding().currency()==source.worldCurrency()?CompletableFuture.completedFuture(null):
                     quotes.quote(new RequestContext(actor.value(),services.sessionId(),UUID.randomUUID()),new FxQuotes.Pair(source.funding().currency(),source.worldCurrency()),FxQuotes.Side.EXACT_CREDIT,
                             new Money(source.worldCurrency(),Math.multiplyExact(25L,source.worldCurrency().minorUnitsPerMajor())));
-                return fx.thenCompose(quote->services.readAccounts(grant,false,reads->Optional.of(creditCardFees.capture(reads,grant.target(),source.facility().issuer(),facility,source.funding(),quote,System.currentTimeMillis())))).thenApply(Optional::orElseThrow);
+                return fx.thenCompose(quote->services.readAccounts(grant,false,reads->Optional.of(creditCardFees.capture(reads,grant.target(),source.facility().issuer(),facility,source.funding(),quote,services.financialMillis())))).thenApply(Optional::orElseThrow);
             });
     }
     public JournalService.Submission replaceCreditCard(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,
             ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.ReplacementRequest request) {
         requireOwner(grant);
         var handler=ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.replacement(grant.target(),request,
-                (intent,fee,reads)->creditCardFees.prepare(intent,fee,reads,fx->quotes.requireFresh(fx.id(),(PlayerId)intent.actor(),grant.target().world(),reads),System.currentTimeMillis()),System::currentTimeMillis);
+                (intent,fee,reads)->creditCardFees.prepare(intent,fee,reads,fx->quotes.requireFresh(fx.id(),(PlayerId)intent.actor(),grant.target().world(),reads),services.financialMillis()),services::financialMillis);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.REPLACE,operation,attempt,unboundCreditRequest(grant,request.request()),handler,null);
     }
 
@@ -362,12 +361,12 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.debt.DebtPayments.Quote>> quoteCollectionPayment(
             PartyAuthorization.Grant grant,UUID id,AccountId funding,long amount) {
-        requireOwner(grant);return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtPayments.quote(reads,grant.target(),id,funding,amount,System.currentTimeMillis())));
+        requireOwner(grant);return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtPayments.quote(reads,grant.target(),id,funding,amount,services.financialMillis())));
     }
     public JournalService.Submission repayCollection(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,
             ca.emilybelnavis.mcmods.economy.debt.DebtPayments.Quote quote) {
         requireOwner(grant);return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.debt.DebtPayments.PAY,operation,attempt,
-            unboundCreditRequest(grant,quote.request()),ca.emilybelnavis.mcmods.economy.debt.DebtPayments.registration(grant.target(),quote,System::currentTimeMillis),null);
+            unboundCreditRequest(grant,quote.request()),ca.emilybelnavis.mcmods.economy.debt.DebtPayments.registration(grant.target(),quote,services::financialMillis),null);
     }
     public CompletionStage<ca.emilybelnavis.mcmods.economy.debt.DebtPayments.FxQuote> quoteCollectionPaymentFx(
             PartyAuthorization.Grant grant,UUID id,AccountId funding,long amount) {
@@ -376,14 +375,14 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             return services.readAccounts(grant,false,reads->Optional.of(Map.entry(AccountCatalog.find(reads,grant.target(),funding).orElseThrow().currency(),
                 ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle.ownedCase(reads,grant.target(),id).orElseThrow().currency())))
                 .thenCompose(pair->quotes.quoteRepayment(new RequestContext(actor.value(),services.sessionId(),UUID.randomUUID()),new FxQuotes.Pair(pair.orElseThrow().getKey(),pair.orElseThrow().getValue()),new Money(pair.orElseThrow().getValue(),amount)))
-                .thenCompose(fx->services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtPayments.capture(reads,grant.target(),payment,fx,System.currentTimeMillis()))))
+                .thenCompose(fx->services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtPayments.capture(reads,grant.target(),payment,fx,services.financialMillis()))))
                 .thenApply(Optional::orElseThrow);
         });
     }
     public JournalService.Submission repayCollectionFx(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,
             ca.emilybelnavis.mcmods.economy.debt.DebtPayments.FxQuote quote) {
         requireOwner(grant);return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.debt.DebtPayments.PAY,operation,attempt,
-            unboundCreditRequest(grant,quote.canonical()),ca.emilybelnavis.mcmods.economy.debt.DebtPayments.registrationFx(grant.target(),quote,quotes::requireFresh,System::currentTimeMillis),null);
+            unboundCreditRequest(grant,quote.canonical()),ca.emilybelnavis.mcmods.economy.debt.DebtPayments.registrationFx(grant.target(),quote,quotes::requireFresh,services::financialMillis),null);
     }
     public record LoanContext(ca.emilybelnavis.mcmods.economy.account.AccountRebasePlanner.Denomination denomination,long calendarOrigin,
             Optional<ca.emilybelnavis.mcmods.economy.credit.CreditProfiles.Profile> profile,ca.emilybelnavis.mcmods.economy.institution.BankProviders.TierSnapshot tier,
@@ -410,13 +409,13 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.CasePage>> debtCases(
             PartyAuthorization.Grant grant,UUID after,int limit) {
         requireOwner(grant);debtPageBounds(limit);
-        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.ownerCases(reads,grant.target(),after,limit,System.currentTimeMillis())));
+        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.ownerCases(reads,grant.target(),after,limit,services.financialMillis())));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.ReportPage>> debtReportPage(
             PartyAuthorization.Grant grant,ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle.ReportCursor after,int limit) {
         requireOwner(grant);debtPageBounds(limit);
         var cursor=after==null?ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle.ReportCursor.start():after;
-        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.ownerReports(reads,grant.target(),cursor,limit,System.currentTimeMillis())));
+        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.ownerReports(reads,grant.target(),cursor,limit,services.financialMillis())));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.EventPage>> debtEvents(
             PartyAuthorization.Grant grant,UUID caseId,ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.EventCursor after,int limit) {
@@ -430,7 +429,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         debtPageBounds(limit);java.util.Objects.requireNonNull(kind);java.util.Objects.requireNonNull(facility);
         return services.inspectAccountsDuringCatchup(inspection,Map.of("domain","debt","kind",kind.name(),"facility",facility.toString(),
             "after",after==null?"":after.toString(),"limit",Integer.toString(limit)),live,
-            reads->ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.inspect(reads,inspection.target(),kind,facility,System.currentTimeMillis(),after,limit));
+            reads->ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.inspect(reads,inspection.target(),kind,facility,services.financialMillis(),after,limit));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.PaymentPage>> cardPaymentHistory(
             PartyAuthorization.Grant grant,UUID facility,ca.emilybelnavis.mcmods.economy.credit.CreditDiagnostics.EventCursor after,int limit) {
@@ -448,7 +447,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         debtPageBounds(limit);
         var cursor=after==null?ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle.ReportCursor.start():after;
         return services.inspectAccountsDuringCatchup(inspection,Map.of("domain","debt-reports","after",cursor.toString(),"limit",Integer.toString(limit)),live,
-            reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.ownerReports(reads,inspection.target(),cursor,limit,System.currentTimeMillis())));
+            reads->Optional.of(ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.ownerReports(reads,inspection.target(),cursor,limit,services.financialMillis())));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.EventPage>> inspectDebtEvents(
             PartyAuthorization.Grant inspection,UUID caseId,ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics.EventCursor after,int limit,
@@ -464,11 +463,11 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.ContractPage>> loanPage(
             PartyAuthorization.Grant grant,UUID after,int limit) {
         requireOwner(grant);if(limit<1||limit>16)throw new IllegalArgumentException("Loan diagnostic page bounds");
-        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.ownerPage(reads,grant.target(),after,limit,System.currentTimeMillis())));
+        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.ownerPage(reads,grant.target(),after,limit,services.financialMillis())));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.ContractView>> loanView(
             PartyAuthorization.Grant grant,UUID loan) {
-        requireOwner(grant);return services.readAccounts(grant,false,reads->ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.contract(reads,grant.target(),loan,System.currentTimeMillis()));
+        requireOwner(grant);return services.readAccounts(grant,false,reads->ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.contract(reads,grant.target(),loan,services.financialMillis()));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.SchedulePage>> loanSchedulePage(
             PartyAuthorization.Grant grant,UUID loan,int after,int limit) {
@@ -484,7 +483,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         var cursor=after==null?ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.EventCursor.start():after;
         return services.inspectAccountsDuringCatchup(inspection,Map.of("domain","loan","loan",loan.toString(),
             "after",cursor.toString(),"limit",Integer.toString(limit)),live,
-            reads->ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.inspect(reads,inspection.target(),loan,System.currentTimeMillis(),cursor,limit));
+            reads->ca.emilybelnavis.mcmods.economy.loan.LoanDiagnostics.inspect(reads,inspection.target(),loan,services.financialMillis(),cursor,limit));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.loan.Loans.ApplicationDecision>> inspectLoanApplication(
             PartyAuthorization.Grant inspection,UUID application,java.util.function.BooleanSupplier live) {
@@ -496,24 +495,24 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     public CompletionStage<Optional<LoanContext>> loanContext(PartyAuthorization.Grant grant,EconomyCurrency currency){return loanContextInternal(grant,Objects.requireNonNull(currency));}
     private CompletionStage<Optional<LoanContext>> loanContextInternal(PartyAuthorization.Grant grant,EconomyCurrency currency){
         requireOwner(grant);
-        return services.readAccounts(grant,false,reads->{long now=System.currentTimeMillis();
+        return services.readAccounts(grant,false,reads->{long now=services.financialMillis();
             Optional<ca.emilybelnavis.mcmods.economy.pricing.PricingPolicy.Policy> prime;
             try{prime=Optional.of(ca.emilybelnavis.mcmods.economy.pricing.PricingPolicy.current(reads,now));}catch(IllegalStateException unavailable){prime=Optional.empty();}
             return Optional.of(new LoanContext(RebaseSettlement.denomination(reads).orElseThrow(),Long.parseLong(reads.query("SELECT origin_ms FROM financial_calendar WHERE singleton=1",List.of(),1).getFirst().get("origin_ms")),
-                    ca.emilybelnavis.mcmods.economy.credit.CreditProfiles.find(reads,grant.target()),pricing.valuation().tierEligibility(grant.target().world(),Clock.systemUTC()).current(reads,grant.target()),prime,loanInputs(reads,grant.target(),now),currency==null?Optional.empty():Optional.of(ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.select(reads,grant.target().world(),currency,now))));
+                    ca.emilybelnavis.mcmods.economy.credit.CreditProfiles.find(reads,grant.target()),pricing.valuation().tierEligibility(grant.target().world(),services.financialClock()).current(reads,grant.target()),prime,loanInputs(reads,grant.target(),now),currency==null?Optional.empty():Optional.of(ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.select(reads,grant.target().world(),currency,now))));
         });
     }
     public JournalService.Submission applyLoan(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,ca.emilybelnavis.mcmods.economy.loan.Loans.Application application){
         requireOwner(grant);
-        var handler=ca.emilybelnavis.mcmods.economy.loan.Loans.application(grant.target(),application,pricing.valuation().tierEligibility(grant.target().world(),Clock.systemUTC()),this::loanInputs,System::currentTimeMillis);
+        var handler=ca.emilybelnavis.mcmods.economy.loan.Loans.application(grant.target(),application,pricing.valuation().tierEligibility(grant.target().world(),services.financialClock()),this::loanInputs,services::financialMillis);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.loan.Loans.APPLY,operation,attempt,unboundCreditRequest(grant,application.request()),ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(handler),null);
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.loan.LoanDisbursementFx.Quote>> quoteLoanDisbursementFx(PartyAuthorization.Grant grant,ca.emilybelnavis.mcmods.economy.loan.Loans.Application application){
-        requireOwner(grant);return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.LoanDisbursementFx.capture(reads,grant.target(),application,pricing,System.currentTimeMillis())));
+        requireOwner(grant);return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.LoanDisbursementFx.capture(reads,grant.target(),application,pricing,services.financialMillis())));
     }
     public JournalService.Submission applyLoanFx(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,ca.emilybelnavis.mcmods.economy.loan.LoanDisbursementFx.Quote quote){
         requireOwner(grant);
-        var handler=ca.emilybelnavis.mcmods.economy.loan.LoanDisbursementFx.application(grant.target(),quote,pricing.valuation().tierEligibility(grant.target().world(),Clock.systemUTC()),this::loanInputs,pricing,System::currentTimeMillis);
+        var handler=ca.emilybelnavis.mcmods.economy.loan.LoanDisbursementFx.application(grant.target(),quote,pricing.valuation().tierEligibility(grant.target().world(),services.financialClock()),this::loanInputs,pricing,services::financialMillis);
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.loan.Loans.APPLY,operation,attempt,unboundCreditRequest(grant,quote.canonical()),ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(handler),null);
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.loan.Loans.ApplicationDecision>> loanApplicationDecision(PartyAuthorization.Grant grant,UUID application){
@@ -532,22 +531,22 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.Loans.installments(reads,grant.target(),loan,after,limit)));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.loan.Loans.PaymentQuote>> quoteLoanRepayment(PartyAuthorization.Grant grant,UUID loan,AccountId funding,long amount,boolean fullPayoff){
-        requireOwner(grant);return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.Loans.quote(reads,grant.target(),loan,funding,amount,fullPayoff,System.currentTimeMillis())));
+        requireOwner(grant);return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.Loans.quote(reads,grant.target(),loan,funding,amount,fullPayoff,services.financialMillis())));
     }
     public JournalService.Submission repayLoan(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,ca.emilybelnavis.mcmods.economy.loan.Loans.PaymentQuote quote){
-        requireOwner(grant);return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.loan.Loans.REPAY,operation,attempt,unboundCreditRequest(grant,quote.request().request()),ca.emilybelnavis.mcmods.economy.loan.Loans.repayment(grant.target(),quote,System::currentTimeMillis),null);
+        requireOwner(grant);return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.loan.Loans.REPAY,operation,attempt,unboundCreditRequest(grant,quote.request().request()),ca.emilybelnavis.mcmods.economy.loan.Loans.repayment(grant.target(),quote,services::financialMillis),null);
     }
     public CompletionStage<ca.emilybelnavis.mcmods.economy.loan.LoanRepaymentFx.Quote> quoteLoanRepaymentFx(PartyAuthorization.Grant grant,UUID loan,AccountId funding,long amount,boolean fullPayoff){
         var actor=requireOwner(grant);
-        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.Loans.quote(reads,grant.target(),loan,funding,amount,fullPayoff,System.currentTimeMillis())))
+        return services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.Loans.quote(reads,grant.target(),loan,funding,amount,fullPayoff,services.financialMillis())))
             .thenCompose(found->{var payment=found.orElseThrow();
                 return services.readAccounts(grant,false,reads->Optional.of(Map.entry(AccountCatalog.find(reads,grant.target(),funding).orElseThrow().currency(),ca.emilybelnavis.mcmods.economy.loan.Loans.find(reads,loan).filter(l->l.party().equals(grant.target())).orElseThrow().currency())))
                     .thenCompose(currencies->quotes.quoteRepayment(new RequestContext(actor.value(),services.sessionId(),UUID.randomUUID()),new FxQuotes.Pair(currencies.orElseThrow().getKey(),currencies.orElseThrow().getValue()),new Money(currencies.orElseThrow().getValue(),payment.request().amountMinor())))
-                    .thenCompose(fx->services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.LoanRepaymentFx.capture(reads,grant.target(),payment,fx,System.currentTimeMillis())))).thenApply(Optional::orElseThrow);
+                    .thenCompose(fx->services.readAccounts(grant,false,reads->Optional.of(ca.emilybelnavis.mcmods.economy.loan.LoanRepaymentFx.capture(reads,grant.target(),payment,fx,services.financialMillis())))).thenApply(Optional::orElseThrow);
             });
     }
     public JournalService.Submission repayLoanFx(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,ca.emilybelnavis.mcmods.economy.loan.LoanRepaymentFx.Quote quote){
-        requireOwner(grant);return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.loan.Loans.REPAY,operation,attempt,unboundCreditRequest(grant,quote.canonical()),ca.emilybelnavis.mcmods.economy.loan.LoanRepaymentFx.registration(grant.target(),quote,quotes::requireFresh,System::currentTimeMillis),null);
+        requireOwner(grant);return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.loan.Loans.REPAY,operation,attempt,unboundCreditRequest(grant,quote.canonical()),ca.emilybelnavis.mcmods.economy.loan.LoanRepaymentFx.registration(grant.target(),quote,quotes::requireFresh,services::financialMillis),null);
     }
 
     public record CardFeeSource(ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId issuer,
@@ -567,15 +566,15 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
                         new FxQuotes.Pair(source.funding().currency(),source.worldCurrency()),FxQuotes.Side.EXACT_CREDIT,
                         new Money(source.worldCurrency(),Math.multiplyExact(25L,source.worldCurrency().minorUnitsPerMajor())));
             return fx.thenCompose(quote->services.readAccounts(grant,false,reads->Optional.of(cardFees.capture(reads,grant.target(),source.issuer(),account,
-                    source.funding(),quote,System.currentTimeMillis())))).thenApply(Optional::orElseThrow);
+                    source.funding(),quote,services.financialMillis())))).thenApply(Optional::orElseThrow);
         });
     }
     public JournalService.Submission issueCard(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,
             ca.emilybelnavis.mcmods.economy.card.IssuedCards.Request request) {
         requireOwner(grant);
         var handler=ca.emilybelnavis.mcmods.economy.card.IssuedCards.registration(grant.target(),request,
-                pricing.valuation().tierEligibility(grant.target().world(),Clock.systemUTC()),System::currentTimeMillis,
-                (intent,fee,reads)->cardFees.prepare(intent,fee,reads,fx->quotes.requireFresh(fx.id(),(PlayerId)intent.actor(),grant.target().world(),reads),System.currentTimeMillis()));
+                pricing.valuation().tierEligibility(grant.target().world(),services.financialClock()),services::financialMillis,
+                (intent,fee,reads)->cardFees.prepare(intent,fee,reads,fx->quotes.requireFresh(fx.id(),(PlayerId)intent.actor(),grant.target().world(),reads),services.financialMillis()));
         return services.submitOwned(grant,ca.emilybelnavis.mcmods.economy.card.IssuedCards.ISSUE,operation,attempt,unboundCreditRequest(grant,request.request()),handler,null);
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.card.IssuedCards.Token>> accountCard(PartyAuthorization.Grant grant,AccountId account) {
@@ -585,13 +584,13 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.card.IssuedCards.Token>> usableCard(PlayerId actor,WorldId world,UUID token) {
         return services.storage(actor,()->store.transaction(tx->{
             if(!store.snapshot().worldId().equals(world))return Optional.empty();
-            return ca.emilybelnavis.mcmods.economy.card.IssuedCards.usable(tx::query,world,actor,token,System.currentTimeMillis());
+            return ca.emilybelnavis.mcmods.economy.card.IssuedCards.usable(tx::query,world,actor,token,services.financialMillis());
         }));
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.card.CardAccess>> usableCardAccess(PlayerId actor,WorldId world,UUID token) {
         return services.storage(actor,()->store.transaction(tx->{
             if(!store.snapshot().worldId().equals(world))return Optional.empty();
-            return ca.emilybelnavis.mcmods.economy.card.CardAccess.usable(tx::query,world,actor,token,System.currentTimeMillis());
+            return ca.emilybelnavis.mcmods.economy.card.CardAccess.usable(tx::query,world,actor,token,services.financialMillis());
         }));
     }
     public JournalService.Submission revokeCard(PartyAuthorization.Grant grant,OperationId operation,RequestId attempt,UUID token,long revision) {
@@ -631,7 +630,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             var terminal = TerminalPolicy.find(reads, grant.target().world(), anchor, player, true).orElse(null);
             var provider = account == null ? null : ca.emilybelnavis.mcmods.economy.institution.BankProviders.find(reads, grant.target(), account.id()).orElse(null);
             var denomination = RebaseSettlement.denomination(reads).orElse(null);
-            var tier = pricing.valuation().tierEligibility(grant.target().world(), Clock.systemUTC()).current(reads, grant.target());
+            var tier = pricing.valuation().tierEligibility(grant.target().world(), services.financialClock()).current(reads, grant.target());
             return Optional.of(new BranchContext(terminal, primary, account, provider, denomination, tier));
         });
     }
@@ -710,7 +709,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
             PartyAuthorization.Grant grant, AccountId selected, TerminalPolicy.Anchor anchor) {
         requireOwner(grant);
         return services.readAccounts(grant, false, reads -> Optional.of(
-                BankingDashboard.read(reads, grant.target(), selected, anchor, System.currentTimeMillis())));
+                BankingDashboard.read(reads, grant.target(), selected, anchor, services.financialMillis())));
     }
 
     public CompletionStage<Optional<LedgerHistory.Page>> inspectHistory(CommandSourceStack source,
@@ -843,7 +842,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     public JournalService merchantPayments(MerchantPayments.Action action, JournalEngine.AccessPolicy admission,
                                            MerchantPayments.Authority authority, JournalService.Publisher publisher) {
         return trustedJournal(action.kind(), admission,
-                MerchantPayments.registration(action, authority, Clock.systemUTC()), publisher);
+                MerchantPayments.registration(action, authority, services.financialClock()), publisher);
     }
 
     public CompletionStage<Optional<MerchantPayments.ReceiptView>> paymentReceipt(
@@ -861,7 +860,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         return services.storage(actor, () -> store.transaction(tx -> {
             boolean operator = operators.allows(actor, tx::query);
             var page = PaymentDiagnostics.page(tx::query, actor, (a, reads) -> operator,
-                    after, limit, overdueOnly, Clock.systemUTC());
+                    after, limit, overdueOnly, services.financialClock());
             return new PaymentInspection(page, operator ? failure : null);
         }));
     }
@@ -977,9 +976,9 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
                         value -> new Deposits.Denomination(value.currency(), value.minorUnits(), value.bill())));
     }
 
-    private static Deposits.FxSnapshot depositFx(JournalEngine.ReadView reads) {
+    private Deposits.FxSnapshot depositFx(JournalEngine.ReadView reads) {
         var publication = ca.emilybelnavis.mcmods.economy.fx.FxService.latest(reads);
-        if(publication!=null){long effective=ca.emilybelnavis.mcmods.economy.fx.FxService.effectiveMillis(reads,publication.updateId());long age=System.currentTimeMillis()-effective;if(age<0||age>=86_400_000L)return null;}
+        if(publication!=null){long effective=ca.emilybelnavis.mcmods.economy.fx.FxService.effectiveMillis(reads,publication.updateId());long age=services.financialMillis()-effective;if(age<0||age>=86_400_000L)return null;}
         return publication == null ? null : new Deposits.FxSnapshot(
                 publication.day() + "/" + publication.updateId() + "/" + publication.policyId(), publication.conversionRates());
     }
@@ -987,7 +986,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
     private Deposits.FxSnapshot depositFx(JournalEngine.ReadView reads,PlayerId actor,UUID account) {
         var fx=depositFx(reads);
         return fx==null?null:new Deposits.FxSnapshot(fx.revision(),fx.rates(),account==null?null:
-                new ca.emilybelnavis.mcmods.economy.pricing.CashPricing.Context(pricing,store.snapshot().worldId(),actor,account,java.time.Instant.now()));
+                new ca.emilybelnavis.mcmods.economy.pricing.CashPricing.Context(pricing,store.snapshot().worldId(),actor,account,services.financialClock().instant()));
     }
     private Withdrawals.FxSnapshot withdrawalFx(JournalEngine.ReadView reads,PlayerId actor,UUID account) {
         var fx=depositFx(reads,actor,account);
@@ -1038,7 +1037,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
                                 value.currency(), value.minorUnits(), value.bill())));
     }
 
-    private static Withdrawals.FxSnapshot withdrawalFx(JournalEngine.ReadView reads) {
+    private Withdrawals.FxSnapshot withdrawalFx(JournalEngine.ReadView reads) {
         var publication = depositFx(reads);
         return publication == null ? null : new Withdrawals.FxSnapshot(publication.revision(), publication.rates());
     }
@@ -1135,7 +1134,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         if (request.kind() != ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawKind.PURCHASE)
             throw new IllegalArgumentException("Purchase required");
         var registration = ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(
-                ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.draw(grant.target(), request, this::creditInputs, proof, System::currentTimeMillis));
+                ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.draw(grant.target(), request, this::creditInputs, proof, services::financialMillis));
         return (intent, sale, reads) -> {
             if (!intent.actor().equals(request.owner()) || !sale.buyer().equals(request.owner())
                     || !request.destination().value().equals(sale.quote().price().sellerAccount())

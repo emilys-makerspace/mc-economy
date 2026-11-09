@@ -147,11 +147,44 @@ public final class CreditFacilities {
     public static String deliveryItems(Token token){return "issued-card-v1\n"+token.world().value()+"|"+token.id()+"|"+itemId(token);}
     /** Server-owned physical token + merchant/ATM/teller admission, checked again during preparation. */
     @FunctionalInterface public interface LiveDraw {boolean valid(Journal.Intent intent,ReadView reads,Token token,DrawKind kind,AccountId destination);}
+    /** Frozen physical terminal and fee amounts included in the reviewed canonical request. */
+    public record AdvanceFees(TerminalPolicy.Anchor terminal, UUID generation, long revision,
+                              InstitutionCatalog.InstitutionId bank, long advanceMinor, long atmMinor, UUID fxPublication) {
+        public AdvanceFees {
+            Objects.requireNonNull(terminal); Objects.requireNonNull(generation); Objects.requireNonNull(fxPublication);
+            if (revision < 1 || advanceMinor < 0 || atmMinor < 0) throw new IllegalArgumentException("Advance fees");
+        }
+        public static AdvanceFees capture(ReadView reads, Facility facility, TerminalPolicy.Snapshot terminal) {
+            var fx = ca.emilybelnavis.mcmods.economy.fx.FxService.snapshot(reads);
+            if (fx == null) throw new IllegalArgumentException("FEE_FX_UNAVAILABLE");
+            var rates = new CurrencyConversion.Rates(fx.reference(), fx.rates());
+            if (terminal.kind() != TerminalPolicy.Kind.ATM && terminal.kind() != TerminalPolicy.Kind.TELLER)
+                throw new IllegalArgumentException("CREDIT_PHYSICAL_ADMISSION");
+            if (terminal.binding() == null || !terminal.binding().bound()) throw new IllegalArgumentException("UNBOUND_BANK");
+            var bank = terminal.binding().institution();
+            long atm = terminal.kind() == TerminalPolicy.Kind.ATM
+                    ? ca.emilybelnavis.mcmods.economy.pricing.BankingFees.atmFee(facility.currency(), facility.issuer().key(), bank == null ? null : bank.key(), rates).minorUnits() : 0;
+            return new AdvanceFees(terminal.anchor(), terminal.generation(), terminal.revision(), bank,
+                    ca.emilybelnavis.mcmods.economy.pricing.BankingFees.advanceFee(facility.currency(), rates).minorUnits(), atm, fx.id());
+        }
+        String encoded() {
+            return terminal.dimension()+"|"+terminal.x()+"|"+terminal.y()+"|"+terminal.z()+"|"+generation+"|"+revision+"|"+(bank==null?"":bank.key())+"|"+advanceMinor+"|"+atmMinor+"|CAD_FEE_V2|"+fxPublication;
+        }
+    }
     public record DrawRequest(WorldId world,PlayerId owner,UUID facility,UUID token,InstitutionCatalog.Network network,DrawKind kind,
                               AccountId destination,long amountMinor,long facilityRevision,long tokenRevision,long destinationRevision,
-                              long profileRevision,UUID quote,long expiresAt) {
-        public DrawRequest {Objects.requireNonNull(world);Objects.requireNonNull(owner);Objects.requireNonNull(facility);Objects.requireNonNull(token);Objects.requireNonNull(network);Objects.requireNonNull(kind);Objects.requireNonNull(destination);Objects.requireNonNull(quote);if(amountMinor<1||facilityRevision<1||tokenRevision<1||destinationRevision<1||profileRevision<1||expiresAt<1)throw new IllegalArgumentException("Draw inputs");}
-        public Journal.CanonicalRequest request(){return canonical(world,owner,Map.ofEntries(Map.entry("facility",facility.toString()),Map.entry("token",token.toString()),Map.entry("network",network.name()),Map.entry("kind",kind.name()),Map.entry("destination",destination.value().toString()),Map.entry("amount",Long.toString(amountMinor)),Map.entry("facility_revision",Long.toString(facilityRevision)),Map.entry("token_revision",Long.toString(tokenRevision)),Map.entry("destination_revision",Long.toString(destinationRevision)),Map.entry("profile_revision",Long.toString(profileRevision)),Map.entry("quote",quote.toString()),Map.entry("expires",Long.toString(expiresAt))));}
+                              long profileRevision,UUID quote,long expiresAt,AdvanceFees fees) {
+        public DrawRequest(WorldId world,PlayerId owner,UUID facility,UUID token,InstitutionCatalog.Network network,DrawKind kind,
+                           AccountId destination,long amountMinor,long facilityRevision,long tokenRevision,long destinationRevision,
+                           long profileRevision,UUID quote,long expiresAt) {
+            this(world,owner,facility,token,network,kind,destination,amountMinor,facilityRevision,tokenRevision,destinationRevision,profileRevision,quote,expiresAt,null);
+        }
+        public DrawRequest {Objects.requireNonNull(world);Objects.requireNonNull(owner);Objects.requireNonNull(facility);Objects.requireNonNull(token);Objects.requireNonNull(network);Objects.requireNonNull(kind);Objects.requireNonNull(destination);Objects.requireNonNull(quote);if(amountMinor<1||facilityRevision<1||tokenRevision<1||destinationRevision<1||profileRevision<1||expiresAt<1 || kind==DrawKind.PURCHASE && fees!=null)throw new IllegalArgumentException("Draw inputs");}
+        public Journal.CanonicalRequest request(){
+            var fields = new TreeMap<>(Map.ofEntries(Map.entry("facility",facility.toString()),Map.entry("token",token.toString()),Map.entry("network",network.name()),Map.entry("kind",kind.name()),Map.entry("destination",destination.value().toString()),Map.entry("amount",Long.toString(amountMinor)),Map.entry("facility_revision",Long.toString(facilityRevision)),Map.entry("token_revision",Long.toString(tokenRevision)),Map.entry("destination_revision",Long.toString(destinationRevision)),Map.entry("profile_revision",Long.toString(profileRevision)),Map.entry("quote",quote.toString()),Map.entry("expires",Long.toString(expiresAt))));
+            if(fees!=null)fields.put("advance_fees_v2",fees.encoded());
+            return canonical(world,owner,fields);
+        }
     }
     public static Registration draw(PartyRef owner,DrawRequest request,InputSource inputs,LiveDraw live,LongSupplier clock) {
         Objects.requireNonNull(inputs);Objects.requireNonNull(live);Objects.requireNonNull(clock);
@@ -171,19 +204,43 @@ public final class CreditFacilities {
             var total=exposure(reads,owner,denom.currency(),source.fx());
             var portfolio=owned(reads,owner);if(portfolio.size()>128)return decline("CREDIT_EXPOSURE_UNAVAILABLE");
             boolean blocked=source.creditBlocked()||portfolio.stream().anyMatch(v->v.status()==Status.DEFAULTED&&ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle.blocks(reads,ca.emilybelnavis.mcmods.economy.debt.DebtRecords.Kind.CARD,v.id(),now)||v.requirements().stream().anyMatch(r->r.unmetMinor()>0&&r.dueAt()<=now));
-            if(!CreditUnderwriting.drawAllowed(profile.score(),InstitutionCatalog.require(f.issuer()).tier2()&&source.tier2Eligible(),blocked,f.limitMinor(),f.owedMinor(),Math.addExact(total,source.otherExposureWorldMinor()),request.amountMinor(),denom.currency()))return reject("CREDIT_DRAW_LIMIT");
-            if(request.kind()==DrawKind.ADVANCE&&Math.addExact(f.advance().principalMinor(),request.amountMinor())>f.limitMinor()/5)return reject("CREDIT_ADVANCE_SUBLIMIT");
+            long advanceFee = request.kind()==DrawKind.ADVANCE ? ca.emilybelnavis.mcmods.economy.pricing.BankingFees.convert(new BigDecimal("3.00"),f.currency(),source.fx().rates().get(EconomyCurrency.CAD),source.fx().rates().get(f.currency())).minorUnits() : 0;
+            long atmFee = 0;
+            if(request.fees()!=null) {
+                var captured = request.fees();
+                var terminal = TerminalPolicy.find(reads,request.world(),captured.terminal(),request.owner(),true).orElse(null);
+                if(terminal==null || !terminal.active() || !AdvanceFees.capture(reads,f,terminal).equals(captured))return reject("CREDIT_FEE_STALE");
+                if(captured.advanceMinor()!=advanceFee)return reject("CREDIT_FEE_STALE");
+                atmFee = captured.atmMinor();
+            }
+            long drawTotal = Math.addExact(request.amountMinor(),Math.addExact(advanceFee,atmFee));
+            if(!CreditUnderwriting.drawAllowed(profile.score(),InstitutionCatalog.require(f.issuer()).tier2()&&source.tier2Eligible(),blocked,f.limitMinor(),f.owedMinor(),Math.addExact(total,source.otherExposureWorldMinor()),drawTotal,denom.currency()))return reject("CREDIT_DRAW_LIMIT");
+            if(request.kind()==DrawKind.ADVANCE&&Math.addExact(f.advance().principalMinor(),drawTotal)>f.limitMinor()/5)return reject("CREDIT_ADVANCE_SUBLIMIT");
             var destination=account(reads,request.destination());
             if(destination==null||destination.currency()!=f.currency()||destination.revision()!=request.destinationRevision())return reject("CREDIT_DESTINATION_STALE");
             if(request.kind()==DrawKind.ADVANCE&&!AccountCatalog.find(reads,owner,request.destination()).isPresent())return reject("CREDIT_ADVANCE_OWNER");
             var bucket=request.kind()==DrawKind.PURCHASE?f.purchase():f.advance();
-            var changed=new CardServicing.Bucket(bucket.kind(),Math.addExact(bucket.principalMinor(),request.amountMinor()),bucket.interestMinor(),bucket.residualMajor(),bucket.periodEarnedMajor(),bucket.apr());
+            var changed=new CardServicing.Bucket(bucket.kind(),Math.addExact(bucket.principalMinor(),drawTotal),bucket.interestMinor(),bucket.residualMajor(),bucket.periodEarnedMajor(),bucket.apr());
             var next=change(f,request.kind()==DrawKind.PURCHASE?changed:f.purchase(),request.kind()==DrawKind.ADVANCE?changed:f.advance(),f.requirements(),f.slices(),f.lastDay(),f.lastStatement());
             var reserve=financial(f,FinancialAccounts.Role.RESERVATION);var receivable=financial(f,FinancialAccounts.Role.RECEIVABLE);var liability=borrower(f,FinancialAccounts.Role.LIABILITY);
-            var legs=List.of(leg(reserve,-request.amountMinor()),customer(request.destination(),f.currency(),request.amountMinor()),leg(receivable,request.amountMinor()),leg(liability,-request.amountMinor()));
-            var posted=InstitutionSettlement.prepare(reads,legs,List.of(reserve,receivable,liability));if(!(posted instanceof Commit money))return posted;
-            return withState(withAccounts(reads,money,List.of(reserve,receivable,liability)),next,event("DRAW_"+request.kind(),f.id(),now,request.amountMinor()+"|"+request.token()+"|"+request.destination().value()),"CREDIT_DRAWN",tx->{for(var a:List.of(reserve,receivable,liability))FinancialAccounts.register(tx,a);});
+            var accounts = new ArrayList<>(List.of(reserve,receivable,liability));
+            var legs = new ArrayList<>(List.of(leg(reserve,-drawTotal),customer(request.destination(),f.currency(),request.amountMinor()),leg(receivable,drawTotal),leg(liability,-drawTotal)));
+            // Fees are financed by the reserved line, earned by their supplying bank, and accrue at the advance APR.
+            if(advanceFee>0)addDrawFee(f,f.issuer(),advanceFee,accounts,legs);
+            if(atmFee>0)addDrawFee(f,request.fees().bank(),atmFee,accounts,legs);
+            var posted=InstitutionSettlement.prepare(reads,legs,accounts);if(!(posted instanceof Commit money))return posted;
+            if(request.kind()==DrawKind.ADVANCE)money=audited(money,event("ADVANCE_FEES",f.id(),now,f.currency()+"|"+advanceFee+"|"+atmFee+"|"+(request.fees()==null||request.fees().bank()==null?"":request.fees().bank().key())));
+            return withState(withAccounts(reads,money,accounts),next,event("DRAW_"+request.kind(),f.id(),now,request.amountMinor()+"|"+request.token()+"|"+request.destination().value()),"CREDIT_DRAWN",tx->{});
+
         });
+    }
+    private static void addDrawFee(Facility facility, InstitutionCatalog.InstitutionId bank, long amount,
+                                   List<FinancialAccounts.Account> accounts, List<PostingBatch.Leg> legs) {
+        var cash=FinancialAccounts.account(facility.world(),bank,FinancialAccounts.Role.CASH,facility.currency());
+        var income=FinancialAccounts.account(facility.world(),bank,FinancialAccounts.Role.INCOME,facility.currency());
+        var expense=borrower(facility,FinancialAccounts.Role.EXPENSE);
+        accounts.addAll(List.of(cash,income,expense));
+        legs.addAll(List.of(leg(cash,amount),leg(income,-amount),leg(expense,amount)));
     }
     public record RepaymentRequest(WorldId world,PlayerId owner,UUID facility,AccountId funding,long amountMinor,
                                    long facilityRevision,long fundingRevision,long fundingLedgerRevision,UUID quote,long expiresAt) {

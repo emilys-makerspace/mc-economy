@@ -49,7 +49,18 @@ public final class CreditUse {
                             if (!audience.live()) return;
                             if (failure != null || quote.isEmpty()) { unavailable(audience); return; }
                             var q = quote.orElseThrow(); QUOTES.put(menu, q);
-                            audience.reply("credit_advance", List.of(UiText.t("ui.finance.credituse.6", CreditReport.money(q.facility().currency(), q.request().amountMinor())),UiText.t("ui.finance.credituse.7", UiText.decimal(q.facility().advance().apr().multiply(new java.math.BigDecimal("100")))),UiText.t("ui.finance.credituse.8"),UiText.t("ui.finance.credituse.9"),UiText.t("ui.finance.creditmenus.67", java.time.Instant.ofEpochMilli(q.request().expiresAt()))),UiText.t("ui.finance.credituse.5"),
+                            var currency = q.facility().currency();
+                            var fees = q.request().fees();
+                            var lines = new ArrayList<String>();
+                            lines.add(UiText.t("ui.finance.credituse.6", CreditReport.money(currency, q.request().amountMinor())));
+                            lines.add(UiText.t("ui.finance.credituse.advance_fee", CreditReport.money(currency, fees.advanceMinor())));
+                            if (fees.atmMinor() > 0) lines.add(UiText.t("ui.bank.atm_fee", CreditReport.money(currency, fees.atmMinor())));
+                            lines.add(UiText.t("ui.finance.credituse.total", CreditReport.money(currency, Math.addExact(q.request().amountMinor(), Math.addExact(fees.advanceMinor(), fees.atmMinor())))));
+                            lines.add(UiText.t("ui.finance.credituse.7", UiText.decimal(q.facility().advance().apr().multiply(new java.math.BigDecimal("100")))));
+                            lines.add(UiText.t("ui.finance.credituse.8"));
+                            lines.add(UiText.t("ui.finance.credituse.9"));
+                            lines.add(UiText.t("ui.finance.creditmenus.67", java.time.Instant.ofEpochMilli(q.request().expiresAt())));
+                            audience.reply("credit_advance", lines,UiText.t("ui.finance.credituse.5"),
                                     List.of(new BankingNetwork.Choice("credit_adv_confirm", "",UiText.t("ui.finance.credituse.10"), false)));
                         });
                     } catch (RuntimeException invalid) { unavailable(audience); }

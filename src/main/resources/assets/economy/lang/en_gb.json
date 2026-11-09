@@ -1141,11 +1141,11 @@
   "ui.finance.credituse.1": "Enter advance amount",
   "ui.finance.credituse.2": "Hold your active credit card and select an owned account using My accounts.",
   "ui.finance.credituse.3": "The advance credits that account. Cash withdrawal is a separate review and confirmation.",
-  "ui.finance.credituse.4": "Maximum outstanding advances are 20% of your credit limit. No advance fee. Input: ASCII digits, decimal dot (.), no grouping.",
+  "ui.finance.credituse.4": "Advances including fees are limited to 20% of your credit limit. Base fees: CAD 3.00 advance; CAD 2.50 other-bank ATM. Converted at the current rate, rounded to nearest 0.25 (25 JPY).",
   "ui.finance.credituse.5": "Review advance",
   "ui.finance.credituse.6": "Advance {0}",
   "ui.finance.credituse.7": "Advance APR {0}%",
-  "ui.finance.credituse.8": "Interest accrues daily from the advance. No grace period or advance fee.",
+  "ui.finance.credituse.8": "Interest accrues daily on the advance and fees. No grace period.",
   "ui.finance.credituse.9": "This credits the selected bank account. Cash needs a separate withdrawal.",
   "ui.finance.credituse.10": "Confirm advance",
   "ui.finance.credituse.11": "Advance unavailable",
@@ -1682,5 +1682,8 @@
   "item.economy.issued_mariner_crest_credit_wayline": "Mariner Crest Wayline Credit Card",
   "item.economy.mariner_crest_credit_keystone": "Mariner Crest Keystone Credit Card",
   "item.economy.issued_mariner_crest_credit_keystone": "Mariner Crest Keystone Credit Card",
-  "item.economy.banker_spawn_egg": "Banker Spawn Egg"
+  "item.economy.banker_spawn_egg": "Banker Spawn Egg",
+  "ui.finance.credituse.advance_fee": "Cash advance fee: {0}",
+  "ui.finance.credituse.total": "Total added to card balance: {0}",
+  "ui.bank.atm_fee": "ATM fee: {0}"
 }

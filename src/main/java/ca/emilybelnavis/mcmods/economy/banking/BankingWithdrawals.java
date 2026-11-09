@@ -162,6 +162,7 @@ public final class BankingWithdrawals {
                 }
                 var lines = new ArrayList<String>();
                 lines.add(UiText.t("ui.bank.cash.f016dc") + money(quote.cash())); lines.add(UiText.t("ui.bank.bank_debit.c90280") + money(quote.debit()));
+                if (quote.atmFee() != null) lines.add(UiText.t("ui.bank.atm_fee", money(Withdrawals.atmFee(quote))));
                 if(quote.pricing()!=null) {
                     var price=quote.pricing().split("\\|",-1);
                     lines.add(UiText.t("ui.bank.fx_principal.f945c9")+money(new Money(quote.debit().currency(),Long.parseLong(price[1])))+"; fee: "+money(new Money(quote.debit().currency(),Long.parseLong(price[3]))));

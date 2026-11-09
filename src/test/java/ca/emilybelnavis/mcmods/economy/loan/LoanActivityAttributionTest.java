@@ -19,6 +19,32 @@ import static org.junit.jupiter.api.Assertions.*;
 class LoanActivityAttributionTest {
     @TempDir Path path;
 
+    @Test void actualDefaultSaleKeepsActivityObserverReadyWithNonspendableAllowance() throws Exception {
+        try (var f = new LoanTestFixture(path.toRealPath())) {
+            observe(f);
+            var loan = f.originate();
+            DebtAcceptanceTest.activate(f);
+            var scheduler = DebtAcceptanceTest.scheduler(f);
+            DebtAcceptanceTest.catchup(f, scheduler, loan.nextMonth()
+                    + ca.emilybelnavis.mcmods.economy.debt.DebtRecords.DEFAULT_DELAY);
+            var debt = f.store.transaction(tx -> ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle
+                    .facilityCase(tx::query, ca.emilybelnavis.mcmods.economy.debt.DebtRecords.Kind.LOAN, loan.id()).orElseThrow());
+            assertEquals(ca.emilybelnavis.mcmods.economy.debt.DebtRecords.Sale.SOLD, debt.sale());
+            assertTrue(debt.discountRemainingMinor() > 0);
+            var allowance = ca.emilybelnavis.mcmods.economy.institution.FinancialAccounts.account(
+                    debt.world(), debt.creditor(),
+                    ca.emilybelnavis.mcmods.economy.institution.FinancialAccounts.Role.ALLOWANCE, debt.currency());
+            assertFalse(allowance.role().spendable());
+            assertEquals(-debt.discountRemainingMinor(), (long) f.store.transaction(tx ->
+                    Settlement.posted(tx::query, allowance.id(), debt.currency())));
+            assertEquals(100_000, total(f, CREDIT_DRAW));
+            assertEquals(0, total(f, OPERATOR_CREATE));
+            long sequence = f.store.lastCommittedSequence();
+            scheduler.advance();
+            assertEquals(sequence, f.store.lastCommittedSequence());
+        }
+    }
+
     @Test void actualPrincipalDrawAndRepaymentExcludeInterestAndReplay() throws Exception {
         try (var f = new LoanTestFixture(path.toRealPath())) {
             observe(f);

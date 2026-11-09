@@ -208,7 +208,7 @@ public final class AutopayMenus {
         state.preview = new Autopay.Configure(grant.target().world(), owner, product.kind(), product.id(),
                 state.settings == null ? 0 : state.settings.revision(), product.revision(), enabled,
                 enabled ? state.funding.id() : null, enabled ? state.funding.revision() : 0, mode);
-        state.expiresAt = Math.addExact(System.currentTimeMillis(), 30_000);
+        state.expiresAt = Math.addExact(BankingController.services(audience.player()).financialMillis(), 30_000);
         var lines = new ArrayList<String>();
         lines.add(product.label());
         if (enabled) {
@@ -238,7 +238,7 @@ public final class AutopayMenus {
                                 PartyAuthorization.Grant grant, State state) {
         requireOffered(audience, "auto_confirm", "");
         var request = state.preview;
-        if (request == null || audience.menu().revision() != state.previewRevision || System.currentTimeMillis() >= state.expiresAt)
+        if (request == null || audience.menu().revision() != state.previewRevision || BankingController.services(audience.player()).financialMillis() >= state.expiresAt)
             throw new IllegalArgumentException("Review automatic-payment consent again");
         state.preview = null;
         FinanceMenuSupport.submit(audience, services, grant, Autopay.CONFIGURE, request.request(),

@@ -54,6 +54,7 @@ public final class ServerServices {
     private final UUID sessionId = UUID.randomUUID();
     private final Thread owner = Thread.currentThread();
     private final StorageLifecycle storage;
+    private final Clock financialClock;
     private final ThreadPoolExecutor storageWorker;
     private final SchedulingConfig config;
     private final ThreadPoolExecutor calculations;
@@ -118,6 +119,13 @@ public final class ServerServices {
 
     public boolean debugGui() { return config.debugGui(); }
 
+    /** Session financial time; elapsed budgets and journal audit UTC use their independent clocks. */
+    public Clock financialClock() { return financialClock; }
+    public long financialMillis() { return financialClock.millis(); }
+    public long observedDeadlineTurns() {
+        return storage instanceof FoundationRuntime runtime ? runtime.observedDeadlineTurns() : 0;
+    }
+
     public ServerServices(Path worldDirectory, StorageLifecycle storage) {
         this(worldDirectory, storage, SchedulingConfig.defaults());
     }
@@ -127,6 +135,16 @@ public final class ServerServices {
     }
     public ServerServices(Path worldDirectory, StorageLifecycle storage, SchedulingConfig config,
                           ca.emilybelnavis.mcmods.economy.pricing.ServicePricing servicePricing) {
+        this(worldDirectory, storage, config, servicePricing, Clock.systemUTC());
+    }
+    public ServerServices(Path worldDirectory, StorageLifecycle storage, SchedulingConfig config, Clock financialClock) {
+        this(worldDirectory, storage, config,
+                new ca.emilybelnavis.mcmods.economy.pricing.ServicePricing(storage instanceof FoundationRuntime runtime
+                        ? runtime.valuation() : ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.wealth()), financialClock);
+    }
+    public ServerServices(Path worldDirectory, StorageLifecycle storage, SchedulingConfig config,
+                          ca.emilybelnavis.mcmods.economy.pricing.ServicePricing servicePricing, Clock financialClock) {
+        this.financialClock = java.util.Objects.requireNonNull(financialClock);
         this.servicePricing=java.util.Objects.requireNonNull(servicePricing);
         this.worldDirectory = worldDirectory.toAbsolutePath().normalize();
         this.storage = storage;
@@ -205,7 +223,7 @@ public final class ServerServices {
     };}
     public List<String> macroDiagnostics(){checkOwner();if(state==State.UNAVAILABLE){String reason=failure instanceof IllegalArgumentException&&failure.getMessage()!=null?failure.getMessage():failureCode(failure);return List.of("Simulation unavailable: "+reason.substring(0,Math.min(240,reason.length())));}var s=simulationSample;if(s==null||!simulationFailure.isEmpty())return List.of("Simulation unavailable: "+simulationFailure);return List.of("Simulation "+s.reason()+" mode="+s.mode()+" coverage="+s.coverageDays()+"/7 baseline="+s.baselineDays()+"/7 ageMs="+s.fxAgeMillis(),"Activation A="+s.activationMillis()+" F="+s.firstEffectiveMillis()+" H="+s.handoverMillis(),"Config="+s.config()+" policyRevision="+s.policyRevision()+" source="+s.sources(),String.join("; ",s.limits()));}
     /** Operator capability and revocable server proof are issued before this trusted worker call. */
-    public CompletionStage<ca.emilybelnavis.mcmods.economy.simulation.macro.MacroControls.Policy> scheduleMacro(PartyAuthorization.Grant grant,java.util.concurrent.atomic.AtomicBoolean live,ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.Request request){checkOwner();if(!allowsAccountRead(grant,partyWorld(),true)||!live.get())return CompletableFuture.failedStage(new IllegalStateException("Operator permission required"));return tradeMonetaryStorage(grant.actor(),store->{if(!live.get()||!allowsAccountRead(grant,store.snapshot().worldId(),true))throw new IllegalStateException("Operator session ended");return ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.schedule(store,request,java.time.Instant.now(),grant.actor());});}
+    public CompletionStage<ca.emilybelnavis.mcmods.economy.simulation.macro.MacroControls.Policy> scheduleMacro(PartyAuthorization.Grant grant,java.util.concurrent.atomic.AtomicBoolean live,ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.Request request){checkOwner();if(!allowsAccountRead(grant,partyWorld(),true)||!live.get())return CompletableFuture.failedStage(new IllegalStateException("Operator permission required"));return tradeMonetaryStorage(grant.actor(),store->{if(!live.get()||!allowsAccountRead(grant,store.snapshot().worldId(),true))throw new IllegalStateException("Operator session ended");return ca.emilybelnavis.mcmods.economy.simulation.MacroPolicyRequests.schedule(store,request,financialClock().instant(),grant.actor());});}
     /** Server-only valuation reads authenticated on every admission. */
     public ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration itemValuation(MinecraftServer server) {
         checkOwner();return ca.emilybelnavis.mcmods.economy.valuation.ValuationApi.integration(server,this);
@@ -252,7 +270,7 @@ public final class ServerServices {
         return storage(grant.actor(),()->{
             store.requireEconomicCurrent();
             return store.transaction(tx->allowsAccountRead(grant,store.snapshot().worldId(),false)
-                ?Optional.of(ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.snapshot(tx::query,grant.target(),after,limit,System.currentTimeMillis())):Optional.empty());
+                ?Optional.of(ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.snapshot(tx::query,grant.target(),after,limit,financialMillis())):Optional.empty());
         });
     }
 
@@ -265,7 +283,7 @@ public final class ServerServices {
         var request=ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.request(grant.target(),action,lease,observedDeathAt);
         var fields=new java.util.HashMap<>(request.fields());fields.remove("economy:owner");
         var id=ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.operation(grant.target(),action,lease);
-        var registration=ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.registration(grant.target(),action,lease,observedDeathAt,System::currentTimeMillis);
+        var registration=ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.registration(grant.target(),action,lease,observedDeathAt,this::financialMillis);
         var operation=PartyOperation.owned(grant,ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.KIND,new OperationId(id),new RequestId(UUID.randomUUID()),new Journal.CanonicalRequest(1,fields),registration);
         return storage(grant.actor(),()->{
             if(action==ca.emilybelnavis.mcmods.economy.collection.CollectionPresence.Action.RESERVE)store.requireEconomicCurrent();
@@ -324,7 +342,7 @@ public final class ServerServices {
 
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.pricing.WealthValuation.Snapshot>> wealthSnapshot(PartyAuthorization.Grant grant) {
         return readAccounts(grant,false,reads->grant.target().owner() instanceof PartyRef.Player player
-                ? Optional.of(servicePricing.valuation().snapshot(reads,grant.target().world(),player.id(),java.time.Instant.now())):Optional.empty());
+                ? Optional.of(servicePricing.valuation().snapshot(reads,grant.target().world(),player.id(),financialClock().instant())):Optional.empty());
     }
     public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.pricing.TierReevaluation.Status>> serviceTierStatus(PartyAuthorization.Grant grant) {
         return readAccounts(grant,false,reads->grant.target().owner() instanceof PartyRef.Player player
@@ -341,7 +359,7 @@ public final class ServerServices {
         checkOwner();
         var player=(PartyRef.Player)grant.target().owner();
         var domain=ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.yield(grant.target().world());
-        var handler=domain.settlement(player.id(),source,bank,currency,destination,()->java.time.Instant.now().toEpochMilli(),false);
+        var handler=domain.settlement(player.id(),source,bank,currency,destination,()->financialClock().instant().toEpochMilli(),false);
         var request=ca.emilybelnavis.mcmods.economy.interest.DepositYield.settlementRequest(source,bank,currency,destination,false);
         var kind=ca.emilybelnavis.mcmods.economy.interest.DepositYield.SETTLE;
         var session=sessionId(); var world=grant.target().world();
@@ -367,7 +385,7 @@ public final class ServerServices {
         var fields = new java.util.HashMap<>(request.request().fields());
         fields.remove("economy:owner");
         var handler = ca.emilybelnavis.mcmods.economy.institution.BankProviders.lifecycle(grant.target(), request,
-                servicePricing.valuation().tierEligibility(grant.target().world(), java.time.Clock.systemUTC()), () -> java.time.Instant.now().toEpochMilli());
+                servicePricing.valuation().tierEligibility(grant.target().world(), financialClock()), () -> financialClock().instant().toEpochMilli());
         return submitOwned(grant, kind, operationId, requestId, new Journal.CanonicalRequest(1, fields), handler, publisher);
     }
 
@@ -653,7 +671,7 @@ public final class ServerServices {
 
     private void sampleDiagnosticsOnWorker() {
         sampleStorage();
-        if(storage instanceof FoundationStore store){try{simulationSample=ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.read(store,System.currentTimeMillis(),storage instanceof FoundationRuntime r?r.simulationStatus().reason():"NOT_CONFIGURED");simulationFailure="";}catch(RuntimeException e){simulationFailure=failureCode(e);}}
+        if(storage instanceof FoundationStore store){try{simulationSample=ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.read(store,financialMillis(),storage instanceof FoundationRuntime r?r.simulationStatus().reason():"NOT_CONFIGURED");simulationFailure="";}catch(RuntimeException e){simulationFailure=failureCode(e);}}
         if (storage instanceof FoundationRuntime runtime) {
             try {
                 fxSample = new FxSample(runtime.readFxDiagnostics(), null);
@@ -704,7 +722,7 @@ public final class ServerServices {
                 || (paymentExpiry != null && !paymentExpiry.toCompletableFuture().isDone())) return;
         nextPaymentExpiry = now + TimeUnit.SECONDS.toNanos(1);
         paymentExpiry = storage(() -> {
-            MerchantPayments.expireBatch(store, Clock.systemUTC());
+            MerchantPayments.expireBatch(store, financialClock());
             return null;
         });
     }

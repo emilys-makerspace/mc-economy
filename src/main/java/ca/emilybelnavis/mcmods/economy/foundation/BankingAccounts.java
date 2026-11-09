@@ -238,13 +238,13 @@ public final class BankingAccounts {
                 else {
                     lines.add(InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(provider.bankKey())).name());
                     if(token!=null) {
-                        lines.add(UiText.t("ui.bank.status.f8c824")+(System.currentTimeMillis()>=token.expiresAt()?display("EXPIRED"):display(token.status())));
+                        lines.add(UiText.t("ui.bank.status.f8c824")+(BankingController.services(audience.player()).financialMillis()>=token.expiresAt()?display("EXPIRED"):display(token.status())));
                         lines.add(UiText.t("ui.bank.expires_utc.7c2031")+java.time.Instant.ofEpochMilli(token.expiresAt()));
-                        if(token.status()==ca.emilybelnavis.mcmods.economy.card.IssuedCards.Status.ACTIVE && System.currentTimeMillis()<token.expiresAt())
+                        if(token.status()==ca.emilybelnavis.mcmods.economy.card.IssuedCards.Status.ACTIVE && BankingController.services(audience.player()).financialMillis()<token.expiresAt())
                             choices.add(new BankingNetwork.Choice("card_lost",account.id().value().toString(),UiText.t("ui.bank.report_card_lost_free.124722"),false));
                     } else lines.add(UiText.t("ui.bank.first_debit_card_free_no_credit_or_score_is_cr.04d8e7"));
                     String issuerName=InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(provider.bankKey())).name();
-                    lines.set(0,token==null?issuerName+UiText.t("ui.bank.first_debit_card_free.337b7b"):issuerName+" — "+ca.emilybelnavis.mcmods.economy.card.IssuedCards.effectiveStatus(token,System.currentTimeMillis())
+                    lines.set(0,token==null?issuerName+UiText.t("ui.bank.first_debit_card_free.337b7b"):issuerName+" — "+ca.emilybelnavis.mcmods.economy.card.IssuedCards.effectiveStatus(token,BankingController.services(audience.player()).financialMillis())
                             +" — "+java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneOffset.UTC).format(java.time.Instant.ofEpochMilli(token.expiresAt())));
                     boolean issuerKiosk=audience.menu().access()==BankingMenu.Access.KIOSK && view.terminal()!=null && view.terminal().binding()!=null
                             && view.terminal().binding().bound() && view.terminal().binding().institution().key().equals(provider.bankKey());
@@ -279,7 +279,7 @@ public final class BankingAccounts {
         String[] parts=value.split("\\|",-1);
         if(!parts[0].equals(state.cardAccount.value().toString()))throw new IllegalArgumentException("Card selection changed");
         var old=state.cardToken;
-        boolean paid=old!=null && !ca.emilybelnavis.mcmods.economy.card.IssuedCards.freeRenewal(old,System.currentTimeMillis());
+        boolean paid=old!=null && !ca.emilybelnavis.mcmods.economy.card.IssuedCards.freeRenewal(old,BankingController.services(audience.player()).financialMillis());
         if(paid && parts.length==1) {
             var choices=state.offered.values().stream().map(a->new BankingNetwork.Choice("card_preview",value+"|"+a.id().value(),UiText.t("ui.bank.pay_from.bc4706")+a.currency().code()+UiText.t("ui.bank.account.6f9a89"),false)).toList();
             reply(audience,"card_funding",List.of(UiText.t("ui.bank.replacement_costs_25_in_the_world_s_currency.5b16d6"),UiText.t("ui.bank.choose_a_funding_account_then_review_the_combi.94dd8d")),UiText.t("ui.bank.choose_funding_account.4990d2"),choices);return;
@@ -800,7 +800,7 @@ public final class BankingAccounts {
         var remoteToken=audience.menu().issuedToken();var remoteActor=new PlayerId(audience.player().getUUID());
         var live=audience.menu().remote()?null:KioskAdmission.financialAuthority(audience.player(),audience.menu(),terminal,intent);
         start(audience, services, grant, state, intent, fresh -> services.ledger().exchange(fresh, operation, attempt, exchange,
-                (candidate,reads)->(remoteToken==null || ca.emilybelnavis.mcmods.economy.card.CardAccess.usable(reads,grant.target().world(),remoteActor,remoteToken,System.currentTimeMillis()).isPresent()) && (live==null || live.allows(TerminalPolicy.Action.CONFIGURE,candidate,terminal,reads)
+                (candidate,reads)->(remoteToken==null || ca.emilybelnavis.mcmods.economy.card.CardAccess.usable(reads,grant.target().world(),remoteActor,remoteToken,services.financialMillis()).isPresent()) && (live==null || live.allows(TerminalPolicy.Action.CONFIGURE,candidate,terminal,reads)
                     && TerminalBanking.matches(reads,grant.target().world(),terminal.anchor(),terminal.generation(),terminal.revision(),terminal.binding().institution()))), "fx");
         state.exchange = null; state.quote = null; state.fxTerminal = null;
     }

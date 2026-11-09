@@ -385,17 +385,19 @@ public final class ActivityClassifier {
         }
 
         private void withdrawal(Journal.Record fact) {
-            version(fact, 1, 2, 3);
+            version(fact, 1, 2, 3, 4, 5);
             if (fact.version() == 1) Withdrawals.validateFact(fact.payload());
             else if (fact.version() == 2) Withdrawals.validateFactV2(fact.payload());
-            else Withdrawals.validateFactV3(fact.payload());
+            else if(fact.version()==3) Withdrawals.validateFactV3(fact.payload());
+            else if(fact.version()==4) Withdrawals.validateFactV4(fact.payload());
+            else Withdrawals.validateFactV5(fact.payload());
             var fields = fields(fact.payload(), 8);
             if (!fields[0].equals("COMMIT")) return;
             UUID id = uuid(fields[1]);
             var preview = Withdrawals.find(reads, intent.actor(), id)
                     .orElseThrow(() -> invalid("Missing committed withdrawal")).preview();
             if (preview.binding().currency() == preview.cash().currency()) return;
-            long principal = preview.pricing() == null ? preview.debit().minorUnits() : number(fields(preview.pricing(), 5)[1]);
+            long principal = preview.pricing() == null ? Math.subtractExact(preview.debit().minorUnits(), Withdrawals.atmFee(preview).minorUnits()) : number(fields(preview.pricing(), 5)[1]);
             exchange("fx", fact.version(), id, publication(preview.binding().fxRevision()), preview.binding().currency(),
                     principal, preview.cash().currency(), preview.cash().minorUnits(), ordinaryEffective);
         }

@@ -30,7 +30,8 @@ public final class CreditDrawAdmission {
                     && price.sellerAccount().equals(destination.value()) && price.sellerAccountRevision()==request.destinationRevision()
                     && price.amount().minorUnits()==request.amountMinor();
             }
-            return true;
+            var facility=CreditFacilities.find(reads,token.facility()).orElse(null);
+            return facility!=null && request.fees()!=null && CreditFacilities.AdvanceFees.capture(reads,facility,terminal).equals(request.fees());
         }
     }
     /** Capture after displaying the server-generated draw quote and receiving confirmation. */

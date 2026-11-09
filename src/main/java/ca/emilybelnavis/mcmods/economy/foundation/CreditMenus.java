@@ -1,5 +1,7 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
+import ca.emilybelnavis.mcmods.economy.banking.BankingController;
+
 import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
@@ -267,7 +269,7 @@ public final class CreditMenus {
             if (error != null || branch.isEmpty() || !bound(branch.orElseThrow())
                     || !branch.orElseThrow().terminal().binding().institution().equals(state.token.issuer())) { unavailable(audience); return; }
             state.branch = branch.orElseThrow();
-            if (System.currentTimeMillis() >= state.token.expiresAt() - ca.emilybelnavis.mcmods.economy.card.IssuedCards.RENEWAL_WINDOW) {
+            if (BankingController.services(audience.player()).financialMillis() >= state.token.expiresAt() - ca.emilybelnavis.mcmods.economy.card.IssuedCards.RENEWAL_WINDOW) {
                 replacementReview(audience, state);
                 return;
             }

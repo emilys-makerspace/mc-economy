@@ -5,6 +5,8 @@ import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.storage.FoundationStore;
 import ca.emilybelnavis.mcmods.economy.pricing.CashPricing;
 import ca.emilybelnavis.mcmods.economy.pricing.ServicePricing;
+import ca.emilybelnavis.mcmods.economy.pricing.BankingFees;
+import ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -18,6 +20,8 @@ public final class Withdrawals {
     public static final int MAX_LINES = 24;
     private static final String CHF_SETTLEMENT = "CHF_MINOR_V2";
     private static final String PRICED_SETTLEMENT = "PRICED_MINOR_V3";
+    private static final String ATM_SETTLEMENT = "ATM_FEE_MINOR_V4";
+    private static final String CAD_ATM_SETTLEMENT = "ATM_FEE_MINOR_V5";
     public static final int MAX_STACKS = 36;
     private static final SystemActorId RECOVERY = new SystemActorId(
             UUID.fromString("225d3dad-73e3-4b30-a121-81df44fc8564"));
@@ -40,15 +44,17 @@ public final class Withdrawals {
         public FxSnapshot { bounded(revision, 256); Objects.requireNonNull(rates); }
     }
     public record Preview(Binding binding, Money cash, boolean edited, Map<String,Integer> billEdits,
-                          WithdrawalPlanner.Plan plan, Money debit, String pricing) {
+                          WithdrawalPlanner.Plan plan, Money debit, String pricing, String atmFee) {
+        public Preview(Binding binding,Money cash,boolean edited,Map<String,Integer> billEdits,WithdrawalPlanner.Plan plan,Money debit,String pricing){this(binding,cash,edited,billEdits,plan,debit,pricing,null);}
         public Preview(Binding binding,Money cash,boolean edited,Map<String,Integer> billEdits,WithdrawalPlanner.Plan plan,Money debit){this(binding,cash,edited,billEdits,plan,debit,null);}
         public Preview {
             Objects.requireNonNull(binding); Objects.requireNonNull(cash); Objects.requireNonNull(plan); Objects.requireNonNull(debit);
             billEdits = Collections.unmodifiableMap(new TreeMap<>(billEdits));
             if(pricing!=null)bounded(pricing,1024);
+            if(atmFee!=null)validateAtmFee(atmFee, debit.currency());
             if ((!edited && !billEdits.isEmpty()) || cash.minorUnits() <= 0 || plan.currency() != cash.currency()
                     || plan.minorUnits() != cash.minorUnits() || debit.currency() != binding.currency()
-                    || debit.minorUnits() <= 0 || debit.minorUnits() % (pricing==null?quantum(cash.currency(), binding.currency()):1) != 0)
+                    || debit.minorUnits() <= 0 || debit.minorUnits() % (pricing==null&&atmFee==null?quantum(cash.currency(), binding.currency()):1) != 0)
                 throw invalid("WITHDRAWAL_PREVIEW");
             validatePlan(plan);
         }
@@ -85,7 +91,7 @@ public final class Withdrawals {
         if (!artwork.equals(result.plan())) {
             // Freeze the sampled variants as exact edits. Reserve, commit and recovery only revalidate them.
             result = new Preview(result.binding(), result.cash(), true, artwork.bills(), artwork,
-                    result.debit(), result.pricing());
+                    result.debit(), result.pricing(), result.atmFee());
         }
         var id = new UUID(0, 0);
         new Intent(new OperationId(id), new RequestId(id), owner, Action.RESERVE.kind(), reserveRequest(result), null, null);
@@ -134,7 +140,19 @@ public final class Withdrawals {
         long quantum = price==null?quantum(cash.currency(), binding.currency()):1;
         long principal = Math.multiplyExact(Math.addExact(raw, quantum - 1) / quantum, quantum);
         long debit = price==null?principal:Math.addExact(principal,price.fee().minorUnits());
-        return new Preview(binding, cash, edits != null, edits == null ? Map.of() : edits, plan, new Money(binding.currency(), debit),price==null?null:price.encoded());
+        String atmFee = null;
+        if (atm && terminal.binding() != null && terminal.binding().bound()) {
+            String bank = terminal.binding().institution().key();
+            String issuer = provider == null ? "" : provider.bankKey();
+            var fee = BankingFees.atmFee(binding.currency(), issuer, bank, publication.rates());
+            if (fee.minorUnits() > 0) {
+                atmFee = bank + "|" + issuer + "|" + (provider == null ? 0 : provider.revision()) + "|" + fee.minorUnits()
+                        + "|CAD_FEE_V2|" + publication.rates().perMajorUnit().get(EconomyCurrency.CAD).stripTrailingZeros().toPlainString()
+                        + "|" + publication.rates().perMajorUnit().get(binding.currency()).stripTrailingZeros().toPlainString();
+                debit = Math.addExact(debit, fee.minorUnits());
+            }
+        }
+        return new Preview(binding, cash, edits != null, edits == null ? Map.of() : edits, plan, new Money(binding.currency(), debit),price==null?null:price.encoded(),atmFee);
     }
 
     public static CanonicalRequest reserveRequest(Preview preview) {
@@ -146,7 +164,8 @@ public final class Withdrawals {
         fields.put("plan", encodePlan(preview.plan()));
         fields.put("debit", Long.toString(preview.debit().minorUnits()));
         if(preview.pricing()!=null){fields.put("settlement",PRICED_SETTLEMENT);fields.put("pricing",preview.pricing());}
-        else if (minorSettlement(preview)) fields.put("settlement", CHF_SETTLEMENT);
+        if(preview.atmFee()!=null){fields.put("settlement",atmFactVersion(preview)==5?CAD_ATM_SETTLEMENT:ATM_SETTLEMENT);fields.put("atm_fee",preview.atmFee());}
+        else if (preview.pricing()==null && minorSettlement(preview)) fields.put("settlement", CHF_SETTLEMENT);
         return new CanonicalRequest(1, fields);
     }
     public static CanonicalRequest request(UUID reservation, String evidence, String reason) {
@@ -205,8 +224,10 @@ public final class Withdrawals {
             if (!capacity.fits(action, intent, current, reads)) return decline("WITHDRAWAL_CAPACITY");
             var preview=current.preview();
             var price=preview.pricing()==null?null:CashPricing.requireFresh(fx.current(reads).pricing(),reads,preview.pricing());
-            var debit = price==null?preview.debit():new Money(preview.debit().currency(),price.principalMinor());
-            if(price!=null&&Math.addExact(debit.minorUnits(),price.fee().minorUnits())!=preview.debit().minorUnits())return reject("WITHDRAWAL_PRICING");
+            long surcharge = atmFee(preview).minorUnits();
+            var debit = new Money(preview.debit().currency(), price==null
+                    ? Math.subtractExact(preview.debit().minorUnits(), surcharge) : price.principalMinor());
+            if(price!=null&&Math.addExact(Math.addExact(debit.minorUnits(),price.fee().minorUnits()),surcharge)!=preview.debit().minorUnits())return reject("WITHDRAWAL_PRICING");
             var legs = List.of(new PostingBatch.Leg(current.preview().binding().account(), ACCOUNT, debit.currency(), debit.negate()),
                     new PostingBatch.Leg(Settlement.issuanceAccount(debit.currency()), ISSUANCE, debit.currency(), debit));
             var decision = minorSettlement(current.preview())
@@ -218,9 +239,24 @@ public final class Withdrawals {
                 return decision;
             }
             var withFees=price==null?financial:FeeSettlement.composeCash(reads,financial,List.of(price));
-            if(!(withFees instanceof Commit pricedFinancial)) {
+            if(!(withFees instanceof Commit)) {
                 if(withFees instanceof Reject rejection&&rejection.result().code().equals("INSUFFICIENT_FUNDS"))return new Retry(rejection.result());
                 return withFees;
+            }
+            var pricedFinancial = (Commit) withFees;
+            if (surcharge > 0) {
+                var charge = FeeSettlement.charge(FeeSettlement.overlay(reads, pricedFinancial.records()), world,
+                        (PlayerId) current.owner(), new InstitutionCatalog.InstitutionId(preview.atmFee().split("\\|", -1)[0]),
+                        atmFee(preview), preview.binding().account());
+                if (!(charge instanceof Commit fee)) {
+                    if(charge instanceof Reject rejection&&rejection.result().code().equals("INSUFFICIENT_FUNDS"))return new Retry(rejection.result());
+                    return charge;
+                }
+                var principalCommit = pricedFinancial;
+                var records = new ArrayList<>(principalCommit.records()); records.addAll(fee.records());
+                pricedFinancial = new Commit(records, principalCommit.result(), tx -> {
+                    principalCommit.projections().apply(tx); fee.projections().apply(tx);
+                });
             }
             var lots = lots(current, world);
             var issuance = CashIssuance.composeIssuance(world, lots, pricedFinancial, reads);
@@ -255,7 +291,7 @@ public final class Withdrawals {
     private static Commit commit(Action action, Reservation value, Commit base, boolean insert) {
         var records = new ArrayList<Journal.Record>();
         if (base != null) records.addAll(base.records());
-        records.add(new Journal.Record(FACT, value.preview().pricing()!=null?3:minorSettlement(value.preview()) ? 2 : 1, encode(action, value)));
+        records.add(new Journal.Record(FACT, value.preview().atmFee()!=null?atmFactVersion(value.preview()):value.preview().pricing()!=null?3:minorSettlement(value.preview()) ? 2 : 1, encode(action, value)));
         return new Commit(records, new Result(1, "WITHDRAWAL_" + action.name(), value.id().toString()), tx -> {
             if (base != null) base.projections().apply(tx);
             if (insert) tx.execute("INSERT INTO withdrawals VALUES(?,?,?,?,?,?,?)", values(value));
@@ -352,7 +388,9 @@ public final class Withdrawals {
         var f = request.fields();
         if (!f.keySet().equals(Set.of("binding","cash","edited","edits","plan","debit"))
                 && !f.keySet().equals(Set.of("binding","cash","edited","edits","plan","debit","settlement"))
-                && !f.keySet().equals(Set.of("binding","cash","edited","edits","plan","debit","settlement","pricing")))
+                && !f.keySet().equals(Set.of("binding","cash","edited","edits","plan","debit","settlement","pricing"))
+                && !f.keySet().equals(Set.of("binding","cash","edited","edits","plan","debit","settlement","atm_fee"))
+                && !f.keySet().equals(Set.of("binding","cash","edited","edits","plan","debit","settlement","pricing","atm_fee")))
             throw invalid("WITHDRAWAL_REQUEST");
         var binding = decodeBinding(f.get("binding"));
         var cash = f.get("cash").split("\\|", -1);
@@ -372,7 +410,7 @@ public final class Withdrawals {
         }
         var plan = new WithdrawalPlanner.Plan(money.currency(), money.minorUnits(), bills, coins, lines, count);
         var result = new Preview(binding, money, Boolean.parseBoolean(f.get("edited")), edits, plan,
-                new Money(binding.currency(), Long.parseLong(f.get("debit"))),f.get("pricing"));
+                new Money(binding.currency(), Long.parseLong(f.get("debit"))),f.get("pricing"),f.get("atm_fee"));
         if (!reserveRequest(result).equals(request)) throw invalid("WITHDRAWAL_REQUEST");
         return result;
     }
@@ -397,6 +435,8 @@ public final class Withdrawals {
     private static void validateFact(String value, int version) { decodeFact(value, version); }
     public static void validateFactV2(String value) { validateFact(value, 2); }
     public static void validateFactV3(String value) { validateFact(value, 3); }
+    public static void validateFactV4(String value) { validateFact(value, 4); }
+    public static void validateFactV5(String value) { validateFact(value, 5); }
     /** Immutable retained fact adapter; validation and canonical-version rules remain identical to startup. */
     public record Fact(Action action, Reservation reservation) {}
     public static Fact decodeFact(String value, int version) {
@@ -407,7 +447,7 @@ public final class Withdrawals {
                 decodePreview(unpack(p[4])), unpack(p[5]), unpack(p[6]), Long.parseLong(p[7]));
         bounded(reservation.evidence(), 256); bounded(reservation.reason(), 256);
         if (reservation.revision() < 1) throw invalid("WITHDRAWAL_REVISION");
-        if ((reservation.preview().pricing()!=null?3:minorSettlement(reservation.preview())?2:1)!=version) throw invalid("WITHDRAWAL_SETTLEMENT_VERSION");
+        if ((reservation.preview().atmFee()!=null?atmFactVersion(reservation.preview()):reservation.preview().pricing()!=null?3:minorSettlement(reservation.preview())?2:1)!=version) throw invalid("WITHDRAWAL_SETTLEMENT_VERSION");
         if (version>=2 && !encode(action, reservation).equals(value)) throw invalid("WITHDRAWAL_FACT");
         return new Fact(action, reservation);
     }
@@ -416,7 +456,43 @@ public final class Withdrawals {
         return cash == EconomyCurrency.CHF || account == EconomyCurrency.CHF ? 1 : account.minorUnitsPerMajor();
     }
     private static boolean minorSettlement(Preview preview) {
-        return preview.pricing()!=null||preview.cash().currency() == EconomyCurrency.CHF || preview.binding().currency() == EconomyCurrency.CHF;
+        return preview.atmFee()!=null||preview.pricing()!=null||preview.cash().currency() == EconomyCurrency.CHF || preview.binding().currency() == EconomyCurrency.CHF;
+    }
+    /** Frozen ATM fee shown in review and charged in the account currency. */
+    public static Money atmFee(Preview preview) {
+        return new Money(preview.debit().currency(), preview.atmFee() == null ? 0
+                : Long.parseLong(preview.atmFee().split("\\|", -1)[3]));
+    }
+    private static void validateAtmFee(String value, EconomyCurrency currency) {
+        bounded(value, 512);
+        var fields = value.split("\\|", -1);
+        if (fields.length != 4 && fields.length != 7) throw invalid("WITHDRAWAL_ATM_FEE");
+        InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(fields[0]));
+        if (!fields[1].isEmpty() && !fields[1].equals(ca.emilybelnavis.mcmods.economy.institution.BankProviders.UNASSIGNED_PROVIDER))
+            InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(fields[1]));
+        long revision = Long.parseLong(fields[2]);
+        long amount = Long.parseLong(fields[3]);
+        long expected;
+        if (fields.length == 4) {
+            // Retained V4 facts charged a fixed amount in the local account currency.
+            expected = new java.math.BigDecimal("2.50").multiply(java.math.BigDecimal.valueOf(currency.minorUnitsPerMajor()))
+                    .setScale(0, java.math.RoundingMode.CEILING).longValueExact();
+        } else {
+            if (!fields[4].equals("CAD_FEE_V2")) throw invalid("WITHDRAWAL_ATM_FEE");
+            var cadRate = new java.math.BigDecimal(fields[5]);
+            var targetRate = new java.math.BigDecimal(fields[6]);
+            if (cadRate.signum() <= 0 || targetRate.signum() <= 0
+                    || !cadRate.stripTrailingZeros().toPlainString().equals(fields[5])
+                    || !targetRate.stripTrailingZeros().toPlainString().equals(fields[6]))
+                throw invalid("WITHDRAWAL_ATM_FEE");
+            expected = BankingFees.convert(new java.math.BigDecimal("2.50"), currency, cadRate, targetRate).minorUnits();
+        }
+        if (revision < 0 || !Long.toString(revision).equals(fields[2]) || amount <= 0
+                || !Long.toString(amount).equals(fields[3]) || fields[0].equals(fields[1]) || expected != amount)
+            throw invalid("WITHDRAWAL_ATM_FEE");
+    }
+    private static int atmFactVersion(Preview preview) {
+        return preview.atmFee().split("\\|", -1).length == 7 ? 5 : 4;
     }
     private static String pack(String value) { return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8)); }
     private static String unpack(String value) { return new String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8); }

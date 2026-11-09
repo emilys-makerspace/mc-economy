@@ -158,7 +158,7 @@ public final class BankingMenu extends AbstractContainerMenu {
         if (operation.state() == BankingOperation.State.PROCESSING) return false;
         if (operation.unresolved() && !Set.of("retry", "bank_retry").contains(action)) return false;
         if (BankingOperation.confirmation(action) && operation.confirming()
-                && operation.expiresAt() > 0 && System.currentTimeMillis() >= operation.expiresAt()) {
+                && operation.expiresAt() > 0 && BankingController.services(player).financialMillis() >= operation.expiresAt()) {
             setBusy(false);
             publish(page, List.of(UiText.t("ui.common.terms_expired")), UiText.t("ui.common.review_expired"),
                     choices.stream().filter(c -> !BankingOperation.confirmation(c.action())).toList(),
@@ -166,7 +166,7 @@ public final class BankingMenu extends AbstractContainerMenu {
             return false;
         }
         if (BankingOperation.confirmation(action) && (!operation.confirming()
-                || (operation.expiresAt() > 0 && System.currentTimeMillis() >= operation.expiresAt())
+                || (operation.expiresAt() > 0 && BankingController.services(player).financialMillis() >= operation.expiresAt())
                 || choices.stream().noneMatch(c -> c.action().equals(action)))) return false;
         if (busy && !action.equals("retry") && !action.equals("bank_retry") && !action.equals("cancel")) return false;
         long now = player.serverLevel().getServer().getTickCount();

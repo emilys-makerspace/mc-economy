@@ -71,7 +71,10 @@ public final class ActivityRuntime {
         var banks = new TreeSet<String>();
         for (var fact : commit.records()) {
             if (fact.type().equals(InstitutionCapital.ACCOUNT)) {
-                requireVersion(fact, 1);
+                // Debt sales add a nonspendable allowance identity using the supported v2 fact.
+                if (fact.version() == 2)
+                    ca.emilybelnavis.mcmods.economy.debt.DebtFinance.validateAllowanceAccount(fact.payload());
+                else requireVersion(fact, 1);
                 var p = fact.payload().split("\\|", -1);
                 if (p.length != 5 || !p[1].equals(world.value().toString())) throw new IllegalArgumentException("Activity institution identity");
                 if (p[3].equals("CASH")) {

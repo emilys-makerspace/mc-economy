@@ -90,6 +90,8 @@ public final class RecordCatalog {
                 .with(new Key(Withdrawals.FACT, 1), Withdrawals::validateFact)
                 .with(new Key(Withdrawals.FACT, 2), Withdrawals::validateFactV2)
                 .with(new Key(Withdrawals.FACT, 3), Withdrawals::validateFactV3)
+                .with(new Key(Withdrawals.FACT, 4), Withdrawals::validateFactV4)
+                .with(new Key(Withdrawals.FACT, 5), Withdrawals::validateFactV5)
                 .with(new Key(RegisterSales.FACT, 1), RegisterSales::validateFact)
                 .with(new Key(RegisterSaleSettlement.RETURN, 1), RegisterSaleSettlement::validateReturn)
                 .with(new Key(DepositReturns.FACT, 1), DepositReturns::validateFact)

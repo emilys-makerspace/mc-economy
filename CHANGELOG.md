@@ -2,6 +2,18 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-09
+
+### Banking fees
+
+- Added a CAD 3.00 base fee to every credit cash advance, financed on the card and included in its advance and credit limits.
+- Added a CAD 2.50 base ATM surcharge for other-bank and unassigned accounts/cards, with same-bank ATMs and tellers exempt. Both fees convert at the current CAD exchange rate and round to the nearest 0.25, or 25 JPY, before confirmation.
+
+### Debt collection
+
+- Fixed debt sales stopping the economy service when activity tracking encountered the collector's nonspendable allowance account.
+- Collection Agent reviews now name Waystone Recovery correctly after a debt sale.
+
 ## 2026-11-08
 
 ### Village banks

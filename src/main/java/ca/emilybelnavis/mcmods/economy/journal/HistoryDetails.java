@@ -130,13 +130,18 @@ public final class HistoryDetails {
         void record(Map<String, String> record) {
             String type = record.get("record_type"), payload = record.get("payload"); int version = Integer.parseInt(record.get("record_version"));
             try {
-                if (type.equals(Withdrawals.FACT) && version >= 1 && version <= 3) {
+                if (type.equals(Withdrawals.FACT) && version >= 1 && version <= 5) {
                     var fact = Withdrawals.decodeFact(payload, version); var value = fact.reservation(); var preview = value.preview();
                     if (fact.action() == Withdrawals.Action.COMMIT && value.state() == Withdrawals.State.COMMITTED
                             && value.owner().equals(player) && accounts.contains(preview.binding().account())
                             && service.equals(Withdrawals.Action.COMMIT.kind().service()) && operationType.equals(Withdrawals.Action.COMMIT.kind().operationType())) {
                         cashFeeInspected = true; addProvenance(type, version, value.id().toString());
-                        if (preview.pricing() != null) cashPrice(preview.pricing(), preview.binding().currency(), preview.binding().account(), preview.debit().minorUnits());
+                        var atmFee = Withdrawals.atmFee(preview);
+                        if (preview.pricing() != null) cashPrice(preview.pricing(), preview.binding().currency(), preview.binding().account(), Math.subtractExact(preview.debit().minorUnits(), atmFee.minorUnits()));
+                        if (atmFee.minorUnits() > 0) {
+                            var fxFee = preview.pricing() == null ? 0 : cashFees.removeLast().minorUnits();
+                            cashFees.add(new Money(atmFee.currency(), Math.addExact(fxFee, atmFee.minorUnits())));
+                        }
                         if (preview.binding().currency() != preview.cash().currency())
                             cashFx(preview.binding().fxRevision(), preview.binding().currency(), preview.cash().currency(), version);
                     } else additional = true;
@@ -203,6 +208,17 @@ public final class HistoryDetails {
                 else if (type.equals(CreditFacilities.FACT) && version == CreditFacilities.VERSION) {
                     var facility = CreditFacilities.decodeSnapshot(payload);
                     if (facility.party().equals(owner)) { counterparty(facility.issuer().key()); addProvenance(type, version, facility.id().toString()); }
+                } else if (type.equals(CreditFacilities.EVENT_FACT) && version == 1) {
+                    CreditFacilities.validateEventFact(payload);
+                    var event = Arrays.stream(payload.split("\\|", -1)).map(part -> new String(Base64.getUrlDecoder().decode(part), java.nio.charset.StandardCharsets.UTF_8)).toList();
+                    if (event.get(0).equals("ADVANCE_FEES") && service.equals(CreditFacilities.DRAW.service())
+                            && operationType.equals(CreditFacilities.DRAW.operationType())
+                            && CreditFacilities.find(reads, UUID.fromString(event.get(1))).filter(f -> f.party().equals(owner)).isPresent()) {
+                        var parts = event.get(3).split("\\|", -1);
+                        if (parts.length != 4) throw new IllegalArgumentException("Advance fee receipt");
+                        pricingFees.add(new Money(EconomyCurrency.fromCode(parts[0]), Math.addExact(Long.parseLong(parts[1]), Long.parseLong(parts[2]))));
+                        addProvenance(type, version, event.get(1));
+                    }
                 } else if (type.equals(Loans.FACT) && (version == 1 || version == 2)) {
                     var loan = Loans.decode(payload, version);
                     if (loan.party().equals(owner)) { counterparty(loan.lender().key()); addProvenance(type, version, loan.id().toString()); }

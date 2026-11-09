@@ -72,6 +72,10 @@ public final class FoundationRuntime implements FoundationStore {
     private boolean economicProjectionsPending;
     private Path world;
     private volatile WorldShutdown.Evidence closedEvidence;
+    private volatile long observedDeadlineTurns;
+
+    /** Actual dispatcher advances observed in this runtime session. */
+    public long observedDeadlineTurns() { return observedDeadlineTurns; }
     public FoundationRuntime(Configuration configuration) { this(configuration, SchedulingConfig.defaults().sqliteLockTimeoutMillis()); }
     public FoundationRuntime(Configuration configuration, int sqliteLockTimeoutMillis) {
         this.configuration = configuration;
@@ -198,6 +202,7 @@ public final class FoundationRuntime implements FoundationStore {
             return new EconomicStep<>(economicProgress(scheduledProgress(true)), null, null);
         }
         if (domainFirst()) {
+            observedDeadlineTurns = Math.addExact(observedDeadlineTurns, 1);
             deadlines.advance();
             economicProjectionsPending = true;
             return new EconomicStep<>(economicProgress(scheduledProgress(true)), null, null);
@@ -251,7 +256,10 @@ public final class FoundationRuntime implements FoundationStore {
 
     private EconomicClock.Progress advanceScheduled() {
         if (baseScheduledProgress(true).ready() && capitalPending()) capital.advance(configuration.wall().instant());
-        else if (domainFirst()) deadlines.advance();
+        else if (domainFirst()) {
+            observedDeadlineTurns = Math.addExact(observedDeadlineTurns, 1);
+            deadlines.advance();
+        }
         else clock.runBatch(1);
         return scheduledProgress(true);
     }

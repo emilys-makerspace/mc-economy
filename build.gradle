@@ -451,3 +451,16 @@ if (providers.gradleProperty('multiplayerProbe').isPresent()) {
         }
     }
 }
+
+// Explicit native A10-05 fresh-world fixture; never part of ordinary builds or CI.
+if (providers.gradleProperty('debtCompositeProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runClient') {
+        systemProperty 'economy.debtCompositeProbe', 'true'
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+            if (new File(root, 'debt-composite-failed.txt').exists() || !new File(root, 'debt-composite-passed.txt').exists())
+                throw new GradleException('Native debt composite witness did not pass')
+        }
+    }
+}

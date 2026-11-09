@@ -46,6 +46,20 @@ class CreditFacilitiesTest {
         long cash(){return store.transaction(tx->Settlement.posted(tx::query,account.value(),EconomyCurrency.CAD));}
         CreditFacilities.DrawRequest drawRequest(CreditFacilities.Facility f,CreditFacilities.DrawKind kind,long amount){var token=token(f.id());return new CreditFacilities.DrawRequest(owner.world(),actor,f.id(),token.id(),token.network(),kind,account,amount,f.revision(),token.revision(),1,1,UUID.randomUUID(),time.get()+30000);}
         Journal.Outcome draw(CreditFacilities.DrawRequest r,Journal.Intent intent){return submit(CreditFacilities.DRAW,CreditFacilities.draw(owner,r,this::inputs,(i,reads,t,k,a)->true,time::get),intent);}
+        TerminalPolicy.Snapshot terminal(InstitutionCatalog.InstitutionId bank, TerminalPolicy.Kind kind) {
+            var anchor=new TerminalPolicy.Anchor("minecraft:overworld", 9,64,9); var generation=UUID.randomUUID();
+            var denominations=Map.of("economy:cad_bill_5",new TerminalPolicy.Denomination(EconomyCurrency.CAD,true));
+            var place=TerminalPolicy.Action.PLACE;
+            assertEquals(Journal.Status.COMMITTED,submit(place.kind(),TerminalPolicy.registration(place,owner.world(),denominations,(a,i,c,r)->true,(a,r)->true),
+                    intent(place.kind(),TerminalPolicy.placeRequest(anchor,generation,actor,kind,null,0))).status());
+            assertEquals(Journal.Status.COMMITTED,submit(TerminalBanking.BIND,TerminalBanking.registration(owner.world(),denominations,(a,i,c,r)->true,(a,r)->true),
+                    intent(TerminalBanking.BIND,TerminalBanking.bindRequest(anchor,generation,1,bank,true))).status());
+            return store.transaction(tx->TerminalPolicy.find(tx::query,owner.world(),anchor,actor,true).orElseThrow());
+        }
+        CreditFacilities.DrawRequest atTerminal(CreditFacilities.Facility line,long amount,TerminalPolicy.Snapshot terminal) {
+            var r=drawRequest(line,CreditFacilities.DrawKind.ADVANCE,amount);
+            return new CreditFacilities.DrawRequest(r.world(),r.owner(),r.facility(),r.token(),r.network(),r.kind(),r.destination(),r.amountMinor(),r.facilityRevision(),r.tokenRevision(),r.destinationRevision(),r.profileRevision(),r.quote(),r.expiresAt(),store.transaction(tx->CreditFacilities.AdvanceFees.capture(tx::query,line,terminal)));
+        }
         @Override public void close()throws Exception{store.close();}
     }
     @Test void issuanceReservesFiniteCashAndReplayNeverCreatesAnotherProfileOrLine()throws Exception {
@@ -77,12 +91,51 @@ class CreditFacilitiesTest {
     @Test void advancesUseOutstandingTwentyPercentSublimitAndRepaymentRestoresReservation()throws Exception {
         try(var f=new Fixture()) {
             var line=f.issue();var request=f.drawRequest(line,CreditFacilities.DrawKind.ADVANCE,30000);var intent=f.intent(CreditFacilities.DRAW,request.request());
-            var first=f.draw(request,intent);assertEquals("CREDIT_DRAWN",first.result().code());assertEquals(first,f.draw(request,intent));assertEquals(30000,f.cash());assertEquals(220000,f.balance(FinancialAccounts.Role.RESERVATION));assertEquals(30000,f.balance(FinancialAccounts.Role.RECEIVABLE));
+            var first=f.draw(request,intent);assertEquals("CREDIT_DRAWN",first.result().code());assertEquals(first,f.draw(request,intent));assertEquals(30000,f.cash());assertEquals(219700,f.balance(FinancialAccounts.Role.RESERVATION));assertEquals(30300,f.balance(FinancialAccounts.Role.RECEIVABLE));assertEquals(-300,f.balance(FinancialAccounts.Role.INCOME));
             line=f.get(line.id());var excess=f.drawRequest(line,CreditFacilities.DrawKind.ADVANCE,20001);assertEquals("CREDIT_ADVANCE_SUBLIMIT",f.draw(excess,f.intent(CreditFacilities.DRAW,excess.request())).result().code());
             var stale=f.drawRequest(line,CreditFacilities.DrawKind.ADVANCE,100);var t=f.token(line.id());var revoke=f.intent(CreditFacilities.REVOKE,CreditFacilities.revokeRequest(f.owner.world(),f.actor,t.id(),t.revision()));assertEquals("CREDIT_TOKEN_REVOKED",f.submit(CreditFacilities.REVOKE,CreditFacilities.revocation(f.owner,t.id(),t.revision()),revoke).result().code());assertEquals("CREDIT_CARD_STALE",f.draw(stale,f.intent(CreditFacilities.DRAW,stale.request())).result().code());
             long ledger=f.store.transaction(tx->WealthValuation.ledgerRevision(tx::query,f.account.value()));
             var repayment=new CreditFacilities.RepaymentRequest(f.owner.world(),f.actor,line.id(),f.account,30000,line.revision(),1,ledger,UUID.randomUUID(),f.time.get()+30000);
-            var pay=f.intent(CreditFacilities.REPAY,repayment.request());assertEquals("CREDIT_REPAID",f.submit(CreditFacilities.REPAY,CreditFacilities.repayment(f.owner,repayment,f.time::get),pay).result().code());assertEquals(0,f.cash());assertEquals(250000,f.balance(FinancialAccounts.Role.RESERVATION));assertEquals(0,f.get(line.id()).owedMinor());
+            var pay=f.intent(CreditFacilities.REPAY,repayment.request());assertEquals("CREDIT_REPAID",f.submit(CreditFacilities.REPAY,CreditFacilities.repayment(f.owner,repayment,f.time::get),pay).result().code());assertEquals(0,f.cash());assertEquals(249700,f.balance(FinancialAccounts.Role.RESERVATION));assertEquals(300,f.get(line.id()).owedMinor());
+        }
+    }
+    @Test void differentBankAtmAdvanceFinancesBothFeesAndReplayCannotChargeAgain() throws Exception {
+        try(var f=new Fixture()) {
+            var line=f.issue();var atmBank=new InstitutionCatalog.InstitutionId("economy:bank/orchard_direct");
+            var terminal=f.terminal(atmBank,TerminalPolicy.Kind.ATM);
+            var request=f.atTerminal(line,10000,terminal);var intent=f.intent(CreditFacilities.DRAW,request.request());
+            long issuerCash=f.balance(FinancialAccounts.Role.CASH);
+            var atmCash=FinancialAccounts.id(f.owner.world(),atmBank,FinancialAccounts.Role.CASH,EconomyCurrency.CAD);
+            long before=f.store.transaction(tx->Settlement.posted(tx::query,atmCash,EconomyCurrency.CAD));
+            var result=f.draw(request,intent);assertEquals("CREDIT_DRAWN",result.result().code());assertEquals(result,f.draw(request,intent));
+            assertEquals(10000,f.cash());assertEquals(10550,f.get(line.id()).advance().principalMinor());
+            assertEquals(239450,f.balance(FinancialAccounts.Role.RESERVATION));assertEquals(issuerCash+300,f.balance(FinancialAccounts.Role.CASH));
+            long after=f.store.transaction(tx->Settlement.posted(tx::query,atmCash,EconomyCurrency.CAD));assertEquals(before+250,after);
+            var detail=f.store.transaction(tx->HistoryDetails.read(tx::query,f.owner,result.transactionId().value(),Long.MAX_VALUE)).orElseThrow();
+            assertEquals(550,detail.fee().amount().minorUnits());
+        }
+    }
+    @Test void sameBankAdvanceFeesCountTowardTwentyPercentCapAndTamperedQuoteRejects() throws Exception {
+        try(var f=new Fixture()) {
+            var line=f.issue();var terminal=f.terminal(BANK,TerminalPolicy.Kind.ATM);
+            var excess=f.atTerminal(line,50000,terminal);
+            assertEquals("CREDIT_ADVANCE_SUBLIMIT",f.draw(excess,f.intent(CreditFacilities.DRAW,excess.request())).result().code());
+            assertEquals(0,f.cash());assertEquals(0,f.balance(FinancialAccounts.Role.INCOME));
+            var good=f.atTerminal(line,49700,terminal);
+            assertEquals(0,good.fees().atmMinor());
+            var fee=good.fees();var forged=new CreditFacilities.DrawRequest(good.world(),good.owner(),good.facility(),good.token(),good.network(),good.kind(),good.destination(),good.amountMinor(),good.facilityRevision(),good.tokenRevision(),good.destinationRevision(),good.profileRevision(),good.quote(),good.expiresAt(),new CreditFacilities.AdvanceFees(fee.terminal(),fee.generation(),fee.revision(),fee.bank(),0,0,fee.fxPublication()));
+            assertEquals("CREDIT_FEE_STALE",f.draw(forged,f.intent(CreditFacilities.DRAW,forged.request())).result().code());
+            assertEquals("CREDIT_DRAWN",f.draw(good,f.intent(CreditFacilities.DRAW,good.request())).result().code());
+            assertEquals(50000,f.get(line.id()).advance().principalMinor());assertEquals(49700,f.cash());
+        }
+    }
+    @Test void foreignBankTellerAdvanceHasOnlyIssuerFee() throws Exception {
+        try(var f=new Fixture()) {
+            var line=f.issue();var terminal=f.terminal(new InstitutionCatalog.InstitutionId("economy:bank/orchard_direct"),TerminalPolicy.Kind.TELLER);
+            var request=f.atTerminal(line,10000,terminal);
+            assertEquals(0,request.fees().atmMinor());
+            assertEquals("CREDIT_DRAWN",f.draw(request,f.intent(CreditFacilities.DRAW,request.request())).result().code());
+            assertEquals(10300,f.get(line.id()).owedMinor());assertEquals(10000,f.cash());
         }
     }
     @Test void explicitIncreaseFundsOnlyAdditionalCommitmentAndCannotResetTheStarter()throws Exception {

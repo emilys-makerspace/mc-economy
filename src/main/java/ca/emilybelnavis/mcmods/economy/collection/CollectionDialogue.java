@@ -127,10 +127,10 @@ public final class CollectionDialogue {
             if(error!=null||found.isEmpty()){failure(menu,UiText.t("ui.dialogue.cases_unavailable_while_financial_work_is_pe.7067cd"));return;}
             if(menu.managed()&&(found.orElseThrow().state().phase()!=CollectionPresence.Phase.LIVE||!found.orElseThrow().state().lease().equals(menu.presentation()))){player.closeContainer();return;}
             state.nextCase=found.orElseThrow().nextCursor();state.offeredCases.clear();
-            var lines=new ArrayList<String>();var choices=new ArrayList<CollectionNetwork.Choice>();long now=System.currentTimeMillis();
+            var lines=new ArrayList<String>();var choices=new ArrayList<CollectionNetwork.Choice>();long now=state.services.financialMillis();
             for(var entry:found.orElseThrow().cases()){
                 var debt=entry;if(!DebtLifecycle.demands(debt,now))continue;state.offeredCases.put(debt.id(),debt);
-                lines.add(kind(debt.kind())+" / "+creditor(debt.creditor()));lines.add(UiText.t("ui.dialogue.remaining.cd8e27")+money(debt.currency(),debt.debtMinor()));
+                lines.add(kind(debt.kind())+" / "+creditor(debt));lines.add(UiText.t("ui.dialogue.remaining.cd8e27")+money(debt.currency(),debt.debtMinor()));
                 choices.add(choice("select_case",debt.id().toString(),kind(debt.kind())+" · "+money(debt.currency(),debt.debtMinor()),state.selected!=null&&state.selected.id().equals(debt.id())));
             }
             if(lines.isEmpty())lines.add(UiText.t("ui.dialogue.no_eligible_cases_on_this_page.29dec2"));
@@ -156,7 +156,7 @@ public final class CollectionDialogue {
     }
     private static void payment(CollectionMenu menu,State state,String status){
         var lines=new ArrayList<String>();lines.add(UiText.t("ui.dialogue.amount_input_help"));var choices=new ArrayList<CollectionNetwork.Choice>();
-        if(state.selected!=null){lines.add(kind(state.selected.kind())+" / "+creditor(state.selected.creditor()));lines.add(UiText.t("ui.dialogue.debt.0e6f7a")+money(state.selected.currency(),state.selected.debtMinor()));}
+        if(state.selected!=null){lines.add(kind(state.selected.kind())+" / "+creditor(state.selected));lines.add(UiText.t("ui.dialogue.debt.0e6f7a")+money(state.selected.currency(),state.selected.debtMinor()));}
         if(state.funding!=null)lines.add(UiText.t("ui.dialogue.funding.a2a66d")+state.funding.currency().code()+" / "+state.funding.id().value().toString().substring(0,8));
         choices.add(choice("cases","",UiText.t("ui.dialogue.choose_case.f81e0b"),false));choices.add(choice("funding","",UiText.t("ui.dialogue.choose_funding.1eb047"),false));
         if(state.selected!=null&&state.funding!=null){choices.add(choice("preview_partial","",UiText.t("ui.dialogue.preview_partial_payment.dd83b4"),false));choices.add(choice("preview_full","",UiText.t("ui.dialogue.preview_full_balance.533159"),false));}
@@ -168,7 +168,7 @@ public final class CollectionDialogue {
         if(minor<=0)throw new IllegalArgumentException("Positive representable amount required");return minor;
     }
     private static void preview(ServerPlayer player,CollectionMenu menu,State state,long amount){
-        if(state.selected==null||state.funding==null||amount>state.selected.debtMinor()||!DebtLifecycle.demands(state.selected,System.currentTimeMillis()))throw new IllegalArgumentException("Collection selection stale");
+        if(state.selected==null||state.funding==null||amount>state.selected.debtMinor()||!DebtLifecycle.demands(state.selected,state.services.financialMillis()))throw new IllegalArgumentException("Collection selection stale");
         state.clearQuote();menu.publish("payment",List.of(),UiText.t("ui.dialogue.preparing_payment_review.3c259b"),true,List.of());
         if(state.funding.currency()==state.selected.currency()) {
             state.services.ledger().quoteCollectionPayment(grant(player,state),state.selected.id(),state.funding.id(),amount).whenComplete((found,error)->player.server.execute(()->{
@@ -193,7 +193,7 @@ public final class CollectionDialogue {
     }
     private static long expires(State state){return state.nativeQuote!=null?state.nativeQuote.expiresAt():Math.min(state.fxQuote.payment().expiresAt(),state.fxQuote.fx().expires().toEpochMilli());}
     private static void review(CollectionMenu menu,State state){
-        var lines=new ArrayList<String>();lines.add(UiText.t("ui.dialogue.current_creditor.f20a66")+creditor(state.selected.creditor()));
+        var lines=new ArrayList<String>();lines.add(UiText.t("ui.dialogue.current_creditor.f20a66")+creditor(state.selected));
         if(state.nativeQuote!=null){lines.add(UiText.t("ui.dialogue.pay.f5b9f7")+money(state.selected.currency(),state.nativeQuote.amountMinor()));lines.add(UiText.t("ui.dialogue.fee_0.78779a")+state.selected.currency().code());}
         else {
             var fx=state.fxQuote.fx();lines.add(UiText.t("ui.dialogue.debt_receives.6cc82c")+money(state.selected.currency(),state.fxQuote.payment().amountMinor()));
@@ -206,7 +206,7 @@ public final class CollectionDialogue {
     }
     private static void confirm(ServerPlayer player,CollectionMenu menu,State state){
         if(state.nativeQuote==null&&state.fxQuote==null)throw new IllegalArgumentException("No reviewed quote");
-        if(System.currentTimeMillis()>=expires(state)){state.clearQuote();payment(menu,state,UiText.t("ui.dialogue.quote_expired_preview_again.86dab6"));return;}
+        if(state.services.financialMillis()>=expires(state)){state.clearQuote();payment(menu,state,UiText.t("ui.dialogue.quote_expired_preview_again.86dab6"));return;}
         var pendingByPlayer=PENDING.computeIfAbsent(player.server,server->new HashMap<>());
         if(pendingByPlayer.size()>=256&&!pendingByPlayer.containsKey(player.getUUID())){failure(menu,UiText.t("ui.dialogue.payment_recovery_is_busy_try_again_later.9f9496"));return;}
         var pending=new Pending(state);pendingByPlayer.put(player.getUUID(),pending);state.clearQuote();submit(player,menu,state,pending);
@@ -270,7 +270,7 @@ public final class CollectionDialogue {
         player.getPersistentData().remove(RECOVERY);
         if(player.server.getPlayerList().getPlayer(player.getUUID())==player)player.server.getPlayerList().save(player);
     }
-    private static String creditor(InstitutionCatalog.InstitutionId id){return InstitutionCatalog.find(id).map(InstitutionCatalog.Entry::name).orElse(UiText.t("ui.dialogue.original_lender.0f4953"));}
+    private static String creditor(DebtRecords.Case debt){return InstitutionCatalog.require(debt.creditor(),debt.currency()).name();}
     private static CollectionNetwork.Choice choice(String action,String value,String label,boolean selected){return new CollectionNetwork.Choice(action,value,label,selected);}
     private static String money(EconomyCurrency currency,long amount){return UiText.money(new Money(currency,amount));}
     private static void failure(CollectionMenu menu,String reason){menu.publish("payment",List.of(),reason,false,List.of(choice("cases","",UiText.t("ui.dialogue.refresh_cases.9cbe98"),false),choice("funding","",UiText.t("ui.dialogue.funding_accounts.3ed457"),false)));}

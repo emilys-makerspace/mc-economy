@@ -213,8 +213,8 @@ public final class LoanMenus {
             var currency = product == CreditUnderwriting.Product.SUBPRIME_LOAN ? context.denomination().currency() : bank.baseCurrency();
             long principal = Math.multiplyExact(principalMajor, currency.minorUnitsPerMajor());
             return services.readAccounts(grant, false, reads -> {
-                long exposure = Math.addExact(context.inputs().otherExposureWorldMinor(), Loans.exposure(reads, grant.target(), context.denomination().currency(), context.inputs().fx(), System.currentTimeMillis()));
-                boolean blocked = context.inputs().creditBlocked() || Loans.blocked(reads, grant.target(), System.currentTimeMillis());
+                long exposure = Math.addExact(context.inputs().otherExposureWorldMinor(), Loans.exposure(reads, grant.target(), context.denomination().currency(), context.inputs().fx(), services.financialMillis()));
+                boolean blocked = context.inputs().creditBlocked() || Loans.blocked(reads, grant.target(), services.financialMillis());
                 var terms = new CreditUnderwriting.LoanRequest(context.profile().isPresent(), context.profile().map(p -> p.score()).orElse(650),
                         context.denomination().currency(), product, product == CreditUnderwriting.Product.BANK_LOAN && bank.tier2() && context.tier().available() && context.tier().eligible(), context.tier().available() && context.tier().eligible(),
                         context.inputs().complete(), blocked, exposure, principal, years,
@@ -234,7 +234,7 @@ public final class LoanMenus {
                 return;
             }
             try {
-                long expiresAt = Math.addExact(System.currentTimeMillis(), 30_000);
+                long expiresAt = Math.addExact(BankingController.services(audience.player()).financialMillis(), 30_000);
                 var proof = FinanceMenuSupport.branch(audience, grant, branch, BranchAdmission.Action.LOAN_APPLY, null);
                 var request = new Loans.Application(proof, UUID.randomUUID(), UUID.randomUUID(), product,
                         offer.requestedNative().currency(), offer.requestedNative().minorUnits(), years, destination.id(), destination.revision(),
@@ -264,7 +264,7 @@ public final class LoanMenus {
         lines.add(UiText.t("ui.finance.loanmenus.36", money(request.currency(), request.principalMinor()), request.years()));
         lines.add(UiText.t("ui.finance.loanmenus.37", UiText.decimal(offer.apr().movePointRight(2).stripTrailingZeros())));
         lines.add(UiText.t("ui.finance.loanmenus.38", money(request.currency(), schedule.installmentMinor())));
-        long firstDue = Math.addExact(System.currentTimeMillis(), Loans.MONTH);
+        long firstDue = Math.addExact(BankingController.services(audience.player()).financialMillis(), Loans.MONTH);
         lines.add(UiText.t("ui.finance.loanmenus.39", Instant.ofEpochMilli(firstDue)));
         lines.add(UiText.t("ui.finance.loanmenus.40"));
         lines.add(UiText.t("ui.finance.loanmenus.41"));
@@ -278,7 +278,7 @@ public final class LoanMenus {
     private static void confirm(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant, State state) {
         requireOffered(audience, PREFIX + "confirm", "");
         var preview = Objects.requireNonNull(state.application);
-        if (audience.menu().access() != BankingMenu.Access.KIOSK || System.currentTimeMillis() >= preview.expiresAt()) throw new IllegalArgumentException("Fresh live branch offer required");
+        if (audience.menu().access() != BankingMenu.Access.KIOSK || BankingController.services(audience.player()).financialMillis() >= preview.expiresAt()) throw new IllegalArgumentException("Fresh live branch offer required");
         state.application = null;
         if (preview.fx() != null) {
             FinanceMenuSupport.submit(audience, services, grant, Loans.APPLY, preview.fx().canonical(),

@@ -197,6 +197,103 @@ class WithdrawalsTest {
         } finally { store.close(); }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"economy:bank/orchard_direct", "economy:unassigned"})
+    void foreignOrUnassignedAtmWithdrawalChargesOperatorOnce(String issuer) throws Exception {
+        var store = open();
+        try {
+            seed(store, TerminalPolicy.Kind.ATM);
+            // Include a legacy account with no financial institution/card affiliation.
+            store.transaction(tx -> tx.execute("UPDATE bank_account_providers SET bank_key=?,revision=2 WHERE account_id=?",
+                    List.of(issuer.equals("economy:unassigned")
+                            ? ca.emilybelnavis.mcmods.economy.institution.BankProviders.UNASSIGNED_PROVIDER : issuer, account.toString())));
+            var preview = preview(store, 6000, null);
+            assertEquals(6250, preview.debit().minorUnits());
+            assertEquals(250, Withdrawals.atmFee(preview).minorUnits());
+            var reserve = intent(Withdrawals.Action.RESERVE, Withdrawals.reserveRequest(preview));
+            assertEquals(Status.COMMITTED, engine(store, Withdrawals.Action.RESERVE, WithdrawalDelivery::prepare).submit(reserve).status());
+            var commit = commit(reserve.operationId().value());
+            var outcome = engine(store, Withdrawals.Action.COMMIT, WithdrawalDelivery::prepare).submit(commit);
+            assertEquals(Status.COMMITTED, outcome.status());
+            assertEquals(outcome, engine(store, Withdrawals.Action.COMMIT, WithdrawalDelivery::prepare).submit(commit));
+            assertEquals(3750, balance(store));
+            var bank = new ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId("economy:bank/crownstone");
+            var cash = ca.emilybelnavis.mcmods.economy.institution.FinancialAccounts.account(store.snapshot().worldId(), bank,
+                    ca.emilybelnavis.mcmods.economy.institution.FinancialAccounts.Role.CASH, CAD);
+            assertEquals(250, store.transaction(tx -> Settlement.posted(tx::query, cash.id(), CAD)).longValue());
+            assertEquals("1", count(store, "cash_issuance"));
+        } finally { store.close(); }
+    }
+
+    @Test void atmFeeCannotOverdrawAndProviderChangeInvalidatesReview() throws Exception {
+        var store = open();
+        try {
+            seed(store, TerminalPolicy.Kind.ATM);
+            store.transaction(tx -> tx.execute("DELETE FROM bank_account_providers WHERE account_id=?", List.of(account.toString())));
+            var reserve = intent(Withdrawals.Action.RESERVE, Withdrawals.reserveRequest(preview(store, 10000, null)));
+            assertEquals(Status.COMMITTED, engine(store, Withdrawals.Action.RESERVE, WithdrawalDelivery::prepare).submit(reserve).status());
+            assertEquals("INSUFFICIENT_FUNDS", engine(store, Withdrawals.Action.COMMIT, WithdrawalDelivery::prepare)
+                    .submit(commit(reserve.operationId().value())).result().code());
+            assertEquals(10000, balance(store));
+            assertEquals("0", count(store, "cash_issuance"));
+            store.transaction(tx -> tx.execute("INSERT INTO bank_account_providers VALUES(?, 'economy:bank/crownstone',0,1,0)", List.of(account.toString())));
+            assertEquals("WITHDRAWAL_STALE", engine(store, Withdrawals.Action.COMMIT, WithdrawalDelivery::prepare)
+                    .submit(commit(reserve.operationId().value())).result().code());
+            assertEquals(10000, balance(store));
+        } finally { store.close(); }
+    }
+
+    @Test void foreignAccountFeeUsesPublishedCadRatioAndFreezesQuarterUnitRounding() throws Exception {
+        var store = open();
+        try {
+            seed(store, TerminalPolicy.Kind.ATM);
+            // A separately created legacy/non-bank EUR account can review foreign cash without an institution FX quote.
+            // Preview and reservation do not debit funds; account currency remains immutable.
+            var euroAccount = UUID.randomUUID();
+            store.transaction(tx -> tx.execute("INSERT INTO account_catalog VALUES(?,?,'BANK','EUR','OPEN',1,0)",
+                    List.of(euroAccount.toString(), owner.value().toString())));
+            var rates = new CurrencyConversion.Rates(EconomyCurrency.USD, Map.of(EconomyCurrency.USD, BigDecimal.ONE,
+                    CAD, new BigDecimal("0.75"), EconomyCurrency.EUR, new BigDecimal("1.125")));
+            var binding = new Withdrawals.Binding(euroAccount, 1, EconomyCurrency.EUR, anchor, generation, 3, fxRevision);
+            Withdrawals.FxReader publication = reads -> new Withdrawals.FxSnapshot(fxRevision, rates);
+            var preview = store.transaction(tx -> Withdrawals.preview(tx::query, store.snapshot().worldId(), owner,
+                    binding, new Money(CAD, 6000), null, catalog, publication));
+            // CAD2.50 / 1.5 EUR rounds from EUR1.666... to the nearest quarter: EUR1.75.
+            assertEquals(175, Withdrawals.atmFee(preview).minorUnits());
+            assertEquals(4175, preview.debit().minorUnits());
+            assertTrue(preview.atmFee().endsWith("|175|CAD_FEE_V2|0.75|1.125"));
+            assertEquals("ATM_FEE_MINOR_V5", Withdrawals.reserveRequest(preview).fields().get("settlement"));
+            var reserve = intent(Withdrawals.Action.RESERVE, Withdrawals.reserveRequest(preview));
+            var action = Withdrawals.Action.RESERVE;
+            var engine = new JournalEngine(store, (a,k) -> true, Map.of(action.kind(), Withdrawals.registration(action,
+                    store.snapshot().worldId(), catalog, publication, (a,i,c,r) -> true, (a,i,c,r) -> true, WithdrawalDelivery::prepare)));
+            assertEquals(Status.COMMITTED, engine.submit(reserve).status());
+            var frozen = store.transaction(tx -> Withdrawals.find(tx::query, owner, reserve.operationId().value())).orElseThrow().preview();
+            assertEquals(preview.atmFee(), frozen.atmFee());
+            // Old V4 local-currency fee payloads remain readable when reloading retained facts.
+            var legacy = new Withdrawals.Preview(binding, preview.cash(), preview.edited(), preview.billEdits(),
+                    preview.plan(), new Money(EconomyCurrency.EUR, 4250), null,
+                    "economy:bank/crownstone||0|250");
+            assertEquals("ATM_FEE_MINOR_V4", Withdrawals.reserveRequest(legacy).fields().get("settlement"));
+        } finally { store.close(); }
+    }
+
+    @Test void ownBankAtmAndForeignBankTellerDoNotChargeAtmFees() throws Exception {
+        var store = open();
+        try {
+            seed(store, TerminalPolicy.Kind.ATM);
+            assertNull(preview(store, 6000, null).atmFee());
+            assertEquals(6000, preview(store, 6000, null).debit().minorUnits());
+            store.transaction(tx -> {
+                tx.execute("UPDATE terminal_settings SET terminal_kind='TELLER'", List.of());
+                tx.execute("UPDATE bank_account_providers SET bank_key='economy:bank/orchard_direct',revision=2 WHERE account_id=?", List.of(account.toString()));
+                return null;
+            });
+            assertNull(preview(store, 6000, null).atmFee());
+            assertEquals(6000, preview(store, 6000, null).debit().minorUnits());
+        } finally { store.close(); }
+    }
+
     private SqliteStorage open() throws Exception {
         var store = new SqliteStorage(); store.initialize(world.toRealPath()); return store;
     }
@@ -224,6 +321,14 @@ class WithdrawalsTest {
     private void seed(SqliteStorage store, TerminalPolicy.Kind kind) {
         store.transaction(tx -> tx.execute("INSERT INTO account_catalog VALUES(?,?,'BANK','CAD','OPEN',1,0)",
                 List.of(account.toString(), owner.value().toString())));
+        store.transaction(tx -> {
+            tx.execute("INSERT INTO bank_account_providers VALUES(?, 'economy:bank/crownstone',0,1,0)", List.of(account.toString()));
+            var bank = new ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId("economy:bank/crownstone");
+            tx.execute("INSERT INTO institution_parties VALUES(?,?,?,?,?,'HYBRID',1)", List.of(store.snapshot().worldId().value().toString(),
+                    bank.key(), new ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.SystemActor(store.snapshot().worldId(), bank).actorId().value().toString(),
+                    "Crownstone Bank", "CAD"));
+            return null;
+        });
         var funding = new Journal.Kind("economy:withdrawal_fixture", "economy:fund");
         var engine = new JournalEngine(store, (a,k) -> true, Map.of(funding,
                 Settlement.registration((intent, legs, reads) -> PostingBatch.Authority.ISSUE)));

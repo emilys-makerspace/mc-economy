@@ -52,7 +52,7 @@ public final class CollectionAgents {
                 && CollectionProtection.allows(player, agent.position(), CollectionProtection.Action.INTERACT);
         }
         var runtime=RUNTIMES.get(player.server);var entry=runtime==null?null:runtime.entries.get(player.getUUID());
-        return entry!=null&&entry.player==player&&entry.agent==agent&&runtime.valid(entry,agent,System.currentTimeMillis())
+        return entry!=null&&entry.player==player&&entry.agent==agent&&runtime.valid(entry,agent,runtime.services.financialMillis())
             &&player.distanceToSqr(agent)<=36&&CollectionProtection.allows(player,agent.position(),CollectionProtection.Action.INTERACT);
     }
     public static void refresh(ServerPlayer player) {
@@ -70,7 +70,7 @@ public final class CollectionAgents {
     static void died(CollectionAgent agent) {
         var entry=entry(agent);if(entry==null)return;var runtime=RUNTIMES.get(((ServerLevel)agent.level()).getServer());
         entry.death=true;entry.snapshot=null;entry.search=false;agent.getNavigation().stop();
-        runtime.transition(entry,CollectionPresence.Action.DEATH,entry.lease,System.currentTimeMillis(),false);
+        runtime.transition(entry,CollectionPresence.Action.DEATH,entry.lease,runtime.services.financialMillis(),false);
     }
     static void removed(CollectionAgent agent) {
         var entry=entry(agent);if(entry==null)return;
@@ -156,7 +156,7 @@ public final class CollectionAgents {
             }));
         }
         void service(Entry entry) {
-            long now=System.currentTimeMillis();
+            long now=services.financialMillis();
             if(entry.agent!=null) {
                 if(entry.agent.isRemoved()){entry.agent=null;if(!entry.death)release(entry);}
                 else if(entry.agent.level()!=entry.player.level()||!entry.player.isAlive()||entry.player.isSpectator()||entry.player.isChangingDimension())remove(entry,true);
@@ -178,14 +178,14 @@ public final class CollectionAgents {
             entry.search=true;entry.relocation=relocation;entry.candidate=0;entry.attempt++;
         }
         void candidate(Entry entry) {
-            if(!entry.search||entry.transitioning||!eligible(entry,System.currentTimeMillis()))return;
-            var first=entry.snapshot.cases().stream().filter(c->DebtLifecycle.demands(c,System.currentTimeMillis())).findFirst().orElse(null);
+            if(!entry.search||entry.transitioning||!eligible(entry,services.financialMillis()))return;
+            var first=entry.snapshot.cases().stream().filter(c->DebtLifecycle.demands(c,services.financialMillis())).findFirst().orElse(null);
             if(first==null){entry.search=false;return;}
             var offset=CollectionPlacement.candidate(first.world().value(),entry.player.getUUID(),first.id(),entry.attempt,entry.candidate++);
             BlockPos position=entry.player.blockPosition().offset(offset.x(),offset.y(),offset.z());
             if(safe(entry.player,position)) {
                 entry.search=false;entry.nextSearch=ticks+CollectionPlacement.RETRY_TICKS;
-                if(entry.relocation&&entry.agent!=null&&valid(entry,entry.agent,System.currentTimeMillis())) {
+                if(entry.relocation&&entry.agent!=null&&valid(entry,entry.agent,services.financialMillis())) {
                     entry.agent.getNavigation().stop();entry.agent.moveTo(position.getX()+0.5,position.getY(),position.getZ()+0.5,entry.player.getYRot(),0);
                     entry.blockedTicks=0;entry.previousDistance=Double.POSITIVE_INFINITY;
                 } else if(entry.agent==null)reserve(entry,position);
@@ -201,14 +201,14 @@ public final class CollectionAgents {
                     entry.snapshot=null;entry.lease=null;entry.nextRead=0;return;
                 }
                 if(!current()||entries.get(entry.player.getUUID())!=entry||!online(entry)||entry.releasing||entry.player.isChangingDimension()
-                        ||!eligible(entry,System.currentTimeMillis())||!safe(entry.player,position)) {release(entry);return;}
+                        ||!eligible(entry,services.financialMillis())||!safe(entry.player,position)) {release(entry);return;}
                 var agent=CollectionCatalog.AGENT.get().create(entry.player.serverLevel());
                 if(agent==null){release(entry);return;}
                 agent.bind(entry.player.getUUID(),lease);agent.setCustomName(Component.translatable("ui.dialogue.collection_agent.5fc2c1"));
                 agent.moveTo(position.getX()+0.5,position.getY(),position.getZ()+0.5,entry.player.getYRot(),0);
                 entry.agent=agent;
                 if(!entry.player.serverLevel().addFreshEntity(agent)){entry.agent=null;release(entry);return;}
-                entry.greetingUntil=System.currentTimeMillis()+8000;entry.greetingCleared=false;entry.lastReminder=System.currentTimeMillis();entry.snapshot=null;entry.nextRead=0;
+                entry.greetingUntil=System.currentTimeMillis()+8000;entry.greetingCleared=false;entry.lastReminder=services.financialMillis();entry.snapshot=null;entry.nextRead=0;
             }));
         }
         void transition(Entry entry,CollectionPresence.Action action,UUID lease,long observed,boolean release) {
@@ -235,13 +235,13 @@ public final class CollectionAgents {
             if(agent!=null&&!agent.isRemoved())agent.discard();
         }
         void follow(Entry entry,CollectionAgent agent) {
-            long now=System.currentTimeMillis();
+            long now=services.financialMillis();
             if(!valid(entry,agent,now)){agent.getNavigation().stop();return;}
             if(!CollectionProtection.allows(entry.player,agent.position(),CollectionProtection.Action.SPAWN)){remove(entry,true);return;}
             double distance=entry.player.distanceToSqr(agent);
             if(distance<=64) {
-                if(now<entry.greetingUntil&&agent.tickCount%20==0)entry.player.displayClientMessage(UiText.component(entry.player, UiText.t("ui.dialogue.a_collection_representative_is_available_rig.7b4116")),true);
-                else if(now>=entry.greetingUntil&&!entry.greetingCleared) {
+                if(System.currentTimeMillis()<entry.greetingUntil&&agent.tickCount%20==0)entry.player.displayClientMessage(UiText.component(entry.player, UiText.t("ui.dialogue.a_collection_representative_is_available_rig.7b4116")),true);
+                else if(System.currentTimeMillis()>=entry.greetingUntil&&!entry.greetingCleared) {
                     entry.player.displayClientMessage(Component.empty(),true);entry.greetingCleared=true;
                 } else if(now-entry.lastReminder>=DebtRecords.DAY) {
                     entry.player.displayClientMessage(UiText.component(entry.player, UiText.t("ui.dialogue.you_can_review_collectible_cases_with_your_c.3a8b4b")),false);entry.lastReminder=now;
