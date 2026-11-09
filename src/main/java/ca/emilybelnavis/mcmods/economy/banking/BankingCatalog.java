@@ -9,9 +9,15 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 /** Common-side menu registration; screens are registered only by the client entry point. */
 public final class BankingCatalog {
-    private static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, "economy");
-    public static final DeferredHolder<MenuType<?>, MenuType<BankingMenu>> BANKING =
-            MENUS.register("banking", () -> IMenuTypeExtension.create(BankingMenu::fromNetwork));
-    private BankingCatalog() {}
-    public static void initialize(IEventBus bus) { MENUS.register(bus); BankingNetwork.initialize(bus); }
+  private static final DeferredRegister<MenuType<?>> MENUS =
+      DeferredRegister.create(Registries.MENU, "economy");
+  public static final DeferredHolder<MenuType<?>, MenuType<BankingMenu>> BANKING =
+      MENUS.register("banking", () -> IMenuTypeExtension.create(BankingMenu::fromNetwork));
+
+  private BankingCatalog() {}
+
+  public static void initialize(IEventBus bus) {
+    MENUS.register(bus);
+    BankingNetwork.initialize(bus);
+  }
 }

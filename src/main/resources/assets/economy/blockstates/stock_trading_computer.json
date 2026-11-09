@@ -1,8 +1,20 @@
 {
   "variants": {
-    "facing=north": { "model": "economy:item/stock_trading_computer", "y": 0 },
-    "facing=east": { "model": "economy:item/stock_trading_computer", "y": 90 },
-    "facing=south": { "model": "economy:item/stock_trading_computer", "y": 180 },
-    "facing=west": { "model": "economy:item/stock_trading_computer", "y": 270 }
+    "facing=north": {
+      "model": "economy:item/stock_trading_computer",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "economy:item/stock_trading_computer",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "economy:item/stock_trading_computer",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "economy:item/stock_trading_computer",
+      "y": 270
+    }
   }
 }

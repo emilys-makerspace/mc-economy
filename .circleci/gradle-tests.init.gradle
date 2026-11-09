@@ -16,7 +16,9 @@ gradle.projectsEvaluated {
             project.extensions.getByName('jacoco').applyTo(it)
             extensions.getByName('jacoco').with {
                 destinationFile = project.file("${liveDir}/jacoco.exec")
-                includes = ['ca.emilybelnavis.mcmods.economy.*']
+                includes = [
+                    'ca.emilybelnavis.mcmods.economy.*'
+                ]
             }
             // Keep Gradle + client + software rendering within one CI node's memory budget.
             maxHeapSize = '2G'

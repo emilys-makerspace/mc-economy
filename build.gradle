@@ -2,6 +2,39 @@ plugins {
     id 'java-library'
     id 'jacoco'
     id 'net.neoforged.moddev' version '2.0.148'
+    id 'com.diffplug.spotless' version '8.1.0'
+}
+
+spotless {
+    java {
+        // Include production code, tests and release-excluded development probes.
+        target 'src/**/*.java'
+        googleJavaFormat('1.28.0')
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    json {
+        target 'src/**/*.json', 'tools/**/*.json', '.codex/**/*.json', 'config/**/*.json'
+        gson().indentWithSpaces(2).version('2.13.2')
+        endWithNewline()
+    }
+    groovyGradle {
+        target '*.gradle', '.circleci/*.gradle'
+        greclipse('4.26').configFile('config/formatting/greclipse.properties')
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    format 'javascript', {
+        target 'tools/**/*.js'
+        // Download the standalone executable; no Node or npm installation is used.
+        biome('2.1.0').configPath('config/formatting')
+        endWithNewline()
+    }
+    format 'shell', {
+        target '.circleci/*.sh', 'tools/**/*.sh'
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
 group = 'ca.emilybelnavis.mcmods.economy'
 version = '0.5.0-alpha'
@@ -14,7 +47,11 @@ neoForge {
         client { client(); gameDirectory = file(providers.gradleProperty('economyRunRoot').getOrElse('run') + '/client') }
         server { server(); gameDirectory = file(providers.gradleProperty('economyRunRoot').getOrElse('run') + '/server'); programArgument '--nogui' }
     }
-    mods { economy { sourceSet sourceSets.main } }
+    mods {
+        economy {
+            sourceSet sourceSets.main
+        }
+    }
     // Command permission tests exercise the real Minecraft command source and dispatcher.
     addModdingDependenciesTo(sourceSets.test)
 }
@@ -41,7 +78,11 @@ test {
     useJUnitPlatform()
     reports.junitXml.required = true
     // Measure the mod; instrumenting Minecraft's large static initializers can exceed JVM limits.
-    jacoco { includes = ['ca.emilybelnavis.mcmods.economy.*'] }
+    jacoco {
+        includes = [
+            'ca.emilybelnavis.mcmods.economy.*'
+        ]
+    }
     finalizedBy jacocoTestReport
     // Standalone storage probes use stdout as a protocol and do not load Minecraft.
     systemProperty 'economy.test.classpath',
@@ -98,7 +139,11 @@ configurations.inventoryProbeImplementation.extendsFrom(configurations.implement
 neoForge {
     addModdingDependenciesTo(sourceSets.inventoryProbe)
     if (providers.gradleProperty('custodyInventoryProbe').isPresent()) {
-        mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+        mods {
+            economy_inventory_probe {
+                sourceSet sourceSets.inventoryProbe
+            }
+        }
     }
 }
 if (providers.gradleProperty('custodyInventoryProbe').isPresent()) {
@@ -225,29 +270,49 @@ if (providers.gradleProperty('financeWorld').isPresent()) {
 
 // Opt-in disposable integrated-client kiosk upgrade witness; excluded from release jars.
 if (providers.gradleProperty('kioskUpgradeProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') { systemProperty 'economy.kioskUpgradeProbe', 'true' }
 }
 
 // Opt-in A7-04 world-generation witness in a fresh disposable integrated client.
 if (providers.gradleProperty('bankLocateProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') { systemProperty 'economy.bankLocateProbe', 'true' }
 }
 if (providers.gradleProperty('villageGenerationProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') { systemProperty 'economy.villageGenerationProbe', 'true' }
 }
 
 // Opt-in native bank structure-tag witness in a fresh disposable client.
 if (providers.gradleProperty('bankStructureProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') { systemProperty 'economy.bankStructureProbe', 'true' }
 }
 
 // Opt-in A7-05 workstation, staffing and dialogue witness; excluded from release jars.
 if (providers.gradleProperty('bankerProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.bankerProbe', 'true'
         doLast {
@@ -260,7 +325,11 @@ if (providers.gradleProperty('bankerProbe').isPresent()) {
 
 // Opt-in A7-06 composite acceptance across two guarded disposable client processes.
 if (providers.gradleProperty('villageBankAcceptance').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     def restarting = providers.gradleProperty('villageBankAcceptanceRestart').isPresent()
     tasks.named('runClient') {
         systemProperty 'economy.villageBankAcceptance', 'true'
@@ -276,7 +345,11 @@ if (providers.gradleProperty('villageBankAcceptance').isPresent()) {
 
 // Opt-in pinned trader hook witness in a new disposable integrated world.
 if (providers.gradleProperty('traderHookProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.traderHookProbe', 'true'
         doLast {
@@ -289,7 +362,11 @@ if (providers.gradleProperty('traderHookProbe').isPresent()) {
 
 // Opt-in A8-04-02 physical custody witness in a fresh disposable client.
 if (providers.gradleProperty('traderCustodyProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.traderCustodyProbe', 'true'
         doLast {
@@ -302,7 +379,11 @@ if (providers.gradleProperty('traderCustodyProbe').isPresent()) {
 
 // Opt-in A8-07 production lifecycle and offered checkout witness in a new disposable client.
 if (providers.gradleProperty('simulationProductionProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.simulationProductionProbe', 'true'
         doLast {
@@ -315,7 +396,11 @@ if (providers.gradleProperty('simulationProductionProbe').isPresent()) {
 
 // Opt-in A9-02 lifecycle/reload smoke check; release jars exclude this source set.
 if (providers.gradleProperty('valuationProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.valuationProbe', 'true'
         doLast {
@@ -328,7 +413,11 @@ if (providers.gradleProperty('valuationProbe').isPresent()) {
 
 // Opt-in ordinary recipe capture/reload witness, excluded from release jars.
 if (providers.gradleProperty('recipeProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.recipeProbe', 'true'
         doLast {
@@ -341,7 +430,11 @@ if (providers.gradleProperty('recipeProbe').isPresent()) {
 
 // Opt-in pinned brewing accessor and retained-value witness; excluded from release jars.
 if (providers.gradleProperty('brewingProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.brewingProbe', 'true'
         doLast {
@@ -354,7 +447,11 @@ if (providers.gradleProperty('brewingProbe').isPresent()) {
 
 // Opt-in native variant/container identity witness, excluded from release jars.
 if (providers.gradleProperty('variantProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.variantProbe', 'true'
         doLast {
@@ -367,7 +464,11 @@ if (providers.gradleProperty('variantProbe').isPresent()) {
 
 // Opt-in isolated public valuation API/provider witness; never packaged in the mod jar.
 if (providers.gradleProperty('valuationApiProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     neoForge.runs.client {
         systemProperty 'economy.valuationApiProbe', 'true'
     }
@@ -382,7 +483,11 @@ if (providers.gradleProperty('valuationApiProbe').isPresent()) {
 
 // Fresh native reference activation and changed trader presentation witness; excluded from jars.
 if (providers.gradleProperty('referenceTraderProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.referenceTraderProbe', 'true'
         doLast {
@@ -395,7 +500,11 @@ if (providers.gradleProperty('referenceTraderProbe').isPresent()) {
 
 // Opt-in fresh-world dashboard/state witness, excluded from release jars.
 if (providers.gradleProperty('bankingDashboardProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.bankingDashboardProbe', 'true'
         doLast {
@@ -408,7 +517,11 @@ if (providers.gradleProperty('bankingDashboardProbe').isPresent()) {
 
 // Opt-in native owner-history witness; release jars exclude all probe classes.
 if (providers.gradleProperty('bankingHistoryProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.bankingHistoryProbe', 'true'
         doLast {
@@ -420,7 +533,11 @@ if (providers.gradleProperty('bankingHistoryProbe').isPresent()) {
 }
 
 if (providers.gradleProperty('layoutProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.layoutProbe', 'true'
         systemProperty 'economy.layoutSupplement', providers.gradleProperty('layoutSupplement').isPresent().toString()
@@ -440,7 +557,11 @@ tasks.register('multiplayerProbeJar', Jar) {
     from sourceSets.inventoryProbe.output
 }
 if (providers.gradleProperty('multiplayerProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runServer') {
         systemProperty 'economy.multiplayerProbe', 'true'
         systemProperty 'economy.multiplayerRoot', file(providers.gradleProperty('economyRunRoot').get()).absolutePath
@@ -454,7 +575,11 @@ if (providers.gradleProperty('multiplayerProbe').isPresent()) {
 
 // Explicit native A10-05 fresh-world fixture; never part of ordinary builds or CI.
 if (providers.gradleProperty('debtCompositeProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.debtCompositeProbe', 'true'
         doLast {
@@ -467,7 +592,11 @@ if (providers.gradleProperty('debtCompositeProbe').isPresent()) {
 
 // Opt-in focused native Admin settings witness; release jars exclude probe classes.
 if (providers.gradleProperty('adminSettingsProbe').isPresent()) {
-    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    neoForge.mods {
+        economy_inventory_probe {
+            sourceSet sourceSets.inventoryProbe
+        }
+    }
     tasks.named('runClient') {
         systemProperty 'economy.adminSettingsProbe', 'true'
         doLast {

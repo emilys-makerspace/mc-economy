@@ -11,16 +11,37 @@ import net.minecraft.world.level.block.state.StateDefinition;
 
 /** Display-only equipment: it has orientation and no menu, block entity, or economic behavior. */
 public final class DecorativeFacingBlock extends HorizontalDirectionalBlock {
-    public static final MapCodec<DecorativeFacingBlock> CODEC = simpleCodec(DecorativeFacingBlock::new);
+  public static final MapCodec<DecorativeFacingBlock> CODEC =
+      simpleCodec(DecorativeFacingBlock::new);
 
-    public DecorativeFacingBlock(Properties properties) {
-        super(properties);
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
-    }
+  public DecorativeFacingBlock(Properties properties) {
+    super(properties);
+    registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
+  }
 
-    @Override protected MapCodec<? extends HorizontalDirectionalBlock> codec() { return CODEC; }
-    @Override protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) { builder.add(FACING); }
-    @Override public BlockState getStateForPlacement(BlockPlaceContext context) { return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite()); }
-    @Override protected BlockState rotate(BlockState state, Rotation rotation) { return state.setValue(FACING, rotation.rotate(state.getValue(FACING))); }
-    @Override protected BlockState mirror(BlockState state, Mirror mirror) { return state.rotate(mirror.getRotation(state.getValue(FACING))); }
+  @Override
+  protected MapCodec<? extends HorizontalDirectionalBlock> codec() {
+    return CODEC;
+  }
+
+  @Override
+  protected void createBlockStateDefinition(
+      StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
+    builder.add(FACING);
+  }
+
+  @Override
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
+    return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
+  }
+
+  @Override
+  protected BlockState rotate(BlockState state, Rotation rotation) {
+    return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
+  }
+
+  @Override
+  protected BlockState mirror(BlockState state, Mirror mirror) {
+    return state.rotate(mirror.getRotation(state.getValue(FACING)));
+  }
 }

@@ -1,5 +1,7 @@
 package ca.emilybelnavis.mcmods.economy.simulation.prime;
 
+import static ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeFacts.*;
+
 import ca.emilybelnavis.mcmods.economy.api.*;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.fx.*;
@@ -12,52 +14,615 @@ import ca.emilybelnavis.mcmods.economy.storage.FoundationStore;
 import java.math.*;
 import java.time.Instant;
 import java.util.*;
-import static ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimeFacts.*;
 
-/** Explicit worker publication primitives. This class installs no clock/provider or production activation. */
+/**
+ * Explicit worker publication primitives. This class installs no clock/provider or production
+ * activation.
+ */
 public final class CurrencyPrimes {
-    private CurrencyPrimes(){}
-    public static final long DAY_MILLIS=ActivityFacts.DAY_MILLIS;
-    private static final BigDecimal MAX=new BigDecimal("0.25"),STEP=new BigDecimal("0.001");
-    private static final Journal.Kind ACTIVATE=new Journal.Kind("economy:a8","economy:a8/currency-prime/activate"),PUBLISH=new Journal.Kind("economy:a8","economy:a8/currency-prime/publish"),FINISH=new Journal.Kind("economy:a8","economy:a8/currency-prime/complete");
-    public enum Mode { BOOTSTRAP,AUTO,PAUSED,MANUAL }
-    public record Policy(UUID id,WorldId world,EconomyCurrency currency,long revision,BigDecimal primeApr,long effectiveMillis,
-                         UUID activation,UUID config,UUID window,Mode mode){
-        public Policy{Objects.requireNonNull(world);Objects.requireNonNull(currency);Objects.requireNonNull(activation);Objects.requireNonNull(config);Objects.requireNonNull(window);Objects.requireNonNull(mode);primeApr=apr(primeApr);if(revision<1||effectiveMillis<0||!policyId(world,currency,activation,revision,effectiveMillis).equals(id))throw new IllegalArgumentException("Currency prime identity");}}
-    public record Selection(UUID id,long revision,BigDecimal primeApr,int legacyVersion,boolean currencySpecific){public Selection{Objects.requireNonNull(id);Objects.requireNonNull(primeApr);if(revision<1||legacyVersion<0||currencySpecific!=(legacyVersion==0))throw new IllegalArgumentException("Prime selection");}}
-    public record Activation(UUID id,WorldId world,long originMillis,long effectiveMillis,long firstEventMillis,long scheduledMillis,long schedulingFrontier,
-                             int legacyVersion,BigDecimal inheritedApr,UUID config,UUID fxSnapshot,EconomyCurrency reference,Map<EconomyCurrency,BigDecimal> anchors,List<EconomyCurrency> currencies){
-        public Activation{Objects.requireNonNull(id);Objects.requireNonNull(world);Objects.requireNonNull(config);Objects.requireNonNull(fxSnapshot);Objects.requireNonNull(reference);anchors=Collections.unmodifiableMap(new TreeMap<>(anchors));currencies=List.copyOf(currencies);inheritedApr=apr(inheritedApr);
-            if(originMillis<0||scheduledMillis<0||schedulingFrontier<scheduledMillis||effectiveMillis<=schedulingFrontier||effectiveMillis<originMillis||(effectiveMillis-originMillis)%DAY_MILLIS!=0||firstEventMillis!=Math.addExact(effectiveMillis,DAY_MILLIS)||legacyVersion<1||!currencies.equals(EconomyCurrency.all())||!anchors.keySet().equals(new HashSet<>(currencies))||!anchors.containsKey(EconomyCurrency.CAD)||anchors.get(reference).compareTo(BigDecimal.ONE)!=0||anchors.values().stream().anyMatch(v->v==null||v.signum()<=0||v.scale()>12))throw new IllegalArgumentException("Future prime activation");}}
-    public static UUID policyId(WorldId world,EconomyCurrency currency,UUID activation,long revision,long time){return stable("policy|"+world.value()+"|"+currency+"|"+activation+"|"+revision+"|"+time);}
-    static BigDecimal apr(BigDecimal value){Objects.requireNonNull(value);if(value.signum()<0||value.compareTo(MAX)>0||value.stripTrailingZeros().scale()>6)throw new IllegalArgumentException("Prime APR must be0..0.25 at six fractional APR digits");return value.setScale(6,RoundingMode.UNNECESSARY);}
-    public static Optional<Activation> activation(JournalEngine.ReadView reads,WorldId world){var rows=reads.query("SELECT payload FROM currency_prime_activation WHERE world_id=?",List.of(world.value().toString()),1);return rows.isEmpty()?Optional.empty():Optional.of(decodeActivation(rows.getFirst().get("payload")));}
-    public static Optional<Policy> current(JournalEngine.ReadView reads,WorldId world,EconomyCurrency currency,long at){Objects.requireNonNull(currency);if(at<0)throw new IllegalArgumentException("Prime time");var rows=reads.query("SELECT payload FROM currency_prime_policies WHERE world_id=? AND currency=? AND effective_ms<=? ORDER BY effective_ms DESC LIMIT 1",List.of(world.value().toString(),currency.name(),Long.toString(at)),1);return rows.isEmpty()?Optional.empty():Optional.of(decodePolicy(rows.getFirst().get("payload")));}
-    public static Optional<Policy> byId(JournalEngine.ReadView reads,WorldId world,UUID id){var rows=reads.query("SELECT payload FROM currency_prime_policies WHERE world_id=? AND id=?",List.of(world.value().toString(),id.toString()),1);return rows.isEmpty()?Optional.empty():Optional.of(decodePolicy(rows.getFirst().get("payload")));}
-    /** Before takeover this is explicitly the legacy global configured policy, independent of requested currency. */
-    public static Selection select(JournalEngine.ReadView reads,WorldId world,EconomyCurrency currency,long at){Objects.requireNonNull(currency);var a=activation(reads,world);if(a.isEmpty()||at<a.get().effectiveMillis()){var legacy=PricingPolicy.current(reads,at);return new Selection(stable("legacy|"+world.value()+"|"+legacy.version()+"|"+legacy.effectiveMillis()+"|"+legacy.primeApr().toPlainString()),legacy.version(),legacy.primeApr(),legacy.version(),false);}if(!ready(reads,world,at))throw new IllegalStateException("CURRENCY_PRIME_BASKET_NOT_READY");var policy=current(reads,world,currency,at).orElseThrow(()->new IllegalStateException("CURRENCY_PRIME_UNAVAILABLE"));return new Selection(policy.id(),policy.revision(),policy.primeApr(),0,true);}
-    public static boolean ready(JournalEngine.ReadView reads,WorldId world,long at){var a=activation(reads,world);if(a.isEmpty()||at<a.get().effectiveMillis())return true;long due=a.get().effectiveMillis()+((at-a.get().effectiveMillis())/DAY_MILLIS)*DAY_MILLIS;if(due==a.get().effectiveMillis())return true;return ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.ready(reads,world,at)&&!reads.query("SELECT id FROM currency_prime_completions WHERE world_id=? AND effective_ms=?",List.of(world.value().toString(),Long.toString(due)),1).isEmpty();}
-    public static Activation activate(FoundationStore store,UUID id,long effectiveMillis,UUID config,Instant now){var world=store.snapshot().worldId();var existing=store.transaction(tx->activation(tx::query,world));if(existing.isPresent()){var a=existing.get();if(!a.id().equals(id)||a.effectiveMillis()!=effectiveMillis||!a.config().equals(config))throw new IllegalArgumentException("Prime activation already captured");return a;}
-        var value=store.transaction(tx->capture(tx::query,world,id,effectiveMillis,config,now));String payload=encode(value);UUID operation=stable("activate|"+world.value()+"|"+id);
-        commit(store,ACTIVATE,operation,payload,(intent,reads)->{if(activation(reads,world).isPresent()||!capture(reads,world,id,effectiveMillis,config,now).equals(value))throw new IllegalArgumentException("Prime activation source changed");var records=new ArrayList<Journal.Record>();records.add(new Journal.Record(ACTIVATION,1,payload));var policies=new ArrayList<Policy>();for(var currency:value.currencies()){var policy=new Policy(policyId(world,currency,id,1,effectiveMillis),world,currency,1,value.inheritedApr(),effectiveMillis,id,config,id,Mode.BOOTSTRAP);policies.add(policy);records.add(new Journal.Record(POLICY,1,encode(policy)));}return new JournalEngine.Commit(records,new Journal.Result(1,"CURRENCY_PRIME_ACTIVATED",id.toString()),tx->{tx.execute("INSERT INTO currency_prime_activation VALUES(?,?,?,?,?)",List.of(world.value().toString(),id.toString(),Long.toString(effectiveMillis),operation.toString(),payload));for(var policy:policies)apply(tx,operation,policy);});});return value;}
-    public static JournalEngine.Commit prepareActivation(JournalEngine.ReadView reads,WorldId world,UUID operation,UUID id,long effective,UUID config,Instant now) {
-        if(activation(reads,world).isPresent())throw new IllegalArgumentException("Prime activation already captured");
-        var value=capture(reads,world,id,effective,config,now);String payload=encode(value);
-        var records=new ArrayList<Journal.Record>();records.add(new Journal.Record(ACTIVATION,2,payload));var policies=new ArrayList<Policy>();
-        for(var currency:value.currencies()){var policy=new Policy(policyId(world,currency,id,1,effective),world,currency,1,value.inheritedApr(),effective,id,config,id,Mode.BOOTSTRAP);policies.add(policy);records.add(new Journal.Record(POLICY,1,encode(policy)));}
-        return new JournalEngine.Commit(records,new Journal.Result(1,"CURRENCY_PRIME_ACTIVATED",id.toString()),tx->{tx.execute("INSERT INTO currency_prime_activation VALUES(?,?,?,?,?)",List.of(world.value().toString(),id.toString(),Long.toString(effective),operation.toString(),payload));for(var policy:policies)apply(tx,operation,policy);});
+  private CurrencyPrimes() {}
+
+  public static final long DAY_MILLIS = ActivityFacts.DAY_MILLIS;
+  private static final BigDecimal MAX = new BigDecimal("0.25"), STEP = new BigDecimal("0.001");
+  private static final Journal.Kind
+      ACTIVATE = new Journal.Kind("economy:a8", "economy:a8/currency-prime/activate"),
+      PUBLISH = new Journal.Kind("economy:a8", "economy:a8/currency-prime/publish"),
+      FINISH = new Journal.Kind("economy:a8", "economy:a8/currency-prime/complete");
+
+  public enum Mode {
+    BOOTSTRAP,
+    AUTO,
+    PAUSED,
+    MANUAL
+  }
+
+  public record Policy(
+      UUID id,
+      WorldId world,
+      EconomyCurrency currency,
+      long revision,
+      BigDecimal primeApr,
+      long effectiveMillis,
+      UUID activation,
+      UUID config,
+      UUID window,
+      Mode mode) {
+    public Policy {
+      Objects.requireNonNull(world);
+      Objects.requireNonNull(currency);
+      Objects.requireNonNull(activation);
+      Objects.requireNonNull(config);
+      Objects.requireNonNull(window);
+      Objects.requireNonNull(mode);
+      primeApr = apr(primeApr);
+      if (revision < 1
+          || effectiveMillis < 0
+          || !policyId(world, currency, activation, revision, effectiveMillis).equals(id))
+        throw new IllegalArgumentException("Currency prime identity");
     }
-    static Activation capture(JournalEngine.ReadView reads,WorldId world,UUID id,long effective,UUID config,Instant now){var calendar=reads.query("SELECT origin_ms,observed_wall_ms,last_effective_ms FROM financial_calendar WHERE singleton=1",List.of(),1);if(calendar.isEmpty()||!ActivityStore.ready(reads))throw new IllegalArgumentException("Prime calendar/source unavailable");var row=calendar.getFirst();long observed=Math.max(now.toEpochMilli(),Math.max(Long.parseLong(row.get("observed_wall_ms")),Long.parseLong(row.get("last_effective_ms"))));var economic=reads.query("SELECT observed_wall_ms FROM economic_metadata WHERE singleton=1",List.of(),1);if(!economic.isEmpty())observed=Math.max(observed,Long.parseLong(economic.getFirst().get("observed_wall_ms")));var fixed=reads.query("SELECT MAX(frontier_ms) AS frontier FROM economic_systems",List.of(),1);if(!fixed.isEmpty()&&fixed.getFirst().get("frontier")!=null)observed=Math.max(observed,Long.parseLong(fixed.getFirst().get("frontier")));var activity=ActivityStore.activation(reads);observed=Math.max(observed,activity.observedMillis());if(!reads.query("SELECT version FROM pricing_policies WHERE effective_ms>? LIMIT 1",List.of(Long.toString(observed)),1).isEmpty())throw new IllegalArgumentException("Existing future legacy prime edit conflicts with takeover");var legacy=PricingPolicy.current(reads,observed);apr(legacy.primeApr());var fx=FxService.latest(reads);if(fx==null||now.isBefore(Instant.ofEpochMilli(FxService.effectiveMillis(reads,fx.updateId())))||!now.isBefore(Instant.ofEpochMilli(FxService.effectiveMillis(reads,fx.updateId())).plus(java.time.Duration.ofHours(48))))throw new IllegalArgumentException("Fresh activation FX required");return new Activation(id,world,Long.parseLong(row.get("origin_ms")),effective,Math.addExact(effective,DAY_MILLIS),now.toEpochMilli(),observed,legacy.version(),legacy.primeApr(),config,fx.updateId(),fx.reference(),fx.rates(),EconomyCurrency.all());}
-    /** One future stage-0 currency child, based only on its already frozen event plan. */
-    public static JournalEngine.Commit prepare(JournalEngine.ReadView reads,WorldId world,UUID window,EconomyCurrency currency,Mode mode){return prepare(reads,world,stable("publish|"+world.value()+"|"+window+"|"+currency),window,currency,mode);}
-    public static JournalEngine.Commit prepare(JournalEngine.ReadView reads,WorldId world,UUID actualChildOperation,UUID window,EconomyCurrency currency,Mode mode){var selected=ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.read(reads,window);if(selected==null&&mode!=Mode.AUTO&&mode!=Mode.PAUSED)throw new IllegalArgumentException("Manual policies require an explicit versioned frozen override adapter");var a=activation(reads,world).orElseThrow(()->new IllegalArgumentException("Prime activation missing"));var open=WindowStore.readOpen(reads,window);var plan=ActivationModelPlans.read(reads,window);if(open==null||plan==null||!a.id().equals(ActivationModelPlans.activation(reads,window))||!plan.output().available()||!open.world().equals(world)||!open.config().equals(plan.input().config().id())||!plan.input().anchors().equals(a.anchors())||!open.currencies().equals(a.currencies()))throw new IllegalArgumentException("Prime frozen event source unavailable");for(var row:reads.query("SELECT payload FROM currency_prime_policies WHERE world_id=? AND window_id=? LIMIT 16",List.of(world.value().toString(),window.toString()),16))if(decodePolicy(row.get("payload")).mode()!=mode)throw new IllegalArgumentException("Mixed prime publication mode");long effective=open.boundaryMillis();if(effective<a.firstEventMillis()||(effective-a.firstEventMillis())%DAY_MILLIS!=0)throw new IllegalArgumentException("Prime publication boundary");var prior=current(reads,world,currency,effective-1).orElseThrow(()->new IllegalArgumentException("Prior currency prime missing"));if(prior.effectiveMillis()!=effective-DAY_MILLIS||!ready(reads,world,effective-1))throw new IllegalArgumentException("Prior prime basket incomplete");
-        long observedDays=(effective-a.effectiveMillis())/DAY_MILLIS;for(var c:a.currencies()){var source=plan.input().windows().get(c);if(source==null||source.days()!=Math.min(7,observedDays)||source.baselineDays()!=Math.min(7,Math.max(0,observedDays-7)))throw new IllegalArgumentException("Prime plan includes pre-activation or missing coverage");var captured=current(reads,world,c,effective-1).orElseThrow();if(plan.input().priorPrime().get(c).compareTo(captured.primeApr())!=0)throw new IllegalArgumentException("Prime model prior basket changed");}
-        if(selected!=null&&(!selected.world().equals(world)||!selected.mode().name().equals(mode.name())||!selected.automaticHash().equals(plan.output().hash())))throw new IllegalArgumentException("Prime selected outcome mismatch");BigDecimal value=selected!=null?selected.primes().get(currency):mode==Mode.PAUSED?prior.primeApr():plan.output().primes().get(currency);apr(value);if(value.subtract(prior.primeApr()).abs().compareTo(STEP)>0)throw new IllegalArgumentException("Prime exceeds0.001 APR step");var policy=new Policy(policyId(world,currency,a.id(),prior.revision()+1,effective),world,currency,prior.revision()+1,value,effective,a.id(),plan.input().config().id(),window,mode);String payload=encode(policy);UUID operation=actualChildOperation;if(byId(reads,world,policy.id()).isPresent())throw new IllegalArgumentException("Currency prime already published");return new JournalEngine.Commit(List.of(new Journal.Record(POLICY,selected==null?1:2,payload)),new Journal.Result(1,"CURRENCY_PRIME_PUBLISHED",policy.id().toString()),tx->apply(tx,operation,policy));}
-    public static Policy publish(FoundationStore store,UUID window,EconomyCurrency currency,Mode mode){var world=store.snapshot().worldId();UUID operation=stable("publish|"+world.value()+"|"+window+"|"+currency);String payload=window+"|"+currency+"|"+mode;commit(store,PUBLISH,operation,payload,(i,r)->prepare(r,world,window,currency,mode));return store.transaction(tx->{var rows=tx.query("SELECT payload FROM currency_prime_policies WHERE operation_id=?",List.of(operation.toString()),1);return decodePolicy(rows.getFirst().get("payload"));});}
-    public static JournalEngine.Commit prepareCompletion(JournalEngine.ReadView reads,WorldId world,UUID actualChildOperation,UUID window){
-        var a=activation(reads,world).orElseThrow();var open=WindowStore.readOpen(reads,window);var plan=ActivationModelPlans.read(reads,window);if(open==null||plan==null)throw new IllegalArgumentException("Prime plan unavailable");var ids=new ArrayList<UUID>();Mode mode=null;for(var c:a.currencies()){var p=current(reads,world,c,open.boundaryMillis()).orElseThrow();if(!p.window().equals(window)||p.effectiveMillis()!=open.boundaryMillis()||mode!=null&&mode!=p.mode())throw new IllegalArgumentException("Prime basket incomplete/mixed mode");mode=p.mode();ids.add(p.id());}var fact=new Completion(stable("basket|"+world.value()+"|"+window),world,a.id(),window,open.boundaryMillis(),plan.output().hash(),ids);String payload=encode(fact);return new JournalEngine.Commit(List.of(new Journal.Record(COMPLETE,1,payload)),new Journal.Result(1,"CURRENCY_PRIME_BASKET_COMPLETE",fact.id().toString()),tx->tx.execute("INSERT INTO currency_prime_completions VALUES(?,?,?,?,?,?)",List.of(fact.id().toString(),world.value().toString(),window.toString(),Long.toString(fact.effectiveMillis()),actualChildOperation.toString(),payload)));
+  }
+
+  public record Selection(
+      UUID id, long revision, BigDecimal primeApr, int legacyVersion, boolean currencySpecific) {
+    public Selection {
+      Objects.requireNonNull(id);
+      Objects.requireNonNull(primeApr);
+      if (revision < 1 || legacyVersion < 0 || currencySpecific != (legacyVersion == 0))
+        throw new IllegalArgumentException("Prime selection");
     }
-    public static Completion complete(FoundationStore store,UUID window){var world=store.snapshot().worldId();UUID operation=stable("complete|"+world.value()+"|"+window);commit(store,FINISH,operation,window.toString(),(i,r)->prepareCompletion(r,world,operation,window));return store.transaction(tx->decodeCompletion(tx.query("SELECT payload FROM currency_prime_completions WHERE operation_id=?",List.of(operation.toString()),1).getFirst().get("payload")));}
-    private static void apply(FoundationStore.Transaction tx,UUID operation,Policy p){tx.execute("INSERT INTO currency_prime_policies VALUES(?,?,?,?,?,?,?,?,?)",List.of(p.id().toString(),p.world().value().toString(),p.currency().name(),Long.toString(p.revision()),Long.toString(p.effectiveMillis()),p.activation().toString(),p.window().toString(),operation.toString(),encode(p)));}
-    private static void commit(FoundationStore store,Journal.Kind kind,UUID operation,String source,JournalEngine.Handler handler){var actor=new SystemActorId(stable("actor|"+store.snapshot().worldId().value()));var request=new Journal.CanonicalRequest(1,Map.of("source",source));var engine=new JournalEngine(store,(a,k)->a.equals(actor)&&k.equals(kind),Map.of(kind,new JournalEngine.Registration(1,(i,r)->{if(!request.equals(i.request()))throw new IllegalArgumentException("Prime canonical request");return handler.prepare(i,r);})));var result=engine.submit(new Journal.Intent(new OperationId(operation),new RequestId(operation),actor,kind,request,null,null));if(result.status()!=Journal.Status.COMMITTED)throw new IllegalArgumentException("Currency prime commit: "+result.result().code());}
+  }
+
+  public record Activation(
+      UUID id,
+      WorldId world,
+      long originMillis,
+      long effectiveMillis,
+      long firstEventMillis,
+      long scheduledMillis,
+      long schedulingFrontier,
+      int legacyVersion,
+      BigDecimal inheritedApr,
+      UUID config,
+      UUID fxSnapshot,
+      EconomyCurrency reference,
+      Map<EconomyCurrency, BigDecimal> anchors,
+      List<EconomyCurrency> currencies) {
+    public Activation {
+      Objects.requireNonNull(id);
+      Objects.requireNonNull(world);
+      Objects.requireNonNull(config);
+      Objects.requireNonNull(fxSnapshot);
+      Objects.requireNonNull(reference);
+      anchors = Collections.unmodifiableMap(new TreeMap<>(anchors));
+      currencies = List.copyOf(currencies);
+      inheritedApr = apr(inheritedApr);
+      if (originMillis < 0
+          || scheduledMillis < 0
+          || schedulingFrontier < scheduledMillis
+          || effectiveMillis <= schedulingFrontier
+          || effectiveMillis < originMillis
+          || (effectiveMillis - originMillis) % DAY_MILLIS != 0
+          || firstEventMillis != Math.addExact(effectiveMillis, DAY_MILLIS)
+          || legacyVersion < 1
+          || !currencies.equals(EconomyCurrency.all())
+          || !anchors.keySet().equals(new HashSet<>(currencies))
+          || !anchors.containsKey(EconomyCurrency.CAD)
+          || anchors.get(reference).compareTo(BigDecimal.ONE) != 0
+          || anchors.values().stream()
+              .anyMatch(v -> v == null || v.signum() <= 0 || v.scale() > 12))
+        throw new IllegalArgumentException("Future prime activation");
+    }
+  }
+
+  public static UUID policyId(
+      WorldId world, EconomyCurrency currency, UUID activation, long revision, long time) {
+    return stable(
+        "policy|"
+            + world.value()
+            + "|"
+            + currency
+            + "|"
+            + activation
+            + "|"
+            + revision
+            + "|"
+            + time);
+  }
+
+  static BigDecimal apr(BigDecimal value) {
+    Objects.requireNonNull(value);
+    if (value.signum() < 0 || value.compareTo(MAX) > 0 || value.stripTrailingZeros().scale() > 6)
+      throw new IllegalArgumentException("Prime APR must be0..0.25 at six fractional APR digits");
+    return value.setScale(6, RoundingMode.UNNECESSARY);
+  }
+
+  public static Optional<Activation> activation(JournalEngine.ReadView reads, WorldId world) {
+    var rows =
+        reads.query(
+            "SELECT payload FROM currency_prime_activation WHERE world_id=?",
+            List.of(world.value().toString()),
+            1);
+    return rows.isEmpty()
+        ? Optional.empty()
+        : Optional.of(decodeActivation(rows.getFirst().get("payload")));
+  }
+
+  public static Optional<Policy> current(
+      JournalEngine.ReadView reads, WorldId world, EconomyCurrency currency, long at) {
+    Objects.requireNonNull(currency);
+    if (at < 0) throw new IllegalArgumentException("Prime time");
+    var rows =
+        reads.query(
+            "SELECT payload FROM currency_prime_policies WHERE world_id=? AND currency=? AND effective_ms<=? ORDER BY effective_ms DESC LIMIT 1",
+            List.of(world.value().toString(), currency.name(), Long.toString(at)),
+            1);
+    return rows.isEmpty()
+        ? Optional.empty()
+        : Optional.of(decodePolicy(rows.getFirst().get("payload")));
+  }
+
+  public static Optional<Policy> byId(JournalEngine.ReadView reads, WorldId world, UUID id) {
+    var rows =
+        reads.query(
+            "SELECT payload FROM currency_prime_policies WHERE world_id=? AND id=?",
+            List.of(world.value().toString(), id.toString()),
+            1);
+    return rows.isEmpty()
+        ? Optional.empty()
+        : Optional.of(decodePolicy(rows.getFirst().get("payload")));
+  }
+
+  /**
+   * Before takeover this is explicitly the legacy global configured policy, independent of
+   * requested currency.
+   */
+  public static Selection select(
+      JournalEngine.ReadView reads, WorldId world, EconomyCurrency currency, long at) {
+    Objects.requireNonNull(currency);
+    var a = activation(reads, world);
+    if (a.isEmpty() || at < a.get().effectiveMillis()) {
+      var legacy = PricingPolicy.current(reads, at);
+      return new Selection(
+          stable(
+              "legacy|"
+                  + world.value()
+                  + "|"
+                  + legacy.version()
+                  + "|"
+                  + legacy.effectiveMillis()
+                  + "|"
+                  + legacy.primeApr().toPlainString()),
+          legacy.version(),
+          legacy.primeApr(),
+          legacy.version(),
+          false);
+    }
+    if (!ready(reads, world, at))
+      throw new IllegalStateException("CURRENCY_PRIME_BASKET_NOT_READY");
+    var policy =
+        current(reads, world, currency, at)
+            .orElseThrow(() -> new IllegalStateException("CURRENCY_PRIME_UNAVAILABLE"));
+    return new Selection(policy.id(), policy.revision(), policy.primeApr(), 0, true);
+  }
+
+  public static boolean ready(JournalEngine.ReadView reads, WorldId world, long at) {
+    var a = activation(reads, world);
+    if (a.isEmpty() || at < a.get().effectiveMillis()) return true;
+    long due =
+        a.get().effectiveMillis() + ((at - a.get().effectiveMillis()) / DAY_MILLIS) * DAY_MILLIS;
+    if (due == a.get().effectiveMillis()) return true;
+    return ca.emilybelnavis.mcmods.economy.simulation.macro.MacroActivation.ready(reads, world, at)
+        && !reads
+            .query(
+                "SELECT id FROM currency_prime_completions WHERE world_id=? AND effective_ms=?",
+                List.of(world.value().toString(), Long.toString(due)),
+                1)
+            .isEmpty();
+  }
+
+  public static Activation activate(
+      FoundationStore store, UUID id, long effectiveMillis, UUID config, Instant now) {
+    var world = store.snapshot().worldId();
+    var existing = store.transaction(tx -> activation(tx::query, world));
+    if (existing.isPresent()) {
+      var a = existing.get();
+      if (!a.id().equals(id)
+          || a.effectiveMillis() != effectiveMillis
+          || !a.config().equals(config))
+        throw new IllegalArgumentException("Prime activation already captured");
+      return a;
+    }
+    var value =
+        store.transaction(tx -> capture(tx::query, world, id, effectiveMillis, config, now));
+    String payload = encode(value);
+    UUID operation = stable("activate|" + world.value() + "|" + id);
+    commit(
+        store,
+        ACTIVATE,
+        operation,
+        payload,
+        (intent, reads) -> {
+          if (activation(reads, world).isPresent()
+              || !capture(reads, world, id, effectiveMillis, config, now).equals(value))
+            throw new IllegalArgumentException("Prime activation source changed");
+          var records = new ArrayList<Journal.Record>();
+          records.add(new Journal.Record(ACTIVATION, 1, payload));
+          var policies = new ArrayList<Policy>();
+          for (var currency : value.currencies()) {
+            var policy =
+                new Policy(
+                    policyId(world, currency, id, 1, effectiveMillis),
+                    world,
+                    currency,
+                    1,
+                    value.inheritedApr(),
+                    effectiveMillis,
+                    id,
+                    config,
+                    id,
+                    Mode.BOOTSTRAP);
+            policies.add(policy);
+            records.add(new Journal.Record(POLICY, 1, encode(policy)));
+          }
+          return new JournalEngine.Commit(
+              records,
+              new Journal.Result(1, "CURRENCY_PRIME_ACTIVATED", id.toString()),
+              tx -> {
+                tx.execute(
+                    "INSERT INTO currency_prime_activation VALUES(?,?,?,?,?)",
+                    List.of(
+                        world.value().toString(),
+                        id.toString(),
+                        Long.toString(effectiveMillis),
+                        operation.toString(),
+                        payload));
+                for (var policy : policies) apply(tx, operation, policy);
+              });
+        });
+    return value;
+  }
+
+  public static JournalEngine.Commit prepareActivation(
+      JournalEngine.ReadView reads,
+      WorldId world,
+      UUID operation,
+      UUID id,
+      long effective,
+      UUID config,
+      Instant now) {
+    if (activation(reads, world).isPresent())
+      throw new IllegalArgumentException("Prime activation already captured");
+    var value = capture(reads, world, id, effective, config, now);
+    String payload = encode(value);
+    var records = new ArrayList<Journal.Record>();
+    records.add(new Journal.Record(ACTIVATION, 2, payload));
+    var policies = new ArrayList<Policy>();
+    for (var currency : value.currencies()) {
+      var policy =
+          new Policy(
+              policyId(world, currency, id, 1, effective),
+              world,
+              currency,
+              1,
+              value.inheritedApr(),
+              effective,
+              id,
+              config,
+              id,
+              Mode.BOOTSTRAP);
+      policies.add(policy);
+      records.add(new Journal.Record(POLICY, 1, encode(policy)));
+    }
+    return new JournalEngine.Commit(
+        records,
+        new Journal.Result(1, "CURRENCY_PRIME_ACTIVATED", id.toString()),
+        tx -> {
+          tx.execute(
+              "INSERT INTO currency_prime_activation VALUES(?,?,?,?,?)",
+              List.of(
+                  world.value().toString(),
+                  id.toString(),
+                  Long.toString(effective),
+                  operation.toString(),
+                  payload));
+          for (var policy : policies) apply(tx, operation, policy);
+        });
+  }
+
+  static Activation capture(
+      JournalEngine.ReadView reads,
+      WorldId world,
+      UUID id,
+      long effective,
+      UUID config,
+      Instant now) {
+    var calendar =
+        reads.query(
+            "SELECT origin_ms,observed_wall_ms,last_effective_ms FROM financial_calendar WHERE singleton=1",
+            List.of(),
+            1);
+    if (calendar.isEmpty() || !ActivityStore.ready(reads))
+      throw new IllegalArgumentException("Prime calendar/source unavailable");
+    var row = calendar.getFirst();
+    long observed =
+        Math.max(
+            now.toEpochMilli(),
+            Math.max(
+                Long.parseLong(row.get("observed_wall_ms")),
+                Long.parseLong(row.get("last_effective_ms"))));
+    var economic =
+        reads.query(
+            "SELECT observed_wall_ms FROM economic_metadata WHERE singleton=1", List.of(), 1);
+    if (!economic.isEmpty())
+      observed = Math.max(observed, Long.parseLong(economic.getFirst().get("observed_wall_ms")));
+    var fixed =
+        reads.query("SELECT MAX(frontier_ms) AS frontier FROM economic_systems", List.of(), 1);
+    if (!fixed.isEmpty() && fixed.getFirst().get("frontier") != null)
+      observed = Math.max(observed, Long.parseLong(fixed.getFirst().get("frontier")));
+    var activity = ActivityStore.activation(reads);
+    observed = Math.max(observed, activity.observedMillis());
+    if (!reads
+        .query(
+            "SELECT version FROM pricing_policies WHERE effective_ms>? LIMIT 1",
+            List.of(Long.toString(observed)),
+            1)
+        .isEmpty())
+      throw new IllegalArgumentException(
+          "Existing future legacy prime edit conflicts with takeover");
+    var legacy = PricingPolicy.current(reads, observed);
+    apr(legacy.primeApr());
+    var fx = FxService.latest(reads);
+    if (fx == null
+        || now.isBefore(Instant.ofEpochMilli(FxService.effectiveMillis(reads, fx.updateId())))
+        || !now.isBefore(
+            Instant.ofEpochMilli(FxService.effectiveMillis(reads, fx.updateId()))
+                .plus(java.time.Duration.ofHours(48))))
+      throw new IllegalArgumentException("Fresh activation FX required");
+    return new Activation(
+        id,
+        world,
+        Long.parseLong(row.get("origin_ms")),
+        effective,
+        Math.addExact(effective, DAY_MILLIS),
+        now.toEpochMilli(),
+        observed,
+        legacy.version(),
+        legacy.primeApr(),
+        config,
+        fx.updateId(),
+        fx.reference(),
+        fx.rates(),
+        EconomyCurrency.all());
+  }
+
+  /** One future stage-0 currency child, based only on its already frozen event plan. */
+  public static JournalEngine.Commit prepare(
+      JournalEngine.ReadView reads,
+      WorldId world,
+      UUID window,
+      EconomyCurrency currency,
+      Mode mode) {
+    return prepare(
+        reads,
+        world,
+        stable("publish|" + world.value() + "|" + window + "|" + currency),
+        window,
+        currency,
+        mode);
+  }
+
+  public static JournalEngine.Commit prepare(
+      JournalEngine.ReadView reads,
+      WorldId world,
+      UUID actualChildOperation,
+      UUID window,
+      EconomyCurrency currency,
+      Mode mode) {
+    var selected = ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.read(reads, window);
+    if (selected == null && mode != Mode.AUTO && mode != Mode.PAUSED)
+      throw new IllegalArgumentException(
+          "Manual policies require an explicit versioned frozen override adapter");
+    var a =
+        activation(reads, world)
+            .orElseThrow(() -> new IllegalArgumentException("Prime activation missing"));
+    var open = WindowStore.readOpen(reads, window);
+    var plan = ActivationModelPlans.read(reads, window);
+    if (open == null
+        || plan == null
+        || !a.id().equals(ActivationModelPlans.activation(reads, window))
+        || !plan.output().available()
+        || !open.world().equals(world)
+        || !open.config().equals(plan.input().config().id())
+        || !plan.input().anchors().equals(a.anchors())
+        || !open.currencies().equals(a.currencies()))
+      throw new IllegalArgumentException("Prime frozen event source unavailable");
+    for (var row :
+        reads.query(
+            "SELECT payload FROM currency_prime_policies WHERE world_id=? AND window_id=? LIMIT 16",
+            List.of(world.value().toString(), window.toString()),
+            16))
+      if (decodePolicy(row.get("payload")).mode() != mode)
+        throw new IllegalArgumentException("Mixed prime publication mode");
+    long effective = open.boundaryMillis();
+    if (effective < a.firstEventMillis() || (effective - a.firstEventMillis()) % DAY_MILLIS != 0)
+      throw new IllegalArgumentException("Prime publication boundary");
+    var prior =
+        current(reads, world, currency, effective - 1)
+            .orElseThrow(() -> new IllegalArgumentException("Prior currency prime missing"));
+    if (prior.effectiveMillis() != effective - DAY_MILLIS || !ready(reads, world, effective - 1))
+      throw new IllegalArgumentException("Prior prime basket incomplete");
+    long observedDays = (effective - a.effectiveMillis()) / DAY_MILLIS;
+    for (var c : a.currencies()) {
+      var source = plan.input().windows().get(c);
+      if (source == null
+          || source.days() != Math.min(7, observedDays)
+          || source.baselineDays() != Math.min(7, Math.max(0, observedDays - 7)))
+        throw new IllegalArgumentException(
+            "Prime plan includes pre-activation or missing coverage");
+      var captured = current(reads, world, c, effective - 1).orElseThrow();
+      if (plan.input().priorPrime().get(c).compareTo(captured.primeApr()) != 0)
+        throw new IllegalArgumentException("Prime model prior basket changed");
+    }
+    if (selected != null
+        && (!selected.world().equals(world)
+            || !selected.mode().name().equals(mode.name())
+            || !selected.automaticHash().equals(plan.output().hash())))
+      throw new IllegalArgumentException("Prime selected outcome mismatch");
+    BigDecimal value =
+        selected != null
+            ? selected.primes().get(currency)
+            : mode == Mode.PAUSED ? prior.primeApr() : plan.output().primes().get(currency);
+    apr(value);
+    if (value.subtract(prior.primeApr()).abs().compareTo(STEP) > 0)
+      throw new IllegalArgumentException("Prime exceeds0.001 APR step");
+    var policy =
+        new Policy(
+            policyId(world, currency, a.id(), prior.revision() + 1, effective),
+            world,
+            currency,
+            prior.revision() + 1,
+            value,
+            effective,
+            a.id(),
+            plan.input().config().id(),
+            window,
+            mode);
+    String payload = encode(policy);
+    UUID operation = actualChildOperation;
+    if (byId(reads, world, policy.id()).isPresent())
+      throw new IllegalArgumentException("Currency prime already published");
+    return new JournalEngine.Commit(
+        List.of(new Journal.Record(POLICY, selected == null ? 1 : 2, payload)),
+        new Journal.Result(1, "CURRENCY_PRIME_PUBLISHED", policy.id().toString()),
+        tx -> apply(tx, operation, policy));
+  }
+
+  public static Policy publish(
+      FoundationStore store, UUID window, EconomyCurrency currency, Mode mode) {
+    var world = store.snapshot().worldId();
+    UUID operation = stable("publish|" + world.value() + "|" + window + "|" + currency);
+    String payload = window + "|" + currency + "|" + mode;
+    commit(store, PUBLISH, operation, payload, (i, r) -> prepare(r, world, window, currency, mode));
+    return store.transaction(
+        tx -> {
+          var rows =
+              tx.query(
+                  "SELECT payload FROM currency_prime_policies WHERE operation_id=?",
+                  List.of(operation.toString()),
+                  1);
+          return decodePolicy(rows.getFirst().get("payload"));
+        });
+  }
+
+  public static JournalEngine.Commit prepareCompletion(
+      JournalEngine.ReadView reads, WorldId world, UUID actualChildOperation, UUID window) {
+    var a = activation(reads, world).orElseThrow();
+    var open = WindowStore.readOpen(reads, window);
+    var plan = ActivationModelPlans.read(reads, window);
+    if (open == null || plan == null) throw new IllegalArgumentException("Prime plan unavailable");
+    var ids = new ArrayList<UUID>();
+    Mode mode = null;
+    for (var c : a.currencies()) {
+      var p = current(reads, world, c, open.boundaryMillis()).orElseThrow();
+      if (!p.window().equals(window)
+          || p.effectiveMillis() != open.boundaryMillis()
+          || mode != null && mode != p.mode())
+        throw new IllegalArgumentException("Prime basket incomplete/mixed mode");
+      mode = p.mode();
+      ids.add(p.id());
+    }
+    var fact =
+        new Completion(
+            stable("basket|" + world.value() + "|" + window),
+            world,
+            a.id(),
+            window,
+            open.boundaryMillis(),
+            plan.output().hash(),
+            ids);
+    String payload = encode(fact);
+    return new JournalEngine.Commit(
+        List.of(new Journal.Record(COMPLETE, 1, payload)),
+        new Journal.Result(1, "CURRENCY_PRIME_BASKET_COMPLETE", fact.id().toString()),
+        tx ->
+            tx.execute(
+                "INSERT INTO currency_prime_completions VALUES(?,?,?,?,?,?)",
+                List.of(
+                    fact.id().toString(),
+                    world.value().toString(),
+                    window.toString(),
+                    Long.toString(fact.effectiveMillis()),
+                    actualChildOperation.toString(),
+                    payload)));
+  }
+
+  public static Completion complete(FoundationStore store, UUID window) {
+    var world = store.snapshot().worldId();
+    UUID operation = stable("complete|" + world.value() + "|" + window);
+    commit(
+        store,
+        FINISH,
+        operation,
+        window.toString(),
+        (i, r) -> prepareCompletion(r, world, operation, window));
+    return store.transaction(
+        tx ->
+            decodeCompletion(
+                tx.query(
+                        "SELECT payload FROM currency_prime_completions WHERE operation_id=?",
+                        List.of(operation.toString()),
+                        1)
+                    .getFirst()
+                    .get("payload")));
+  }
+
+  private static void apply(FoundationStore.Transaction tx, UUID operation, Policy p) {
+    tx.execute(
+        "INSERT INTO currency_prime_policies VALUES(?,?,?,?,?,?,?,?,?)",
+        List.of(
+            p.id().toString(),
+            p.world().value().toString(),
+            p.currency().name(),
+            Long.toString(p.revision()),
+            Long.toString(p.effectiveMillis()),
+            p.activation().toString(),
+            p.window().toString(),
+            operation.toString(),
+            encode(p)));
+  }
+
+  private static void commit(
+      FoundationStore store,
+      Journal.Kind kind,
+      UUID operation,
+      String source,
+      JournalEngine.Handler handler) {
+    var actor = new SystemActorId(stable("actor|" + store.snapshot().worldId().value()));
+    var request = new Journal.CanonicalRequest(1, Map.of("source", source));
+    var engine =
+        new JournalEngine(
+            store,
+            (a, k) -> a.equals(actor) && k.equals(kind),
+            Map.of(
+                kind,
+                new JournalEngine.Registration(
+                    1,
+                    (i, r) -> {
+                      if (!request.equals(i.request()))
+                        throw new IllegalArgumentException("Prime canonical request");
+                      return handler.prepare(i, r);
+                    })));
+    var result =
+        engine.submit(
+            new Journal.Intent(
+                new OperationId(operation),
+                new RequestId(operation),
+                actor,
+                kind,
+                request,
+                null,
+                null));
+    if (result.status() != Journal.Status.COMMITTED)
+      throw new IllegalArgumentException("Currency prime commit: " + result.result().code());
+  }
 }

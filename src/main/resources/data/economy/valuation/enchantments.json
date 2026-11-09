@@ -1,1 +1,375 @@
-[{"id":"minecraft:aqua_affinity","premiums":["40"],"curse":false},{"id":"minecraft:bane_of_arthropods","premiums":["10","20","35","55","80"],"curse":false},{"id":"minecraft:binding_curse","premiums":[],"curse":true},{"id":"minecraft:blast_protection","premiums":["15","35","60","90"],"curse":false},{"id":"minecraft:breach","premiums":["40","90","160","250"],"curse":false},{"id":"minecraft:channeling","premiums":["100"],"curse":false},{"id":"minecraft:density","premiums":["25","55","95","145","210"],"curse":false},{"id":"minecraft:depth_strider","premiums":["40","90","150"],"curse":false},{"id":"minecraft:efficiency","premiums":["20","45","80","130","200"],"curse":false},{"id":"minecraft:feather_falling","premiums":["30","65","110","170"],"curse":false},{"id":"minecraft:fire_aspect","premiums":["50","120"],"curse":false},{"id":"minecraft:fire_protection","premiums":["15","35","60","90"],"curse":false},{"id":"minecraft:flame","premiums":["80"],"curse":false},{"id":"minecraft:fortune","premiums":["100","250","500"],"curse":false},{"id":"minecraft:frost_walker","premiums":["80","180"],"curse":false},{"id":"minecraft:impaling","premiums":["10","25","45","70","100"],"curse":false},{"id":"minecraft:infinity","premiums":["250"],"curse":false},{"id":"minecraft:knockback","premiums":["15","40"],"curse":false},{"id":"minecraft:looting","premiums":["80","180","350"],"curse":false},{"id":"minecraft:loyalty","premiums":["25","60","110"],"curse":false},{"id":"minecraft:luck_of_the_sea","premiums":["50","120","220"],"curse":false},{"id":"minecraft:lure","premiums":["30","70","130"],"curse":false},{"id":"minecraft:mending","premiums":["300"],"curse":false},{"id":"minecraft:multishot","premiums":["120"],"curse":false},{"id":"minecraft:piercing","premiums":["15","35","60","90"],"curse":false},{"id":"minecraft:power","premiums":["20","45","75","110","150"],"curse":false},{"id":"minecraft:projectile_protection","premiums":["15","35","60","90"],"curse":false},{"id":"minecraft:protection","premiums":["25","60","110","180"],"curse":false},{"id":"minecraft:punch","premiums":["20","50"],"curse":false},{"id":"minecraft:quick_charge","premiums":["35","85","160"],"curse":false},{"id":"minecraft:respiration","premiums":["25","60","110"],"curse":false},{"id":"minecraft:riptide","premiums":["60","140","250"],"curse":false},{"id":"minecraft:sharpness","premiums":["20","45","75","110","150"],"curse":false},{"id":"minecraft:silk_touch","premiums":["300"],"curse":false},{"id":"minecraft:smite","premiums":["15","30","50","75","110"],"curse":false},{"id":"minecraft:soul_speed","premiums":["80","180","320"],"curse":false},{"id":"minecraft:sweeping_edge","premiums":["25","60","110"],"curse":false},{"id":"minecraft:swift_sneak","premiums":["100","225","400"],"curse":false},{"id":"minecraft:thorns","premiums":["30","75","140"],"curse":false},{"id":"minecraft:unbreaking","premiums":["50","110","200"],"curse":false},{"id":"minecraft:vanishing_curse","premiums":[],"curse":true},{"id":"minecraft:wind_burst","premiums":["150","350","650"],"curse":false}]
+[
+  {
+    "id": "minecraft:aqua_affinity",
+    "premiums": [
+      "40"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:bane_of_arthropods",
+    "premiums": [
+      "10",
+      "20",
+      "35",
+      "55",
+      "80"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:binding_curse",
+    "premiums": [],
+    "curse": true
+  },
+  {
+    "id": "minecraft:blast_protection",
+    "premiums": [
+      "15",
+      "35",
+      "60",
+      "90"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:breach",
+    "premiums": [
+      "40",
+      "90",
+      "160",
+      "250"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:channeling",
+    "premiums": [
+      "100"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:density",
+    "premiums": [
+      "25",
+      "55",
+      "95",
+      "145",
+      "210"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:depth_strider",
+    "premiums": [
+      "40",
+      "90",
+      "150"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:efficiency",
+    "premiums": [
+      "20",
+      "45",
+      "80",
+      "130",
+      "200"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:feather_falling",
+    "premiums": [
+      "30",
+      "65",
+      "110",
+      "170"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:fire_aspect",
+    "premiums": [
+      "50",
+      "120"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:fire_protection",
+    "premiums": [
+      "15",
+      "35",
+      "60",
+      "90"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:flame",
+    "premiums": [
+      "80"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:fortune",
+    "premiums": [
+      "100",
+      "250",
+      "500"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:frost_walker",
+    "premiums": [
+      "80",
+      "180"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:impaling",
+    "premiums": [
+      "10",
+      "25",
+      "45",
+      "70",
+      "100"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:infinity",
+    "premiums": [
+      "250"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:knockback",
+    "premiums": [
+      "15",
+      "40"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:looting",
+    "premiums": [
+      "80",
+      "180",
+      "350"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:loyalty",
+    "premiums": [
+      "25",
+      "60",
+      "110"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:luck_of_the_sea",
+    "premiums": [
+      "50",
+      "120",
+      "220"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:lure",
+    "premiums": [
+      "30",
+      "70",
+      "130"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:mending",
+    "premiums": [
+      "300"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:multishot",
+    "premiums": [
+      "120"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:piercing",
+    "premiums": [
+      "15",
+      "35",
+      "60",
+      "90"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:power",
+    "premiums": [
+      "20",
+      "45",
+      "75",
+      "110",
+      "150"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:projectile_protection",
+    "premiums": [
+      "15",
+      "35",
+      "60",
+      "90"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:protection",
+    "premiums": [
+      "25",
+      "60",
+      "110",
+      "180"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:punch",
+    "premiums": [
+      "20",
+      "50"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:quick_charge",
+    "premiums": [
+      "35",
+      "85",
+      "160"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:respiration",
+    "premiums": [
+      "25",
+      "60",
+      "110"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:riptide",
+    "premiums": [
+      "60",
+      "140",
+      "250"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:sharpness",
+    "premiums": [
+      "20",
+      "45",
+      "75",
+      "110",
+      "150"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:silk_touch",
+    "premiums": [
+      "300"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:smite",
+    "premiums": [
+      "15",
+      "30",
+      "50",
+      "75",
+      "110"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:soul_speed",
+    "premiums": [
+      "80",
+      "180",
+      "320"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:sweeping_edge",
+    "premiums": [
+      "25",
+      "60",
+      "110"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:swift_sneak",
+    "premiums": [
+      "100",
+      "225",
+      "400"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:thorns",
+    "premiums": [
+      "30",
+      "75",
+      "140"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:unbreaking",
+    "premiums": [
+      "50",
+      "110",
+      "200"
+    ],
+    "curse": false
+  },
+  {
+    "id": "minecraft:vanishing_curse",
+    "premiums": [],
+    "curse": true
+  },
+  {
+    "id": "minecraft:wind_burst",
+    "premiums": [
+      "150",
+      "350",
+      "650"
+    ],
+    "curse": false
+  }
+]

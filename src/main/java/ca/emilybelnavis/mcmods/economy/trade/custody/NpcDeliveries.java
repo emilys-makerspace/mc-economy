@@ -13,10 +13,11 @@ import java.util.UUID;
 
 /** Owner-bound NPC deliveries that have durable provenance and no unresolved physical effect. */
 public final class NpcDeliveries {
-    private NpcDeliveries() {}
+  private NpcDeliveries() {}
 
-    // Use the immutable journal rather than projection tables that older schemas may lack.
-    private static final String CLAIMABLE = """
+  // Use the immutable journal rather than projection tables that older schemas may lack.
+  private static final String CLAIMABLE =
+      """
             SELECT c.id FROM custody_cases c
             JOIN operation_outcomes o ON o.world_id=(SELECT world_id FROM foundation_metadata WHERE singleton=1)
                 AND o.operation_id=c.financial_operation AND o.actor=c.owner
@@ -70,49 +71,86 @@ public final class NpcDeliveries {
                 )
             """;
 
-    public static List<UUID> page(ReadView reads, PlayerId owner, UUID after, int limit) {
-        if (limit < 1 || limit > Custody.MAX_PAGE_SIZE) throw new IllegalArgumentException("NPC claim page bounds");
-        return reads.query(CLAIMABLE + " AND c.id>? ORDER BY c.id LIMIT ?",
-                        List.of(Journal.actorKey(owner), after == null ? "" : after.toString(), Integer.toString(limit)), limit)
-                .stream().map(row -> UUID.fromString(row.get("id"))).toList();
-    }
+  public static List<UUID> page(ReadView reads, PlayerId owner, UUID after, int limit) {
+    if (limit < 1 || limit > Custody.MAX_PAGE_SIZE)
+      throw new IllegalArgumentException("NPC claim page bounds");
+    return reads
+        .query(
+            CLAIMABLE + " AND c.id>? ORDER BY c.id LIMIT ?",
+            List.of(
+                Journal.actorKey(owner),
+                after == null ? "" : after.toString(),
+                Integer.toString(limit)),
+            limit)
+        .stream()
+        .map(row -> UUID.fromString(row.get("id")))
+        .toList();
+  }
 
-    public static boolean isClaimable(ReadView reads, Custody.Case current) {
-        if (current.financialOperation() == null || !(current.terms().owner() instanceof PlayerId owner)
-                || !current.terms().source().startsWith("npc-")
-                || current.state() != Custody.State.COMMITTED && current.state() != Custody.State.CLAIM) return false;
-        return !reads.query(CLAIMABLE + " AND c.id=?", List.of(Journal.actorKey(owner), current.id().toString()), 1)
-                .isEmpty();
-    }
+  public static boolean isClaimable(ReadView reads, Custody.Case current) {
+    if (current.financialOperation() == null
+        || !(current.terms().owner() instanceof PlayerId owner)
+        || !current.terms().source().startsWith("npc-")
+        || current.state() != Custody.State.COMMITTED && current.state() != Custody.State.CLAIM)
+      return false;
+    return !reads
+        .query(
+            CLAIMABLE + " AND c.id=?", List.of(Journal.actorKey(owner), current.id().toString()), 1)
+        .isEmpty();
+  }
 
-    /** A newly issued lot remains safe if the original NPC payout has no physical effect. */
-    public static boolean protectsCash(ReadView reads, CashIssuance.Lot lot) {
-        if (lot.revision() != 1 || lot.remaining() != lot.issued() || !lot.evidence().startsWith("npc-cash:")) return false;
-        UUID original;
-        try {
-            original = UUID.fromString(lot.evidence().substring("npc-cash:".length()));
-        } catch (IllegalArgumentException malformed) {
-            return false;
-        }
-        boolean reference=ReferenceCashFacts.stable("lot|"+lot.world().value()+"|"+original+"|"+lot.item()).equals(lot.id());
-        if (!reference&&!NpcCashFacts.stable("lot|" + lot.world().value() + "|" + original + "|" + lot.item()).equals(lot.id()))
-            return false;
-        var rows = reads.query("""
+  /** A newly issued lot remains safe if the original NPC payout has no physical effect. */
+  public static boolean protectsCash(ReadView reads, CashIssuance.Lot lot) {
+    if (lot.revision() != 1
+        || lot.remaining() != lot.issued()
+        || !lot.evidence().startsWith("npc-cash:")) return false;
+    UUID original;
+    try {
+      original = UUID.fromString(lot.evidence().substring("npc-cash:".length()));
+    } catch (IllegalArgumentException malformed) {
+      return false;
+    }
+    boolean reference =
+        ReferenceCashFacts.stable("lot|" + lot.world().value() + "|" + original + "|" + lot.item())
+            .equals(lot.id());
+    if (!reference
+        && !NpcCashFacts.stable("lot|" + lot.world().value() + "|" + original + "|" + lot.item())
+            .equals(lot.id())) return false;
+    var rows =
+        reads.query(
+            """
                 SELECT r.payload FROM operation_outcomes o
                 JOIN journal_records r ON r.sequence=o.sequence
                 WHERE o.world_id=? AND o.operation_id=? AND o.status='COMMITTED'
                     AND r.record_type=? AND r.record_version=1
-                """, List.of(lot.world().value().toString(), original.toString(), reference?ReferenceCashFacts.RECEIPT:NpcCashFacts.RECEIPT), 1);
-        if (rows.isEmpty()) return false;
-        var payload=rows.getFirst().get("payload");
-        var actor=reference?ReferenceCashFacts.decodeReceipt(payload).actor():NpcCashFacts.decodeReceipt(payload).actor();
-        UUID custody=reference?ReferenceCashFacts.decodeReceipt(payload).cashCustody():NpcCashFacts.decodeReceipt(payload).cashCustody();
-        if(custody==null)return false;
-        var payout=Custody.find(reads,actor,custody,false).orElse(null);
-        return payout != null && isClaimable(reads, payout)
-                && WithdrawalDelivery.claims(payout).stream()
-                        .filter(claim -> claim.lot().equals(lot.id()) && claim.world().equals(lot.world())
-                                && claim.item().equals(lot.item()))
-                        .mapToInt(CashIssuance.Claim::count).sum() == lot.issued();
-    }
+                """,
+            List.of(
+                lot.world().value().toString(),
+                original.toString(),
+                reference ? ReferenceCashFacts.RECEIPT : NpcCashFacts.RECEIPT),
+            1);
+    if (rows.isEmpty()) return false;
+    var payload = rows.getFirst().get("payload");
+    var actor =
+        reference
+            ? ReferenceCashFacts.decodeReceipt(payload).actor()
+            : NpcCashFacts.decodeReceipt(payload).actor();
+    UUID custody =
+        reference
+            ? ReferenceCashFacts.decodeReceipt(payload).cashCustody()
+            : NpcCashFacts.decodeReceipt(payload).cashCustody();
+    if (custody == null) return false;
+    var payout = Custody.find(reads, actor, custody, false).orElse(null);
+    return payout != null
+        && isClaimable(reads, payout)
+        && WithdrawalDelivery.claims(payout).stream()
+                .filter(
+                    claim ->
+                        claim.lot().equals(lot.id())
+                            && claim.world().equals(lot.world())
+                            && claim.item().equals(lot.item()))
+                .mapToInt(CashIssuance.Claim::count)
+                .sum()
+            == lot.issued();
+  }
 }
