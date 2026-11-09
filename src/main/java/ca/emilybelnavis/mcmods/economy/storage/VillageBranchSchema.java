@@ -20,8 +20,35 @@ public final class VillageBranchSchema {
     private static final Set<String> BRANCH_STATES = Set.of("CAPTURE_PENDING", "PROVIDER_PENDING", "SITE_PENDING",
             "RESERVED", "PLACING", "PHYSICAL_COMPLETE", "ACTIVATION_PENDING", "ACTIVE", "REMOVED", "CONFLICT", "OMITTED");
     private static final Set<String> ANCHOR_STATES = Set.of("PENDING", "ACTIVE", "REMOVED", "CONFLICT");
+    private static final String ANCHOR_INDEX = "CREATE INDEX village_anchor_location ON village_branch_anchors(world_id,dimension,x,y,z)";
 
     public static List<String> statements() {
+        return statements(1);
+    }
+
+    private static String anchorTable(int maxSlot) {
+        return """
+                CREATE TABLE village_branch_anchors(
+                    world_id TEXT NOT NULL,branch_id TEXT NOT NULL,slot INTEGER NOT NULL CHECK(typeof(slot)='integer' AND slot BETWEEN 0 AND %d),
+                    dimension TEXT NOT NULL,x INTEGER NOT NULL CHECK(typeof(x)='integer' AND x BETWEEN -30000000 AND 30000000),
+                    y INTEGER NOT NULL CHECK(typeof(y)='integer' AND y BETWEEN -2048 AND 2047),z INTEGER NOT NULL CHECK(typeof(z)='integer' AND z BETWEEN -30000000 AND 30000000),
+                    generation TEXT NOT NULL,terminal_revision INTEGER NOT NULL CHECK(typeof(terminal_revision)='integer' AND terminal_revision>=0),
+                    state TEXT NOT NULL CHECK(state IN ('PENDING','ACTIVE','REMOVED','CONFLICT')),
+                    PRIMARY KEY(world_id,branch_id,slot),UNIQUE(world_id,generation),
+                    FOREIGN KEY(world_id,branch_id) REFERENCES village_branches(world_id,branch_id))
+                """.formatted(maxSlot);
+    }
+
+    static List<String> threeAnchorMigration() {
+        return List.of(
+                "ALTER TABLE village_branch_anchors RENAME TO village_branch_anchors_v53",
+                anchorTable(2),
+                "INSERT INTO village_branch_anchors SELECT * FROM village_branch_anchors_v53",
+                "DROP TABLE village_branch_anchors_v53",
+                ANCHOR_INDEX);
+    }
+
+    private static List<String> statements(int maxAnchorSlot) {
         return List.of("""
                 CREATE TABLE village_plans(
                     world_id TEXT NOT NULL,village_id TEXT NOT NULL,source_key TEXT NOT NULL CHECK(length(source_key)<=512),
@@ -35,16 +62,7 @@ public final class VillageBranchSchema {
                     revision INTEGER NOT NULL CHECK(typeof(revision)='integer' AND revision>0),staffing_paused INTEGER NOT NULL CHECK(typeof(staffing_paused)='integer' AND staffing_paused IN (0,1)),
                     PRIMARY KEY(world_id,branch_id),UNIQUE(world_id,village_id,slot),
                     FOREIGN KEY(world_id,village_id) REFERENCES village_plans(world_id,village_id))
-                """.formatted(STATES), """
-                CREATE TABLE village_branch_anchors(
-                    world_id TEXT NOT NULL,branch_id TEXT NOT NULL,slot INTEGER NOT NULL CHECK(typeof(slot)='integer' AND slot BETWEEN 0 AND 1),
-                    dimension TEXT NOT NULL,x INTEGER NOT NULL CHECK(typeof(x)='integer' AND x BETWEEN -30000000 AND 30000000),
-                    y INTEGER NOT NULL CHECK(typeof(y)='integer' AND y BETWEEN -2048 AND 2047),z INTEGER NOT NULL CHECK(typeof(z)='integer' AND z BETWEEN -30000000 AND 30000000),
-                    generation TEXT NOT NULL,terminal_revision INTEGER NOT NULL CHECK(typeof(terminal_revision)='integer' AND terminal_revision>=0),
-                    state TEXT NOT NULL CHECK(state IN ('PENDING','ACTIVE','REMOVED','CONFLICT')),
-                    PRIMARY KEY(world_id,branch_id,slot),UNIQUE(world_id,generation),
-                    FOREIGN KEY(world_id,branch_id) REFERENCES village_branches(world_id,branch_id))
-                """, """
+                """.formatted(STATES), anchorTable(maxAnchorSlot), """
                 CREATE TABLE village_branch_events(
                     world_id TEXT NOT NULL,branch_id TEXT NOT NULL,revision INTEGER NOT NULL CHECK(typeof(revision)='integer' AND revision>0),
                     state TEXT NOT NULL CHECK(state IN (%s)),reason TEXT NOT NULL CHECK(length(reason)<=256),operation_id TEXT NOT NULL,
@@ -60,22 +78,24 @@ public final class VillageBranchSchema {
                 """,
                 "CREATE INDEX village_branch_state ON village_branches(world_id,state,branch_id)",
                 "CREATE INDEX village_branch_village ON village_branches(world_id,village_id,slot)",
-                "CREATE INDEX village_anchor_location ON village_branch_anchors(world_id,dimension,x,y,z)",
+                ANCHOR_INDEX,
                 "CREATE INDEX village_branch_event_operation ON village_branch_events(world_id,operation_id,branch_id)");
     }
 
     /** Exact schema, canonical immutable capture and relational history checks for online/offline opening. */
     public static void validate(Connection connection) throws SQLException {
         try {
-            validateStructure(connection);
             String world;
-            try (var statement = connection.createStatement(); var rows = statement.executeQuery("SELECT world_id FROM foundation_metadata WHERE singleton=1")) {
+            int maxAnchorSlot;
+            try (var statement = connection.createStatement(); var rows = statement.executeQuery("SELECT world_id,schema_version FROM foundation_metadata WHERE singleton=1")) {
                 if (!rows.next()) throw new SQLException("Missing village world identity");
                 world = canonicalUuid(rows.getString(1)).toString();
+                maxAnchorSlot = rows.getInt(2) >= 54 ? 2 : 1;
             }
+            validateStructure(connection, maxAnchorSlot);
             validatePlans(connection, world);
             validateBranches(connection, world);
-            validateAnchors(connection, world);
+            validateAnchors(connection, world, maxAnchorSlot);
             validateEvents(connection, world);
             validateProviderFills(connection, world);
             rejectRows(connection, "SELECT 1 FROM village_branches b LEFT JOIN village_plans p ON p.world_id=b.world_id AND p.village_id=b.village_id WHERE p.village_id IS NULL LIMIT 1", "Orphan village branch");
@@ -100,9 +120,9 @@ public final class VillageBranchSchema {
         }
     }
 
-    private static void validateStructure(Connection connection) throws SQLException {
+    private static void validateStructure(Connection connection, int maxAnchorSlot) throws SQLException {
         try (var query = connection.prepareStatement("SELECT sql FROM sqlite_schema WHERE name=?")) {
-            for (var declaration : statements()) {
+            for (var declaration : statements(maxAnchorSlot)) {
                 String sql = declaration.strip();
                 String name = sql.split("\\s+", 4)[2].split("\\(", 2)[0];
                 query.setString(1, name);
@@ -180,14 +200,14 @@ public final class VillageBranchSchema {
         }
     }
 
-    private static void validateAnchors(Connection connection, String world) throws SQLException {
+    private static void validateAnchors(Connection connection, String world, int maxAnchorSlot) throws SQLException {
         try (var statement = connection.createStatement(); var rows = statement.executeQuery("SELECT * FROM village_branch_anchors")) {
             while (rows.next()) {
                 requireWorld(world, rows.getString("world_id"));
                 canonicalUuid(rows.getString("branch_id"));
                 canonicalUuid(rows.getString("generation"));
                 if (!rows.getString("dimension").matches("[a-z0-9_.-]+:[a-z0-9_./-]+") || rows.getString("dimension").length() > 128
-                        || rows.getInt("slot") < 0 || rows.getInt("slot") > 1 || Math.abs(rows.getLong("x")) > 30_000_000
+                        || rows.getInt("slot") < 0 || rows.getInt("slot") > maxAnchorSlot || Math.abs(rows.getLong("x")) > 30_000_000
                         || Math.abs(rows.getLong("z")) > 30_000_000 || rows.getInt("y") < -2048 || rows.getInt("y") > 2047
                         || rows.getLong("terminal_revision") < 0 || !ANCHOR_STATES.contains(rows.getString("state")))
                     throw new SQLException("Village anchor projection bounds");

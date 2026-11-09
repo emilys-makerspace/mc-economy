@@ -77,14 +77,15 @@ public final class BranchPlacement {
             if(action==Action.RESERVE){
                 if(!view.state().equals("SITE_PENDING")||proposed==null||attempt!=(prior==null?1:prior.number()+1))return reject("PLACEMENT_STATE");
                 var original=view.choice();choice=proposed;
-                if(choice.state()!=BranchPlans.State.RESERVED||choice.slot()!=view.slot()||choice.required()!=original.required()||choice.size()!=original.size()
+                if(choice.state()!=BranchPlans.State.RESERVED||choice.slot()!=view.slot()||choice.required()!=original.required()
+                        ||choice.size()!=original.size()&&(choice.size()!=BranchPlans.Size.STANDARD||original.bounds()!=null)
                         ||!Objects.equals(choice.institution(),original.institution())||choice.nativeCurrency()!=original.nativeCurrency()||choice.optionalRoll()!=original.optionalRoll())return reject("PLACEMENT_CAPTURE_CONFLICT");
                 if(view.anchors().stream().anyMatch(a->!a.get("state").equals("PENDING")))return reject("PLACEMENT_ANCHOR_USED");
                 for(var a:choice.services()){
                     if(!a.generation().equals(BranchPlans.generation(branch,a.slot())))return reject("PLACEMENT_GENERATION");
                     if(!reads.query("SELECT generation FROM terminal_generations WHERE world_id=? AND generation=?",List.of(world.value().toString(),a.generation().toString()),1).isEmpty())return reject("PLACEMENT_GENERATION_USED");
                 }
-                for(var a:choice.desks())if(!a.generation().equals(BranchPlans.generation(branch,a.slot()+2)))return reject("PLACEMENT_GENERATION");
+                for(var a:choice.desks())if(!a.generation().equals(BranchPlans.generation(branch,choice.deskGenerationSlot(a.slot()))))return reject("PLACEMENT_GENERATION");
                 state="RESERVED";phase="RESERVED";
             }else{
                 if(prior==null||prior.number()!=attempt||!prior.operation().equals(operation)||proposed!=null)return reject("PLACEMENT_ATTEMPT_STALE");

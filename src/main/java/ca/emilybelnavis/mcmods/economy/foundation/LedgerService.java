@@ -965,7 +965,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         }));
     }
 
-    private static Map<String, TerminalPolicy.Denomination> terminalCatalog() {
+    static Map<String, TerminalPolicy.Denomination> terminalCatalog() {
         return ca.emilybelnavis.mcmods.economy.cash.CashCatalog.all().stream().collect(
                 java.util.stream.Collectors.toUnmodifiableMap(value -> "economy:" + value.id(),
                         value -> new TerminalPolicy.Denomination(value.currency(), value.bill())));

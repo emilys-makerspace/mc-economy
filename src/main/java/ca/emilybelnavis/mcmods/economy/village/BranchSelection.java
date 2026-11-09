@@ -32,12 +32,11 @@ public final class BranchSelection {
         if (uncaptured.captureStatus() != BranchPlans.CaptureStatus.CAPTURE_PENDING)
             throw new IllegalArgumentException("Village is not awaiting capture");
         int count = uncaptured.buildingCount();
-        int slots = count <= 8 ? 1 : count <= 16 ? 2 : 3;
+        int slots = BranchPlans.standardSlotCount(count);
         var branches = new ArrayList<BranchPlans.BranchPlanV1>();
         var used = new HashSet<String>();
         for (int slot = 0; slot < slots; slot++) {
-            boolean required = slot == 0 || count >= 17 && slot == 1;
-            var size = count <= 8 || !required ? BranchPlans.Size.COMPACT : BranchPlans.Size.LARGER;
+            boolean required = slot < Math.min(2, slots);
             int roll = required ? -1 : draw(worldSeed, uncaptured.source(), "optional-roll", slot, 100);
             boolean selected = required || roll < (count <= 16 ? 25 : 50);
             var provider = selected ? selectProvider(snapshot, slot, used, worldSeed, uncaptured.source()) : Optional.<BranchPlans.Provider>empty();
@@ -50,7 +49,7 @@ public final class BranchSelection {
                 reason = slot == 0 ? "NO_LOCAL_PROVIDER" : "NO_DISTINCT_PROVIDER";
             } else { state = BranchPlans.State.OMITTED; reason = "NO_DISTINCT_PROVIDER"; }
             provider.ifPresent(value -> used.add(value.institution()));
-            branches.add(new BranchPlans.BranchPlanV1(slot, required, size,
+            branches.add(new BranchPlans.BranchPlanV1(slot, required, BranchPlans.Size.STANDARD,
                     provider.map(BranchPlans.Provider::institution).orElse(null),
                     provider.map(BranchPlans.Provider::nativeCurrency).orElse(null),
                     null, null, null, null, List.of(), List.of(), List.of(), state, reason, 0, roll));

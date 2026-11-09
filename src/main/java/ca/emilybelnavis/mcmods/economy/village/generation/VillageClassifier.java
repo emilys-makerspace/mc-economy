@@ -14,7 +14,7 @@ import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
 /** Explicit pinned resource manifest. Unknown/replaced/composite elements fail closed for banking only. */
 public final class VillageClassifier {
     private static final JsonObject MANIFEST=load();
-    public static final String REVISION=MANIFEST.get("revision").getAsString()+":banker-desks-v2";
+    public static final String REVISION=MANIFEST.get("revision").getAsString()+":standard-banks-v3";
     public record Result(int buildings,boolean abandoned,boolean supported) {}
     private VillageClassifier(){}
     private static JsonObject load(){

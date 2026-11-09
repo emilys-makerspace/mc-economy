@@ -30,6 +30,10 @@ public final class Branches {
         return new Journal.CanonicalRequest(1,f);
     }
     public static Registration registration(Action action,WorldId world,Authority authority,VillagePlanV1 observed){
+        return registration(action,world,authority,observed,Map.of());
+    }
+    public static Registration registration(Action action,WorldId world,Authority authority,VillagePlanV1 observed,
+                                            Map<String,TerminalPolicy.Denomination> catalog){
         return new Registration(1,(intent,reads)->{
             if(!intent.kind().equals(action.kind())||!authority.allows(intent))return decline("BRANCH_ACCESS");
             if(action==Action.OBSERVE)return observe(world,intent,reads,Objects.requireNonNull(observed));
@@ -42,7 +46,7 @@ public final class Branches {
             }catch(IllegalArgumentException|NullPointerException bad){return reject("BRANCH_REQUEST");}
             if(action==Action.FILL)return fill(world,intent,reads,view);
             if(action==Action.ACTIVATE||action==Action.REMOVE)
-                return hardware(action,world,intent,reads,view);
+                return hardware(action,world,intent,reads,view,catalog);
             if(action==Action.PAUSE){
                 if(!f.keySet().equals(Set.of("branch","revision","paused"))||!Set.of("true","false").contains(f.get("paused")))return reject("BRANCH_REQUEST");
                 boolean paused=Boolean.parseBoolean(f.get("paused"));
@@ -85,7 +89,7 @@ public final class Branches {
         for(var b:plan.branches()){
             var bid=BranchPlans.branchId(id,b.slot());
             for(var a:b.services())if(!a.generation().equals(BranchPlans.generation(bid,a.slot())))return reject("BRANCH_ANCHOR_IDENTITY");
-            for(var a:b.desks())if(!a.generation().equals(BranchPlans.generation(bid,a.slot()+2)))return reject("BRANCH_ANCHOR_IDENTITY");
+            for(var a:b.desks())if(!a.generation().equals(BranchPlans.generation(bid,b.deskGenerationSlot(a.slot()))))return reject("BRANCH_ANCHOR_IDENTITY");
         }
         var records=new ArrayList<Journal.Record>();
         int total=Math.max(1,(encoded.length+8191)/8192);
@@ -107,7 +111,8 @@ public final class Branches {
             }
         });
     }
-    private static Decision hardware(Action action,WorldId world,Journal.Intent intent,ReadView reads,View v) throws Exception {
+    private static Decision hardware(Action action,WorldId world,Journal.Intent intent,ReadView reads,View v,
+                                     Map<String,TerminalPolicy.Denomination> catalog) throws Exception {
         var f=intent.request().fields();
         if(!intent.actor().equals(BranchPlans.owner(v.id()))||!f.keySet().equals(Set.of("branch","revision","slot","generation","terminal_revision")))return decline("BRANCH_ACCESS");
         Map<String,String> row;UUID generation;long expected;
@@ -130,23 +135,25 @@ public final class Branches {
         }else{
             if(!Set.of("PHYSICAL_COMPLETE","ACTIVATION_PENDING").contains(v.state())||!row.get("state").equals("PENDING"))return reject("BRANCH_ACTIVATION_STATE");
             if(v.choice().institution()==null)return reject("BRANCH_PROVIDER_PENDING");
+            int slot=Integer.parseInt(row.get("slot"));
+            var kind=v.choice().services().stream().filter(a->a.slot()==slot).findFirst().orElseThrow().serviceKind();
             if(current==null){
                 if(expected!=0)return reject("TERMINAL_STALE");
-                var inner=inner(intent,TerminalPolicy.Action.PLACE.kind(),TerminalPolicy.placeRequest(anchor,generation,intent.actor(),TerminalPolicy.Kind.KIOSK,null,0));
+                var inner=inner(intent,TerminalPolicy.Action.PLACE.kind(),TerminalPolicy.placeRequest(anchor,generation,intent.actor(),kind,null,0));
                 var d=TerminalPolicy.registration(TerminalPolicy.Action.PLACE,world,Map.of(),(a,i,c,r)->i.equals(inner),(a,r)->false).handler().prepare(inner,reads);
                 if(!(d instanceof Commit c))return d;facts.addAll(c.records());effects.add(c.projections());
-                current=new TerminalPolicy.Snapshot(world,anchor,generation,intent.actor(),TerminalPolicy.Kind.KIOSK,1,true,TerminalPolicy.Settings.disabled());
-            }else if(current.kind()!=TerminalPolicy.Kind.KIOSK||!current.active()||!current.owner().equals(intent.actor())||!current.generation().equals(generation)||current.revision()!=expected||current.binding()!=null&&current.binding().bound())return reject("BRANCH_TERMINAL_CONFLICT");
+                current=new TerminalPolicy.Snapshot(world,anchor,generation,intent.actor(),kind,1,true,TerminalPolicy.Settings.disabled());
+            }else if(current.kind()!=kind||!current.active()||!current.owner().equals(intent.actor())||!current.generation().equals(generation)||current.revision()!=expected||current.binding()!=null&&current.binding().bound())return reject("BRANCH_TERMINAL_CONFLICT");
             var bank=ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.require(new ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId(v.choice().institution()));
-            var d=TerminalBanking.prepareBinding(world,bank,current,reads);
+            var d=TerminalBanking.prepareGeneratedBinding(world,bank,current,reads,catalog);
             if(!(d instanceof Commit c))return d;facts.addAll(c.records());effects.add(c.projections());anchorState="ACTIVE";
         }
         String changed;
         if(action==Action.REMOVE){
             if(Set.of("CONFLICT","PLACING","RESERVED","CAPTURE_PENDING","PROVIDER_PENDING","SITE_PENDING").contains(v.state()))changed=v.state();
             else if(v.anchors().stream().allMatch(a->a==row||a.get("state").equals("REMOVED")))changed="REMOVED";
-            else changed=v.anchors().stream().anyMatch(a->a!=row&&a.get("state").equals("ACTIVE"))?"ACTIVE":"ACTIVATION_PENDING";
-        }else changed=v.anchors().stream().allMatch(a->a==row||a.get("state").equals("ACTIVE"))?"ACTIVE":"ACTIVATION_PENDING";
+            else changed=v.anchors().stream().anyMatch(a->a!=row&&a.get("state").equals("PENDING"))?"ACTIVATION_PENDING":"ACTIVE";
+        }else changed=v.anchors().stream().anyMatch(a->a!=row&&a.get("state").equals("PENDING"))?"ACTIVATION_PENDING":"ACTIVE";
         long terminalRevision=current==null||!current.generation().equals(generation)?Long.parseLong(row.get("terminal_revision")):
                 current.revision()+(action==Action.ACTIVATE||current.active()?1:0);
         var decision=(Commit)transition(world,intent,v,changed,action==Action.REMOVE?"SERVICE_REMOVED":"HARDWARE_ACTIVATED",v.paused(),tx->{
@@ -224,7 +231,7 @@ public final class Branches {
         var placement=BranchPlacement.latestChoice(reads,world,id);
         if(placement.isPresent())choice=placement.get();
         return Optional.of(new View(id,UUID.fromString(row.get("village_id")),slot,row.get("state"),row.get("reason"),Long.parseLong(row.get("revision")),row.get("staffing_paused").equals("1"),plan,
-                reads.query("SELECT * FROM village_branch_anchors WHERE world_id=? AND branch_id=? ORDER BY slot",List.of(world.value().toString(),id.toString()),2),choice));
+                reads.query("SELECT * FROM village_branch_anchors WHERE world_id=? AND branch_id=? ORDER BY slot",List.of(world.value().toString(),id.toString()),3),choice));
     }
 
     public static List<Map<String,String>> page(ReadView reads,WorldId world,String after){

@@ -66,21 +66,24 @@ public final class BankerProbe {
             var rows=rows();int capacity=choice.desks().size();require(capacity>0&&capacity<=2,"bounded generated desk capacity");
             if(rows.size()!=capacity||rows.stream().anyMatch(r->!r.phase().equals("LIVE"))){until=server.getTickCount()+40;stage=2;return false;}
             for(var row:rows)require(level.getEntity(row.employee()) instanceof BankerEntity banker&&banker.assignmentId().equals(row.assignment()),"one actual entity per initial assignment");
-            var expectedFacing = Rotation.values()[choice.transform().quarterTurns()].rotate(Direction.SOUTH);
+            var rotation = Rotation.values()[choice.transform().quarterTurns()];
+            boolean standard = choice.size() == BranchPlans.Size.STANDARD;
             for (var anchor : choice.services()) {
                 var position = new BlockPos(anchor.position().x(), anchor.position().y(), anchor.position().z());
+                var expectedFacing = rotation.rotate(standard && anchor.slot() > 0 ? Direction.EAST : Direction.SOUTH);
                 require(level.getBlockState(position).getValue(ca.emilybelnavis.mcmods.economy.terminal.WideTerminalBlock.FACING) == expectedFacing,
                         "generated console faces the rotated room direction");
             }
             for (var anchor : choice.desks()) {
                 var position = new BlockPos(anchor.position().x(), anchor.position().y(), anchor.position().z());
-                require(level.getBlockState(position).getValue(DeskBlock.FACING) == expectedFacing,
+                require(level.getBlockState(position).getValue(DeskBlock.FACING) == rotation.rotate(standard ? Direction.EAST : Direction.SOUTH),
                         "generated desk faces the rotated room direction");
             }
             var row=rows.getFirst();employee=row.employee();rowRevision=row.revision();var banker=(BankerEntity)level.getEntity(employee);
             boolean compact = choice.size() == BranchPlans.Size.COMPACT;
-            var view = VillageSites.local(choice.transform().origin(), choice.transform().quarterTurns(),
-                    compact ? 11 : 17, compact ? 9 : 11, compact ? 5 : 6, 1, compact ? 3 : 6);
+            var view = standard ? VillageSites.bankRest(choice.transform())
+                    : VillageSites.local(choice.transform().origin(), choice.transform().quarterTurns(),
+                            compact ? 11 : 17, compact ? 9 : 11, compact ? 5 : 6, 1, compact ? 3 : 6);
             double viewX = view.x() + .5;
             double viewZ = view.z() + .5;
             float viewYaw = (float) Math.toDegrees(Math.atan2(-(banker.getX() - viewX), banker.getZ() - viewZ));

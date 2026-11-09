@@ -4,6 +4,7 @@ import ca.emilybelnavis.mcmods.economy.api.EconomyCurrency;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.SystemActorId;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.WorldId;
 import ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog;
+import ca.emilybelnavis.mcmods.economy.journal.TerminalPolicy.Kind;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -37,7 +38,11 @@ public final class BranchPlans {
         CAPTURE_PENDING, PROVIDER_PENDING, SITE_PENDING, RESERVED, PLACING, PHYSICAL_COMPLETE,
         ACTIVATION_PENDING, ACTIVE, REMOVED, CONFLICT, OMITTED
     }
-    public enum Size { COMPACT, LARGER }
+    public enum Size {
+        COMPACT, LARGER, STANDARD;
+
+        public int deskGenerationSlot(int deskSlot) { return this == STANDARD ? 4 : deskSlot + 2; }
+    }
     public enum CaptureStatus { CAPTURE_PENDING, CAPTURED, EXCLUDED }
     public enum ManifestState { PLANNED, COMPLETE, CONFLICT }
 
@@ -97,8 +102,16 @@ public final class BranchPlans {
 
     public record Anchor(int slot, Point position, UUID generation, String geometry) {
         public Anchor {
-            BranchPlans.slot(slot, 2); Objects.requireNonNull(position); Objects.requireNonNull(generation);
+            BranchPlans.slot(slot, 3); Objects.requireNonNull(position); Objects.requireNonNull(generation);
             text(geometry, 128, false);
+        }
+
+        public Kind serviceKind() {
+            return switch (geometry) {
+                case "atm" -> Kind.ATM;
+                case "wide", "narrow" -> Kind.KIOSK;
+                default -> throw new IllegalStateException("Unknown service geometry " + geometry);
+            };
         }
     }
 
@@ -134,7 +147,7 @@ public final class BranchPlans {
                 if (bank.baseCurrency() != nativeCurrency) throw new IllegalArgumentException("Branch native currency");
             }
             if (templateRevision != null) text(templateRevision, 128, false);
-            services = sorted(services, 2, Comparator.comparingInt(Anchor::slot));
+            services = sorted(services, 3, Comparator.comparingInt(Anchor::slot));
             desks = sorted(desks, 2, Comparator.comparingInt(Anchor::slot));
             manifests = sorted(manifests, 1024, Comparator.comparingInt(Manifest::chunkX).thenComparingInt(Manifest::chunkZ));
             distinct(services.stream().map(Anchor::slot).toList(), "service slot");
@@ -157,14 +170,28 @@ public final class BranchPlans {
             };
             if (physical && (institution == null || templateRevision == null || transform == null || bounds == null || entrance == null))
                 throw new IllegalArgumentException("Incomplete physical branch plan");
-            int capacity = size == Size.COMPACT ? 1 : 2;
-            if (services.size() > capacity || desks.size() > capacity
-                    || physical && (services.size() != capacity || desks.size() != capacity))
+            int serviceCapacity = switch (size) {
+                case COMPACT -> 1;
+                case LARGER -> 2;
+                case STANDARD -> 3;
+            };
+            int deskCapacity = size == Size.LARGER ? 2 : 1;
+            if (services.size() > serviceCapacity || desks.size() > deskCapacity
+                    || physical && (services.size() != serviceCapacity || desks.size() != deskCapacity))
                 throw new IllegalArgumentException("Branch anchor capacity");
+            for (var anchor : services) {
+                boolean atm = size == Size.STANDARD && anchor.slot() > 0;
+                if (atm ? !anchor.geometry().equals("atm") : !Set.of("wide", "narrow").contains(anchor.geometry()))
+                    throw new IllegalArgumentException("Branch service geometry");
+            }
             for (var anchor : allAnchors) if (bounds == null || !bounds.contains(anchor.position()))
                 throw new IllegalArgumentException("Anchor outside reservation");
             if (entrance != null && (bounds == null || !bounds.contains(entrance)))
                 throw new IllegalArgumentException("Entrance outside reservation");
+        }
+
+        public int deskGenerationSlot(int deskSlot) {
+            return size.deskGenerationSlot(deskSlot);
         }
     }
 
@@ -241,9 +268,9 @@ public final class BranchPlans {
     public static SystemActorId owner(UUID branchId) {
         return new SystemActorId(identity("economy:a7:owner:v1", out -> uuid(out, branchId)));
     }
-    /** Service anchors use indexes 0/1; reserved desk anchors use indexes 2/3. */
+    /** Legacy desks use indexes 2/3. Standard banks use service indexes 0–2 and desk index 4. */
     public static UUID generation(UUID branchId, int slot) {
-        slot(slot, 4); return identity("economy:a7:anchor:v1", out -> { uuid(out, branchId); out.writeByte(slot); });
+        slot(slot, 5); return identity("economy:a7:anchor:v1", out -> { uuid(out, branchId); out.writeByte(slot); });
     }
     public static UUID operation(UUID branchId, int slot, String action, int effectVersion) {
         slot(slot, 4); text(action, 128, false);
@@ -254,13 +281,14 @@ public final class BranchPlans {
     }
 
     private static void validateChoices(int count, PlanningSnapshotV1 snapshot, List<BranchPlanV1> branches) {
-        int slots = count <= 8 ? 1 : count <= 16 ? 2 : 3;
+        boolean standard = branches.stream().anyMatch(b -> b.size() == Size.STANDARD);
+        int slots = standard ? standardSlotCount(count) : count <= 8 ? 1 : count <= 16 ? 2 : 3;
         if (branches.size() != slots) throw new IllegalArgumentException("Village slot count");
         var used = new HashSet<String>();
         for (int index = 0; index < slots; index++) {
             var branch = branches.get(index);
-            boolean required = index == 0 || count >= 17 && index == 1;
-            Size size = count <= 8 || !required ? Size.COMPACT : Size.LARGER;
+            boolean required = standard ? index < Math.min(2, slots) : index == 0 || count >= 17 && index == 1;
+            Size size = standard ? Size.STANDARD : count <= 8 || !required ? Size.COMPACT : Size.LARGER;
             if (branch.slot() != index || branch.required() != required || branch.size() != size)
                 throw new IllegalArgumentException("Village slot semantics");
             if (required && branch.optionalRoll() != -1 || !required && branch.optionalRoll() < 0)
@@ -288,6 +316,7 @@ public final class BranchPlans {
             }
         }
     }
+    static int standardSlotCount(int buildingCount) { return buildingCount <= 8 ? 1 : 3; }
     private static boolean indexNotPrimary(BranchPlanV1 branch) { return branch.slot() != 0; }
     private static JsonElement canonical(JsonElement value) {
         if (value.isJsonObject()) {

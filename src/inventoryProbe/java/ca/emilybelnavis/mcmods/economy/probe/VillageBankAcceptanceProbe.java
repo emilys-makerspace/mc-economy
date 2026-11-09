@@ -103,7 +103,7 @@ public final class VillageBankAcceptanceProbe {
                     }
                 }
                 require(plan!=null,"natural savanna source metadata");
-                choice=plan.branches().stream().filter(b->b.state()==BranchPlans.State.RESERVED&&b.desks().size()==2).findFirst().orElseThrow(()->new IllegalStateException("natural two-desk reserved branch missing"));
+                choice=plan.branches().stream().filter(b->b.state()==BranchPlans.State.RESERVED&&b.slot()==0).findFirst().orElseThrow(()->new IllegalStateException("natural primary bank reservation missing"));
                 branch=BranchPlans.branchId(BranchPlans.id(services.worldId(),plan.source()),choice.slot());
                 if(restart())require(expected.get("branch").equals(branch.toString())&&expected.get("planDigest").equals(plan.digest())&&expected.get("world").equals(services.worldId().value().toString()),"same captured branch/world");
                 for(var manifest:choice.manifests())for(int dx=-2;dx<=2;dx++)for(int dz=-2;dz<=2;dz++) {
@@ -136,7 +136,7 @@ public final class VillageBankAcceptanceProbe {
             // Require physical staffing before direct kiosk use; restart also checks saved identities.
             case 4-> {
                 employees=staffRows();
-                if(employees.size()!=2||(!restart()&&employees.stream().anyMatch(r->!r.phase().equals("LIVE")))) {
+                if(employees.size()!=1||(!restart()&&employees.stream().anyMatch(r->!r.phase().equals("LIVE")))) {
                     stage=2;
                     waitUntilTick=server.getTickCount()+40;
                     break;

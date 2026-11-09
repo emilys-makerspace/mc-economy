@@ -1,29 +1,22 @@
 # Village bank templates
 
-Original mid-century modern bank buildings created with the connected GenMC studio,
-following the approved reference in thread `01a1b341-0a81-7fa0-9812-17c9ca0c1da5`.
-The original design and generated structure assets are dedicated under CC0-1.0;
-Minecraft block names are references to game assets, which are not redistributed here.
+New village banks use the supplied Crownstone structure for all biomes. The
+packaged Crownstone NBT is the canonical 17×15×17 template. Its structure block
+export included two empty layers above the roof, which the converter trims. A
+cobblestone threshold at the west edge connects the building floor to generated
+paths. Grass blocks line all four sides of the base up to the entrance threshold.
+The source world's hardware ownership and placement records are cleared
+so each generated branch can register its own terminals and banker.
 
-`genmc/projects.json` records the reference and five private studio collections.
-Each collection contains compact and larger branches for all 23 institutions.
-The adjacent JavaScript programs and compressed JSON exports retain their source.
-No studio pairing credentials are included.
+Run `python3 tools/village-banks/export_templates.py` from the repository to
+regenerate all 23 variants and the SHA-256 manifest from the packaged template.
+Pass the path to a new Crownstone NBT export to refresh the source template.
+Each variant uses the institution's established dye colors for the blue and
+yellow wool and carpet positions. The two ATMs and wide kiosk use the same
+institution's registered hardware states. The shared banker desk supplies one
+staffing slot per branch.
 
-Run `python3 tools/village-banks/export_templates.py` from the repository to convert
-the exact studio block exports into 230 standard structure NBT files and their
-SHA-256 manifest. The converter crops/translates exported geometry, inserts the
-registered wide Economy kiosk blocks in reserved service bays and writes bank sign
-text. It does not invent replacement building geometry.
-
-Plains uses oak, desert jungle, savanna acacia, snowy spruce and taiga spruce.
-Every branch has glazing, a flat roof, institution colors, a geometric roof mark,
-lighting, furniture and a bed. Compact branches reserve one kiosk and one desk;
-larger branches reserve two of each. The converter installs real banker desks and
-rotates both desks and consoles to local south. Their anchors switch columns within
-the two-block bays, with coordinates recorded in the manifest.
-
-Templates are 11×8×9 or 17×9×11, including explicit interior air. Runtime generation
-rotates their states and anchors together, validates supports and connects paths.
-The GenMC scene uses clear service bays because its renderer lacks mod block IDs;
-the shipped NBT contains real kiosks rather than colored machine placeholders.
+The historical GenMC source exports are preserved in `genmc/`. Their facade
+trim supplies the established dye names for the other institutions. Crownstone
+uses the supplied blue and yellow colors. The original GenMC designs and source
+exports are dedicated under CC0-1.0.

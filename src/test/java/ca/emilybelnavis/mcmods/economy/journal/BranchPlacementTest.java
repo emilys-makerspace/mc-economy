@@ -29,16 +29,19 @@ class BranchPlacementTest {
             var observe=new Intent(new OperationId(UUID.randomUUID()),new RequestId(UUID.randomUUID()),BranchPlans.owner(BranchPlans.id(w,source)),Branches.Action.OBSERVE.kind(),Branches.observeRequest(plan),null,null);
             var observed=new JournalEngine(store,(actor,kind)->true,Map.of(observe.kind(),Branches.registration(Branches.Action.OBSERVE,w,i->i.equals(observe),plan))).submit(observe);
             assertEquals(Status.COMMITTED,observed.status());
-            var choice=new BranchPlanV1(0,true,Size.COMPACT,bank.id().key(),bank.baseCurrency(),"mid-century-v1",new Transform(new Point(30,64,30),0),
-                    new Bounds(30,64,30,40,71,38),new Point(35,65,30),List.of(new Anchor(0,new Point(32,65,32),BranchPlans.generation(branch,0),"wide")),
-                    List.of(new Anchor(0,new Point(37,65,35),BranchPlans.generation(branch,2),"reserved-desk")),List.of(),State.RESERVED,"SITE_RESERVED",1,-1);
+            var choice=new BranchPlanV1(0,true,Size.STANDARD,bank.id().key(),bank.baseCurrency(),"economy:banks/crownstone",
+                    new Transform(new Point(30,64,30),0),new Bounds(30,58,30,46,79,46),new Point(38,65,30),
+                    List.of(new Anchor(0,new Point(32,65,32),BranchPlans.generation(branch,0),"wide"),
+                            new Anchor(1,new Point(34,65,32),BranchPlans.generation(branch,1),"atm"),
+                            new Anchor(2,new Point(36,65,32),BranchPlans.generation(branch,2),"atm")),
+                    List.of(new Anchor(0,new Point(37,65,42),BranchPlans.generation(branch,4),"desk")),List.of(),State.RESERVED,"SITE_RESERVED",1,-1);
             assertEquals(Status.NOT_ACCEPTED,submit(store,BranchPlacement.Action.RESERVE,branch,1,operation,choice,false).status());
             assertEquals("SITE_PENDING",view(store,branch).state());
             var reserved=submit(store,BranchPlacement.Action.RESERVE,branch,1,operation,choice,true);
             assertEquals(Status.COMMITTED,reserved.status());
             assertEquals(captured,view(store,branch).plan().digest());
             assertEquals(choice,store.transaction(tx->BranchPlacement.latestChoice(tx::query,w,branch)).orElseThrow());
-            assertEquals(1,view(store,branch).anchors().size());
+            assertEquals(3,view(store,branch).anchors().size());
             assertEquals(Status.COMMITTED,submit(store,BranchPlacement.Action.START,branch,2,operation,null,true).status());
             assertEquals("PLACING",view(store,branch).state());
             assertEquals(Status.COMMITTED,submit(store,BranchPlacement.Action.FAIL,branch,3,operation,null,true).status());

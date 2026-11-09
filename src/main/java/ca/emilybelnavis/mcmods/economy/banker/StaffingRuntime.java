@@ -11,6 +11,7 @@ import ca.emilybelnavis.mcmods.economy.foundation.*;
 import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.terminal.*;
 import ca.emilybelnavis.mcmods.economy.village.*;
+import ca.emilybelnavis.mcmods.economy.village.generation.VillageSites;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -283,9 +284,12 @@ public final class StaffingRuntime {
         if(!(entity.level() instanceof ServerLevel level)||!entity.assigned())return;var server=level.getServer();watch(server,entity.branchId());var s=SESSIONS.get(server);var b=s.branches.get(entity.branchId());var w=b==null?null:b.slots.get(entity.deskSlot());
         if(w==null||w.row==null||!identity(entity,w.row)||!w.row.phase().equals("LIVE")||!active(w)||!deskValid(server,w)||level(server,w)!=level){entity.workTarget(null,null,false);return;}
         if(entity.assignmentRevision()<w.row.revision())entity.assignmentRevision(w.row.revision());
-        var a=anchor(w);var work=standing(server,w);var c=b.view.choice();var origin=c.transform().origin();int turn=c.transform().quarterTurns();
-        int bx=c.size()==BranchPlans.Size.COMPACT?2:w.index==0?5:10,bz=c.size()==BranchPlans.Size.COMPACT?7:9;
-        var rest=ca.emilybelnavis.mcmods.economy.village.generation.VillageSites.local(origin,turn,c.size()==BranchPlans.Size.COMPACT?11:17,c.size()==BranchPlans.Size.COMPACT?9:11,bx,1,bz);
+        var work=standing(server,w);var c=b.view.choice();var transform=c.transform();
+        var rest=switch(c.size()){
+            case STANDARD -> VillageSites.bankRest(transform);
+            case COMPACT -> VillageSites.local(transform.origin(),transform.quarterTurns(),11,9,2,1,7);
+            case LARGER -> VillageSites.local(transform.origin(),transform.quarterTurns(),17,11,w.index==0?5:10,1,9);
+        };
         entity.workTarget(work,pos(rest),true);
     }
     public static Optional<Context> context(ServerPlayer player,BankerEntity entity){
@@ -293,7 +297,7 @@ public final class StaffingRuntime {
         if(svc==null||s==null||!player.isAlive()||!entity.isAlive()||server.getPlayerList().getPlayer(player.getUUID())!=player||player.serverLevel()!=entity.level()||player.distanceToSqr(entity)>36||!entity.assigned())return Optional.empty();
         var b=s.branches.get(entity.branchId());var w=b==null?null:b.slots.get(entity.deskSlot());
         if(w==null||w.row==null||!w.row.phase().equals("LIVE")||!identity(entity,w.row)||entity.assignmentRevision()!=w.row.revision()||!active(w)||!deskValid(server,w)||level(server,w)!=player.serverLevel())return Optional.empty();
-        var kiosk=b.view.choice().services().stream().map(a->pos(a.position())).filter(p->player.serverLevel().getChunkSource().getChunkNow(p.getX()>>4,p.getZ()>>4)!=null).filter(p->player.serverLevel().getBlockEntity(p) instanceof TerminalBlockEntity e&&e.policyReady()&&b.id.equals(e.branchId())&&TerminalGeometry.matches(player.serverLevel(),p,e.generation())).min(Comparator.comparingDouble(p->player.position().distanceToSqr(p.getX()+.5,p.getY()+.5,p.getZ()+.5))).orElse(null);
+        var kiosk=b.view.choice().services().stream().filter(a->a.serviceKind()==TerminalPolicy.Kind.KIOSK).map(a->pos(a.position())).filter(p->player.serverLevel().getChunkSource().getChunkNow(p.getX()>>4,p.getZ()>>4)!=null).filter(p->player.serverLevel().getBlockEntity(p) instanceof TerminalBlockEntity e&&e.policyReady()&&b.id.equals(e.branchId())&&TerminalGeometry.matches(player.serverLevel(),p,e.generation())).min(Comparator.comparingDouble(p->player.position().distanceToSqr(p.getX()+.5,p.getY()+.5,p.getZ()+.5))).orElse(null);
         return Optional.of(new Context(b.id,b.view.choice().institution(),b.view.choice().nativeCurrency(),pos(anchor(w).position()),kiosk,b.view.revision(),w.row.assignment(),w.row.revision()));
     }
     public static boolean openBanking(ServerPlayer player,BankerEntity entity){

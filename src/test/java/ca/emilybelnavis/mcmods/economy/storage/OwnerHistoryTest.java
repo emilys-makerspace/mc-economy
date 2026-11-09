@@ -51,7 +51,7 @@ class OwnerHistoryTest {
             var retained = reopened.transaction(tx->OwnerHistory.page(tx::query,owner,
                     new OwnerHistory.Query(account.value(),CAD,null,null,OwnerHistory.Type.TRANSFER,2),frozen,null));
             assertEquals(first.rows(),retained.rows());
-            assertEquals(53,reopened.snapshot().schemaVersion());
+            assertEquals(SchemaMigrations.CURRENT,reopened.snapshot().schemaVersion());
         } finally { reopened.close(); }
         try(var connection=DriverManager.getConnection("jdbc:sqlite:"+world.resolve("economy/economy.sqlite"))) {
             OwnerHistorySchema.validateFacts(connection);
@@ -88,7 +88,12 @@ class OwnerHistoryTest {
         // Simulate an actual stopped V52 source, retaining every original journal fact and identity.
         try(var connection=DriverManager.getConnection("jdbc:sqlite:"+world.resolve("economy/economy.sqlite"));var sql=connection.createStatement()) {
             sql.execute("DROP TABLE owner_history");sql.execute("DROP TABLE owner_history_state");
-            sql.execute("DELETE FROM migration_history WHERE version=53");sql.execute("UPDATE foundation_metadata SET schema_version=52 WHERE singleton=1");sql.execute("PRAGMA user_version=52");
+            sql.execute("DROP TABLE village_branch_anchors");
+            for(var statement:VillageBranchSchema.statements()){
+                if(statement.startsWith("CREATE TABLE village_branch_anchors(")||statement.startsWith("CREATE INDEX village_anchor_location "))
+                    sql.execute(statement);
+            }
+            sql.execute("DELETE FROM migration_history WHERE version>52");sql.execute("UPDATE foundation_metadata SET schema_version=52 WHERE singleton=1");sql.execute("PRAGMA user_version=52");
         }
         Files.writeString(world.resolve("level.dat"),"disposable complete-world fixture");UpgradeBackup.prepare(world);
         var partial=new SqliteStorage();

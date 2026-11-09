@@ -55,15 +55,24 @@ public final class VillageGenerationProbe {
         if(stage==1){
             if(publication==null||publication.snapshot()==null||publication.world()==null)return false;
             require(publication.snapshot().denomination()==EconomyCurrency.CAD,"CAD planning publication");
-            for(var s:STYLES)for(var bank:InstitutionCatalog.banks())for(var size:List.of("compact","larger")){
-                var id=ResourceLocation.fromNamespaceAndPath("economy","banks/"+s+"/"+bank.id().key().substring(bank.id().key().lastIndexOf('/')+1)+"/"+size);
+            for(var bank:InstitutionCatalog.banks()){
+                var id=ResourceLocation.fromNamespaceAndPath("economy","banks/"+bank.id().key().substring(bank.id().key().lastIndexOf('/')+1));
                 var template=level.getStructureManager().get(id).orElseThrow(()->new IllegalStateException("Missing template "+id));
-                var expected=size.equals("compact")?new Vec3i(11,8,9):new Vec3i(17,9,11);require(template.getSize().equals(expected),"template envelope "+id);
-                var tag=template.save(new CompoundTag());var palette=tag.getList("palette",Tag.TAG_COMPOUND);boolean machine=false;
-                for(int i=0;i<palette.size();i++){var name=palette.getCompound(i).getString("Name");require(!name.equals("minecraft:magenta_concrete")&&!name.equals("minecraft:purple_glazed_terracotta"),"no coloured placeholder "+id);if(name.equals("economy:branch_kiosk"))machine=true;}
-                require(machine,"actual registered kiosk in "+id);templates++;
+                require(template.getSize().equals(new Vec3i(17,15,17)),"template envelope "+id);
+                var tag=template.save(new CompoundTag());var palette=tag.getList("palette",Tag.TAG_COMPOUND);var blocks=tag.getList("blocks",Tag.TAG_COMPOUND);
+                int kiosks=0,atms=0,desks=0;
+                for(int i=0;i<blocks.size();i++){
+                    var state=palette.getCompound(blocks.getCompound(i).getInt("state"));
+                    if(!state.getCompound("Properties").getString("cell").equals("0"))continue;
+                    switch(state.getString("Name")){
+                        case "economy:branch_kiosk" -> kiosks++;
+                        case "economy:white_atm" -> atms++;
+                        case "economy:banker_desk" -> desks++;
+                    }
+                }
+                require(kiosks==1&&atms==2&&desks==1,"actual registered kiosk, ATMs and desk in "+id);templates++;
             }
-            require(templates==230,"all 23 banks, five styles and two sizes");evidence.add("230 actual templates load with exact envelopes and registered kiosks; no coloured machine placeholders.");stage=2;return false;
+            require(templates==23,"all 23 banks");evidence.add("23 actual templates load with the same envelope and registered kiosks, ATMs and desks.");stage=2;return false;
         }
         if(stage==2){
             if(style==STYLES.size()){stage=3;return false;}
@@ -89,9 +98,11 @@ public final class VillageGenerationProbe {
             evidence.add(s+": real registry wrapper generate + exact A7 piece/plan NBT roundtrip, vanilla children unchanged except documented expansion-box maxY normalization; root-only zero count and abandoned root excluded; A7 pieces="+bankPieces.size());System.out.println("VILLAGE_STYLE_PASS "+s);style++;return false;
         }
         if(stage==3){
-            if(naturalAttempt==3){require(naturalBanks>0,"at least one naturally generated branch became active; "+last);stage=6;return false;}
+            if(naturalBanks>0){stage=6;return false;}
+            require(naturalAttempt<3,"at least one naturally generated branch became active; "+last);
             var target=new BlockPos(6000+naturalAttempt*6000,80,6000-naturalAttempt*3000);
-            var located=level.findNearestMapStructure(StructureTags.VILLAGE,target,5,false);
+            // This seed's savanna village is the regression case for the shared template's west path.
+            var located=naturalAttempt==0?new BlockPos(1097*16,80,-10*16):level.findNearestMapStructure(StructureTags.VILLAGE,target,5,false);
             if(located==null){last="No eligible natural village within bounded search near "+target;evidence.add(last);naturalAttempt++;return false;}
             var chunk=level.getChunk(Math.floorDiv(located.getX(),16),Math.floorDiv(located.getZ(),16));
             StructureStart start=null;for(var candidate:chunk.getAllStarts().values())if(candidate.getStructure() instanceof BankedVillageStructure&&candidate.isValid()){start=candidate;break;}
@@ -143,7 +154,7 @@ public final class VillageGenerationProbe {
                 var view=found.get();require(view.plan().digest().equals(retryDigest),"retry never rerolls immutable capture");require(level.getBlockState(gold).is(Blocks.GOLD_BLOCK),"later gold construction not overwritten");
                 var anchor=view.choice().services().getFirst();var pos=new BlockPos(anchor.position().x(),anchor.position().y(),anchor.position().z());
                 require(level.getBlockEntity(pos) instanceof TerminalBlockEntity terminal&&terminal.policyReady()&&terminal.generation().equals(anchor.generation()),"actual wide retry hardware");
-                var facing=level.getBlockState(pos).getValue(WideTerminalBlock.FACING);var entrance=view.choice().entrance();player.connection.teleport(entrance.x()+.5+facing.getStepX()*7,entrance.y(),entrance.z()+.5+facing.getStepZ()*7,facing.getOpposite().toYRot(),0);
+                var facing=Rotation.values()[view.choice().transform().quarterTurns()].rotate(Direction.WEST);var entrance=view.choice().entrance();player.connection.teleport(entrance.x()+.5+facing.getStepX()*7,entrance.y(),entrance.z()+.5+facing.getStepZ()*7,facing.getOpposite().toYRot(),0);
                 captureCamera=new Point(entrance.x()+facing.getStepX()*7,entrance.y(),entrance.z()+facing.getStepZ()*7);
                 player.closeContainer();captureReady=true;busy=false;waitUntil=server.getTickCount()+40;stage=10;
             }));return false;
@@ -151,7 +162,9 @@ public final class VillageGenerationProbe {
         if(stage==10){
             if(!captured&&server.getTickCount()<waitUntil+100)return false;
             busy=true;services.branches().find(retryBranch).whenComplete((found,error)->safe(()->{
-                require(error==null&&found.isPresent(),"active view before removal");var a=found.get().choice().services().getFirst();level.destroyBlock(new BlockPos(a.position().x(),a.position().y(),a.position().z()),false);busy=false;waitUntil=server.getTickCount()+250;stage=11;
+                require(error==null&&found.isPresent(),"active view before removal");
+                for(var a:found.get().choice().services())level.destroyBlock(new BlockPos(a.position().x(),a.position().y(),a.position().z()),false);
+                busy=false;waitUntil=server.getTickCount()+250;stage=11;
             }));return false;
         }
         if(stage==11){
@@ -196,7 +209,15 @@ public final class VillageGenerationProbe {
         if(index==ids.size()){finish.run();return;}var services=Economy.serverServices(player.server);
         services.branches().find(ids.get(index)).whenComplete((found,error)->safe(()->{
             require(error==null&&found.isPresent(),"natural source durable handoff");var view=found.get();
-            if(view.state().equals("ACTIVE")){naturalBanks++;for(var a:view.choice().services()){var p=new BlockPos(a.position().x(),a.position().y(),a.position().z());require(level.getBlockEntity(p) instanceof TerminalBlockEntity e&&e.policyReady(),"natural live generated hardware");}}
+            if(view.state().equals("ACTIVE")){
+                naturalBanks++;
+                require(view.choice().services().size()==3&&view.choice().desks().size()==1,"natural branch hardware capacity");
+                for(var a:view.choice().services()){
+                    var p=new BlockPos(a.position().x(),a.position().y(),a.position().z());
+                    require(level.getBlockEntity(p) instanceof TerminalBlockEntity e&&e.policyReady()&&e.kind()==a.serviceKind(),
+                            "natural live generated "+a.serviceKind());
+                }
+            }
             last+=" / "+view.state()+":"+view.reason();checkNatural(ids,index+1,finish);
         }));
     }

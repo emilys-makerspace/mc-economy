@@ -3,6 +3,7 @@ package ca.emilybelnavis.mcmods.economy.terminal;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.foundation.BranchService;
 import ca.emilybelnavis.mcmods.economy.foundation.ServerServices;
+import ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog;
 import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.village.BranchPlans;
 import java.util.*;
@@ -18,6 +19,8 @@ public final class BranchBootstrap {
         final Key key;
         final AtomicBoolean live=new AtomicBoolean(true);
         BranchService.Pending prepared;
+        BranchPlans.Anchor activationAnchor;
+        int activationBrand;
         boolean busy;
         long retry;
         Pending(Key key){this.key=key;}
@@ -49,15 +52,30 @@ public final class BranchBootstrap {
     private static TerminalBlockEntity live(MinecraftServer server,Key key){
         var level=level(server,key.anchor());var pos=new BlockPos(key.anchor().x(),key.anchor().y(),key.anchor().z());
         return level!=null&&level.hasChunkAt(pos)&&level.getBlockEntity(pos) instanceof TerminalBlockEntity entity
-                &&entity.kind()==TerminalPolicy.Kind.KIOSK&&key.branch().equals(entity.branchId())&&key.generation().equals(entity.generation())&&entity.validIdentity()
+                &&(entity.kind()==TerminalPolicy.Kind.KIOSK||entity.kind()==TerminalPolicy.Kind.ATM)
+                &&key.branch().equals(entity.branchId())&&key.generation().equals(entity.generation())&&entity.validIdentity()
                 &&TerminalGeometry.matches(level,pos,key.generation())?entity:null;
     }
+    private static boolean matchesActivation(Pending pending,TerminalBlockEntity entity){
+        if(entity==null)return false;
+        var planned=pending.activationAnchor;
+        if(planned==null)return true;
+        var state=entity.getBlockState();
+        if(entity.kind()!=planned.serviceKind())return false;
+        if(state.getBlock() instanceof BranchKioskBlock
+                &&state.getValue(BranchKioskBlock.WIDE)!=planned.geometry().equals("wide"))return false;
+        if(pending.activationBrand==0)return true;
+        var level=entity.getLevel();
+        return TerminalGeometry.cells(entity.getBlockPos(),state).stream().allMatch(
+                p->level.getBlockState(p).getValue(WideTerminalBlock.BANK)==pending.activationBrand);
+    }
     public static void revalidate(MinecraftServer server){
-        var session=SESSIONS.get(server);if(session!=null)for(var p:session.queue.values())if(!p.key.removal()&&live(server,p.key)==null)p.live.set(false);
+        var session=SESSIONS.get(server);
+        if(session!=null)for(var p:session.queue.values())if(!p.key.removal()&&!matchesActivation(p,live(server,p.key)))p.live.set(false);
     }
     public static void tick(MinecraftServer server){
         var session=SESSIONS.computeIfAbsent(server,s->new Session());session.tick++;
-        for(var p:session.queue.values())if(!p.key.removal()&&live(server,p.key)==null)p.live.set(false);
+        revalidate(server);
         var services=Economy.serverServices(server);
         if(services==null||services.state()!=ServerServices.State.READY)return;
         for(var removal:TerminalRemovals.get(server).branchPage(16))enqueue(server,new Key(removal.branch(),removal.anchor(),removal.generation(),true));
@@ -111,18 +129,20 @@ public final class BranchBootstrap {
                     if(!p.key.removal()){
                         var entity=live(server,p.key);
                         if(entity==null||!p.live.get()){session.queue.remove(p.key);return;}
+                        var planned=view.choice().services().stream().filter(a->a.slot()==Integer.parseInt(row.get("slot"))).findFirst().orElseThrow();
                         boolean ready=!Set.of("CONFLICT","REMOVED","PLACING","RESERVED").contains(view.state())&&row.get("state").equals("ACTIVE")
-                                &&current!=null&&current.active()&&current.generation().equals(p.key.generation())&&current.binding()!=null&&current.binding().bound()
+                                &&entity.kind()==planned.serviceKind()&&current!=null&&current.kind()==planned.serviceKind()
+                                &&current.active()&&current.generation().equals(p.key.generation())&&current.binding()!=null&&current.binding().bound()
                                 &&view.choice().institution()!=null&&current.binding().institution().key().equals(view.choice().institution());
                         if(ready){entity.applyPolicy(current);entity.setPolicyReady(true);session.queue.remove(p.key);return;}
                         entity.setPolicyReady(false);
                         if(!Set.of("PHYSICAL_COMPLETE","ACTIVATION_PENDING").contains(view.state())||!row.get("state").equals("PENDING")){session.queue.remove(p.key);return;}
-                        var planned=view.choice().services().stream().filter(a->a.slot()==Integer.parseInt(row.get("slot"))).findFirst().orElseThrow();
-                        var physical=entity.getBlockState();
-                        boolean wide=physical.getBlock() instanceof BranchKioskBlock && physical.getValue(BranchKioskBlock.WIDE);
-                        if (!(planned.geometry().equals("wide") && wide || planned.geometry().equals("narrow") && !wide)) {
-                            session.queue.remove(p.key);return;
+                        p.activationAnchor=planned;
+                        if(view.choice().size()==BranchPlans.Size.STANDARD){
+                            var bank=InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(view.choice().institution()));
+                            p.activationBrand=InstitutionCatalog.banks().indexOf(bank)+1;
                         }
+                        if(!matchesActivation(p,entity)){session.queue.remove(p.key);return;}
                     }
                     long revision=current==null?0:current.revision();
                     p.prepared=services.branches().hardware(view,Integer.parseInt(row.get("slot")),p.key.generation(),revision,p.key.removal(),p.live);

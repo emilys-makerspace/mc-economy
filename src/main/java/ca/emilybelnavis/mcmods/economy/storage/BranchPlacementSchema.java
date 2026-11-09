@@ -51,10 +51,12 @@ public final class BranchPlacementSchema {
                     }
                     if(!BranchPlans.branchId(BranchPlans.id(new WorldId(UUID.fromString(world)),plan.source()),original.slot()).equals(branch)
                             ||r.getLong("attempt")<1||r.getLong("source_revision")<1||r.getLong("source_revision")>=r.getLong("branch_revision")
-                            ||choice.state()!=BranchPlans.State.RESERVED||choice.slot()!=original.slot()||choice.size()!=original.size()||choice.required()!=original.required()
+                            ||choice.state()!=BranchPlans.State.RESERVED||choice.slot()!=original.slot()||choice.required()!=original.required()
+                            ||choice.size()!=original.size()&&(choice.size()!=BranchPlans.Size.STANDARD||original.bounds()!=null)
                             ||choice.optionalRoll()!=original.optionalRoll()||!Objects.equals(choice.institution(),institution)||choice.nativeCurrency()!=currency
                             ||!Set.of("RESERVED","PLACING","PHYSICAL_COMPLETE","CONFLICT").contains(r.getString("phase")))throw new IllegalArgumentException("Placement capture mismatch");
                     for(var a:choice.services())if(!a.generation().equals(BranchPlans.generation(branch,a.slot())))throw new IllegalArgumentException("Placement generation");
+                    for(var a:choice.desks())if(!a.generation().equals(BranchPlans.generation(branch,choice.deskGenerationSlot(a.slot()))))throw new IllegalArgumentException("Placement desk generation");
                     if(!operation.toString().equals(r.getString("operation_id")))throw new IllegalArgumentException("Placement operation");
                 }catch(RuntimeException bad){throw new SQLException("Invalid placement attempt",bad);}
             }

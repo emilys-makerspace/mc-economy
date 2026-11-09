@@ -112,8 +112,9 @@ public final class BranchService {
     private UUID operation(Branches.View view,String action){return BranchPlans.operation(view.id(),0,action+"/"+view.revision(),1);}
     private Pending prepare(Branches.Action action,ActorId actor,UUID operation,Journal.CanonicalRequest request,AtomicBoolean live,VillagePlanV1 plan){
         var intent=new Journal.Intent(new OperationId(operation),new RequestId(operation),actor,action.kind(),request,null,null);
+        var catalog=action==Branches.Action.ACTIVATE?LedgerService.terminalCatalog():Map.<String,TerminalPolicy.Denomination>of();
         var journal=services.journal((who,kind)->who.equals(actor)&&kind.equals(action.kind()),Map.of(action.kind(),
-                Branches.registration(action,services.worldId(),candidate->live.get()&&candidate.equals(intent),plan)),null);
+                Branches.registration(action,services.worldId(),candidate->live.get()&&candidate.equals(intent),plan,catalog)),null);
         return new Pending(journal,intent);
     }
 }

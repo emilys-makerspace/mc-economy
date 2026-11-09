@@ -20,6 +20,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class BranchesTest {
     @TempDir Path world;
     private static final String LOCAL = InstitutionCatalog.banks().getFirst().id().key();
+    private static final Map<String, TerminalPolicy.Denomination> CASH = Map.of(
+            "economy:cad_bill_10", new TerminalPolicy.Denomination(EconomyCurrency.CAD, true),
+            "economy:chf_bill_10", new TerminalPolicy.Denomination(EconomyCurrency.CHF, true),
+            "economy:cad_coin_5", new TerminalPolicy.Denomination(EconomyCurrency.CAD, false),
+            "economy:chf_coin_5", new TerminalPolicy.Denomination(EconomyCurrency.CHF, false));
 
     @Test void activationIsNativeAtomicReplayableAndRemovalNeverRevivesIt() throws Exception {
         Intent activation;
@@ -155,6 +160,75 @@ class BranchesTest {
         }
     }
 
+    @Test void standardBranchesCommissionBothAtmsForTheirOwnBankCurrency() throws Exception {
+        var source = new Source("minecraft:overworld", "minecraft:village_plains", 0, 0);
+        var local = InstitutionCatalog.banks().getFirst();
+        var foreign = InstitutionCatalog.banks().stream().filter(b -> b.baseCurrency() == EconomyCurrency.CHF).findFirst().orElseThrow();
+        UUID village;
+        try (var fixture = new Fixture(open())) {
+            var store = fixture.store();
+            var worldId = store.snapshot().worldId();
+            village = BranchPlans.id(worldId, source);
+            var captured = plan(source, 10, snapshot(List.of(
+                    new Provider(local.id().key(), local.baseCurrency(), true),
+                    new Provider(foreign.id().key(), foreign.baseCurrency(), true))), List.of(
+                    standardBranch(village, 0, local),
+                    standardBranch(village, 1, foreign),
+                    pending(2, false, Size.STANDARD, null, null, State.OMITTED, "NOT_SELECTED", 99)));
+            observe(store, captured);
+            for (var choice : captured.branches().subList(0, 2)) {
+                var branch = BranchPlans.branchId(village, choice.slot());
+                assertEquals(3, view(store, branch).anchors().size());
+                progress(store, branch, 1, "PLACING", "INITIAL_PLACEMENT");
+                progress(store, branch, 2, "PHYSICAL_COMPLETE", "CHUNK_RECEIPTS_MATCH");
+                for (var service : choice.services()) {
+                    var activation = intent(Branches.Action.ACTIVATE, BranchPlans.owner(branch),
+                            Branches.request(branch, 3 + service.slot(), Map.of("slot", Integer.toString(service.slot()),
+                                    "generation", service.generation().toString(), "terminal_revision", "0")));
+                    assertEquals(Status.COMMITTED, engine(store, Branches.Action.ACTIVATE, activation, null, () -> true).submit(activation).status());
+                }
+                assertEquals("ACTIVE", view(store, branch).state());
+            }
+        }
+        try (var fixture = new Fixture(open())) {
+            var store = fixture.store();
+            for (int slot = 0; slot < 2; slot++) {
+                var branch = BranchPlans.branchId(village, slot);
+                var choice = view(store, branch).choice();
+                for (var service : choice.services()) {
+                    var point = service.position();
+                    var at = new TerminalPolicy.Anchor(source.dimension(), point.x(), point.y(), point.z());
+                    var terminal = terminal(store, at, BranchPlans.owner(branch));
+                    assertEquals(choice.institution(), terminal.binding().institution().key());
+                    assertEquals(choice.nativeCurrency(), terminal.binding().nativeCurrency());
+                    if (service.slot() == 0) {
+                        assertEquals(TerminalPolicy.Kind.KIOSK, terminal.kind());
+                        assertEquals(TerminalPolicy.Settings.disabled(), terminal.settings());
+                    } else {
+                        assertEquals(TerminalPolicy.Kind.ATM, terminal.kind());
+                        assertEquals(TerminalPolicy.Mode.BOTH, terminal.settings().mode());
+                        assertEquals(Set.of(choice.nativeCurrency()), terminal.settings().currencies());
+                        assertEquals(Set.of(choice.nativeCurrency() == EconomyCurrency.CAD
+                                ? "economy:cad_bill_10" : "economy:chf_bill_10"), terminal.settings().denominations());
+                    }
+                }
+            }
+        }
+    }
+
+    private static BranchPlanV1 standardBranch(UUID village, int slot, InstitutionCatalog.Entry bank) {
+        var branch = BranchPlans.branchId(village, slot);
+        int x = 24 + 18 * slot;
+        return new BranchPlanV1(slot, true, Size.STANDARD, bank.id().key(), bank.baseCurrency(),
+                "economy:banks/" + bank.id().key().substring(bank.id().key().lastIndexOf('/') + 1),
+                new Transform(new Point(x, 63, 24), 0), new Bounds(x, 57, 24, x + 16, 78, 40), new Point(x + 8, 64, 24),
+                List.of(new Anchor(0, new Point(x + 2, 64, 27), BranchPlans.generation(branch, 0), "wide"),
+                        new Anchor(1, new Point(x + 4, 64, 27), BranchPlans.generation(branch, 1), "atm"),
+                        new Anchor(2, new Point(x + 6, 64, 27), BranchPlans.generation(branch, 2), "atm")),
+                List.of(new Anchor(0, new Point(x + 8, 64, 37), BranchPlans.generation(branch, 4), "desk")),
+                List.of(), State.RESERVED, "SITE_RESERVED", 1, -1);
+    }
+
     @Test void firstReadyCaptureAndRequiredProviderFillPreserveOriginalChoicesAndConflictSafety() throws Exception {
         UUID filledBranch;
         UUID omittedBranch;
@@ -277,7 +351,7 @@ class BranchesTest {
     private static JournalEngine engine(SqliteStorage store, Branches.Action action, Intent expected, VillagePlanV1 plan,
                                          java.util.function.BooleanSupplier live) {
         return new JournalEngine(store, (actor, kind) -> true, Map.of(action.kind(),
-                Branches.registration(action, store.snapshot().worldId(), candidate -> candidate.equals(expected) && live.getAsBoolean(), plan)));
+                Branches.registration(action, store.snapshot().worldId(), candidate -> candidate.equals(expected) && live.getAsBoolean(), plan, CASH)));
     }
     private static Branches.View view(SqliteStorage store, UUID branch) {
         return store.transaction(tx -> Branches.find(tx::query, store.snapshot().worldId(), branch)).orElseThrow();

@@ -54,17 +54,17 @@ Use `/locate structure #economy:banks` or `/locate structure economy:bank` to fi
 
 Operators can find nearby branded branch kiosks with `/locate poi economy:bank` or `/locate poi #economy:banks`. Vanilla POI search covers 256 blocks in the current dimension and uses indexed, already discovered kiosks; it does not search unexplored terrain for new bank buildings. Generated and player-placed branded kiosks qualify, including legacy narrow forms. Neutral kiosks and satellite cells do not. Existing kiosks enter the index when their chunks load. A result identifies physical hardware, not a guarantee that banking service is active.
 
-New eligible vanilla plains, desert, savanna, snowy and taiga villages can generate bank branches. Original houses and workplaces determine branch eligibility and capacity; abandoned and empty villages receive none. Existing explored villages are not retrofitted. The mid-century modern buildings have institution signs, local wood, lighting, furnishings and working kiosks. New branch templates include original two-wide banker desks in local wood. Active branches can staff only their captured desks; player-placed desks remain unbound and do not create bankers or grant banking access. Older vanilla desk furniture is preserved and is not automatically converted.
+New eligible vanilla plains, desert, savanna, snowy and taiga villages use a shared 17×15×17 bank layout. Each branch has the selected bank's colors, two native-currency ATMs, one branded kiosk and one banker desk. Abandoned and empty villages receive no branches. Existing placed buildings keep their original design and hardware.
 
 Branch counts use the village's original qualifying houses and workplaces. Farms, roads, decorations, wells, pens and stables do not add to that count.
 
-| Qualifying buildings | Required branches | Optional compact branch |
+| Qualifying buildings | Required branches | Optional third branch |
 | --- | --- | --- |
-| 1–8 | One compact | None |
-| 9–16 | One larger | 25% chance |
-| 17 or more | Two larger | 50% chance |
+| 1–8 | One | None |
+| 9–16 | Two | 25% chance |
+| 17 or more | Two | 50% chance |
 
-A compact branch has one kiosk, desk and banker slot. A larger branch has two of each. Each village uses distinct banks. Its first branch needs an eligible bank in the world's selected currency. Choices are retained after a later world-currency change.
+Each village uses distinct banks. Its first branch needs an eligible bank in the world's selected currency. Each branch serves its own bank's currency, and a later world-currency change preserves captured choices.
 
 Supported generation covers the five vanilla village styles in the Overworld. Modified village resources can prevent new bank generation when their layout cannot be safely recognized. Superflat village/bank generation has a known unresolved limitation tracked in [issue #3](https://github.com/emilybelnavis/economy/issues/3). Ordinary world generation and existing banks remain usable while a new bank plan is waiting for an eligible provider.
 
@@ -95,7 +95,7 @@ Offline time and skipping the night do not advance the replacement wait. Replace
 
 ## Schema upgrades
 
-New worlds initialize automatically. Worlds on schemas 1 through 49 require a validated complete-world backup before upgrading to schema 50. Prepare it while Minecraft is fully stopped:
+New worlds initialize automatically. Worlds on schemas 1 through 53 require a validated complete-world backup before upgrading to schema 54. Prepare it while Minecraft is fully stopped:
 
 ```sh
 ./gradlew prepareEconomyUpgrade -PeconomyWorld=/absolute/path/to/world
@@ -119,7 +119,7 @@ Restore into a **new, separate directory**:
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 53 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
+The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 54 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
 
 There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination.
 

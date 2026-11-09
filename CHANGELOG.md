@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-08
 
+### Village banks
+
+- Replaced biome-specific bank buildings with the shared 17×15×17 Crownstone design, recolored and equipped for all 23 banks.
+- Added a grass-block border around all four sides of the base, with a cobblestone entrance threshold.
+- New branches have two native-currency ATMs, one branded kiosk and one banker. Small villages plan one branch, while medium and large villages plan two with a chance of a third.
+
 ### Banker creative items
 
 - Centered the Banker Desk inventory icon and reduced its display scale to fit within its slot.

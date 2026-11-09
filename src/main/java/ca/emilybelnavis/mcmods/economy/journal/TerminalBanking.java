@@ -66,6 +66,22 @@ public final class TerminalBanking {
 
     /** Package-internal composition for a prepared placement; retains the same custody/native binding rules. */
     static Decision prepareBinding(WorldId world,InstitutionCatalog.Entry bank,TerminalPolicy.Snapshot current,ReadView reads) {
+        return prepareBinding(world,bank,current,reads,TerminalPolicy.Settings.disabled());
+    }
+
+    /** Generated ATMs are commissioned for native bills in the same transaction that binds them. */
+    static Decision prepareGeneratedBinding(WorldId world,InstitutionCatalog.Entry bank,TerminalPolicy.Snapshot current,
+                                            ReadView reads,Map<String,TerminalPolicy.Denomination> catalog) {
+        if(current.kind()!=TerminalPolicy.Kind.ATM)return prepareBinding(world,bank,current,reads);
+        var currency=bank.baseCurrency();
+        var bills=nativeDenominations(current.kind(),currency,catalog);
+        if(bills.isEmpty())return decline("TERMINAL_BANK_CASH_UNAVAILABLE");
+        var settings=new TerminalPolicy.Settings(TerminalPolicy.Mode.BOTH,Set.of(currency),bills);
+        return prepareBinding(world,bank,current,reads,settings);
+    }
+
+    private static Decision prepareBinding(WorldId world,InstitutionCatalog.Entry bank,TerminalPolicy.Snapshot current,
+                                           ReadView reads,TerminalPolicy.Settings settings) {
         long revision=current.revision();
         var anchor=current.anchor();var generation=current.generation();
         if(!KioskUpgrades.usable(reads,world,generation))return decline("KIOSK_UPGRADE_PENDING");
@@ -75,10 +91,11 @@ public final class TerminalBanking {
         if(current.binding()!=null && current.binding().migrationState()==MigrationState.ENABLED
                 && !current.binding().institution().equals(bank.id()))return reject("TERMINAL_BANK_LOCKED");
         if(hasPending(reads,world,generation))return decline("TERMINAL_BANK_PENDING");
-        // Confirmed binding is a distinct step; explicit enable/configuration follows it.
         var legacy=current.binding()==null?current.settings():current.binding().legacySettings();
-        var binding=new Binding(world,anchor,generation,bank.id(),CATALOG_REVISION,bank.baseCurrency(),current.binding()!=null && current.binding().migrationState()==MigrationState.ENABLED?MigrationState.ENABLED:MigrationState.BOUND,legacy);
-        var changed=new TerminalPolicy.Snapshot(world,anchor,generation,current.owner(),current.kind(),revision+1,true,TerminalPolicy.Settings.disabled(),binding);
+        boolean enabled=settings.mode()!=TerminalPolicy.Mode.DISABLED
+                ||current.binding()!=null&&current.binding().migrationState()==MigrationState.ENABLED;
+        var binding=new Binding(world,anchor,generation,bank.id(),CATALOG_REVISION,bank.baseCurrency(),enabled?MigrationState.ENABLED:MigrationState.BOUND,legacy);
+        var changed=new TerminalPolicy.Snapshot(world,anchor,generation,current.owner(),current.kind(),revision+1,true,settings,binding);
         return new Commit(List.of(new Journal.Record(TerminalPolicy.FACT,1,TerminalPolicy.encode(TerminalPolicy.Action.CONFIGURE,changed)),
                 new Journal.Record(FACT,1,encode(binding,changed.revision()))),new Result(1,"TERMINAL_BANK_BOUND",bank.id().key()),tx->{
                     TerminalPolicy.project(tx,current,changed);
@@ -102,9 +119,14 @@ public final class TerminalBanking {
                                                     Map<String,TerminalPolicy.Denomination> catalog) {
         if(snapshot.binding()==null||!snapshot.binding().bound())throw new IllegalArgumentException("UNBOUND_BANK");
         if(snapshot.kind()==TerminalPolicy.Kind.KIOSK)return TerminalPolicy.Settings.disabled();
-        var currency=snapshot.binding().nativeCurrency();var ids=new TreeSet<String>();
-        catalog.forEach((id,d)->{if(d.currency()==currency&&(snapshot.kind()==TerminalPolicy.Kind.TELLER||d.bill()))ids.add(id);});
-        return new TerminalPolicy.Settings(mode,Set.of(currency),ids);
+        var currency=snapshot.binding().nativeCurrency();
+        return new TerminalPolicy.Settings(mode,Set.of(currency),nativeDenominations(snapshot.kind(),currency,catalog));
+    }
+    private static Set<String> nativeDenominations(TerminalPolicy.Kind kind,EconomyCurrency currency,
+                                                    Map<String,TerminalPolicy.Denomination> catalog) {
+        var ids=new TreeSet<String>();
+        catalog.forEach((id,d)->{if(d.currency()==currency&&(kind==TerminalPolicy.Kind.TELLER||d.bill()))ids.add(id);});
+        return ids;
     }
     static boolean validSettings(TerminalPolicy.Snapshot snapshot,TerminalPolicy.Settings settings,
                                  Map<String,TerminalPolicy.Denomination> catalog) {
