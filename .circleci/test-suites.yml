@@ -10,7 +10,7 @@ file-mapper: python3 .circleci/impact-data.py map << test.atoms >> > "<< outputs
 outputs:
   junit-directory: build/circleci/junit
 options:
-  dynamic-test-splitting: true
+  dynamic-test-splitting: false
   test-impact-analysis: false
   max-auto-rerun: 0
   # Coverage does not capture resources, build configuration or shared fixtures.

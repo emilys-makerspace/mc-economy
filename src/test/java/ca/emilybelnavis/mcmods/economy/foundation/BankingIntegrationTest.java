@@ -14,6 +14,38 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BankingIntegrationTest {
     @TempDir Path world;
+    @Test void pagedSimulationHistoryDistinguishesEmptyHistoryFromDeniedSessionsWithoutWriting() throws Exception {
+        var store = new SqliteStorage();
+        var services = new ServerServices(world.toRealPath(), store);
+        await(services, services.readiness());
+        try {
+            var owner = new PlayerId(UUID.randomUUID());
+            var party = new PartyRef(services.worldId(), new PartyRef.Player(owner));
+            var grant = PartyAuthorization.admit(services.worldId(), services.sessionId(), owner, false, party, false).orElseThrow();
+            var stale = PartyAuthorization.admit(services.worldId(), UUID.randomUUID(), owner, false, party, false).orElseThrow();
+            var inspection = PartyAuthorization.admit(services.worldId(), services.sessionId(),
+                    new PlayerId(UUID.randomUUID()), true, party, true).orElseThrow();
+            var otherWorld = new WorldId(UUID.randomUUID());
+            var foreign = PartyAuthorization.admit(otherWorld, services.sessionId(), owner, false,
+                    new PartyRef(otherWorld, new PartyRef.Player(owner)), false).orElseThrow();
+            EconomicSimulationHistory api = services.simulationHistory();
+            assertEquals(1, api.version());
+            long before = await(services, services.storage(store::lastCommittedSequence));
+            var page = await(services, api.page(grant, Long.MAX_VALUE, 1)).orElseThrow();
+            assertTrue(page.entries().isEmpty());
+            assertTrue(page.nextBeforeDay().isEmpty());
+            assertTrue(await(services, api.page(stale, Long.MAX_VALUE, 1)).isEmpty());
+            assertTrue(await(services, api.page(inspection, Long.MAX_VALUE, 1)).isEmpty());
+            assertTrue(await(services, api.page(foreign, Long.MAX_VALUE, 1)).isEmpty());
+            assertThrows(IllegalArgumentException.class, () -> api.page(grant, -1, 1));
+            assertThrows(IllegalArgumentException.class, () -> api.page(grant, Long.MAX_VALUE, 17));
+            // The old facade retains its version, result type and empty-history meaning.
+            assertEquals(1, services.simulation().version());
+            assertTrue(await(services, services.simulation().history(grant, Long.MAX_VALUE, 1)).isEmpty());
+            assertEquals(before, (long) await(services, services.storage(store::lastCommittedSequence)));
+        } finally { assertTrue(services.stop(java.time.Duration.ofSeconds(5))); }
+    }
+
     @Test void versionedIntegrationRejectsInspectionAuthorityAndFutureTrading() throws Exception {
         var services = new ServerServices(world.toRealPath(), new SqliteStorage());
         await(services, services.readiness());

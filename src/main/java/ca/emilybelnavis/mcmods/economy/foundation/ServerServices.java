@@ -217,6 +217,27 @@ public final class ServerServices {
     private final ca.emilybelnavis.mcmods.economy.pricing.ServicePricing servicePricing;
     public ca.emilybelnavis.mcmods.economy.pricing.ServicePricing servicePricing() { checkOwner(); return servicePricing; }
     public ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulationConfig(){checkOwner();return storage instanceof FoundationRuntime r?r.simulationConfig():ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig.defaults();}
+    /** Cursor-bearing API-owned history; legacy simulation() signatures remain supported. */
+    public ca.emilybelnavis.mcmods.economy.api.EconomicSimulationHistory simulationHistory() {
+        checkOwner();
+        return new ca.emilybelnavis.mcmods.economy.api.EconomicSimulationHistory() {
+            @Override
+            public CompletionStage<Optional<Page>> page(PartyAuthorization.Grant grant, long beforeDay, int limit) {
+                checkOwner();
+                if (beforeDay < 0 || limit < 1 || limit > 16)
+                    throw new IllegalArgumentException("Simulation history bounds");
+                requireReady();
+                if (!(storage instanceof FoundationStore store))
+                    throw new IllegalStateException("Simulation history requires foundation storage");
+                if (!allowsAccountRead(grant, partyWorld(), false))
+                    return CompletableFuture.completedStage(Optional.empty());
+                return storage(grant.actor(), () -> allowsAccountRead(grant, store.snapshot().worldId(), false)
+                        ? Optional.of(ca.emilybelnavis.mcmods.economy.simulation.SimulationHistory.page(store, beforeDay, limit))
+                        : Optional.empty());
+            }
+        };
+    }
+
     public ca.emilybelnavis.mcmods.economy.api.EconomicSimulationIntegration simulation(){checkOwner();return new ca.emilybelnavis.mcmods.economy.api.EconomicSimulationIntegration(){
         public Optional<ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.Snapshot> snapshot(PartyAuthorization.Grant grant){checkOwner();return allowsAccountRead(grant,partyWorld(),false)&&simulationFailure.isEmpty()?Optional.ofNullable(simulationSample):Optional.empty();}
         public CompletionStage<List<ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans.Outcome>> history(PartyAuthorization.Grant grant,long before,int limit){checkOwner();if(before<0||limit<1||limit>16)throw new IllegalArgumentException("Simulation history bounds");if(!allowsAccountRead(grant,partyWorld(),false)||!(storage instanceof FoundationStore store))return CompletableFuture.completedStage(List.of());return storage(grant.actor(),()->allowsAccountRead(grant,store.snapshot().worldId(),false)?ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics.history(store,before,limit):List.of());}

@@ -30,8 +30,12 @@ class FinanceProtocolTest {
         assertTrue(BankingMenu.Access.CARD.allows("finance_credit_pay"));
         assertTrue(BankingMenu.Access.CARD.allows("finance_debt_confirm"));
         assertTrue(BankingMenu.Access.CARD.allows("finance_loan_pay_confirm"));
-        assertTrue(BankingMenu.Access.ATM.allows("credit_adv_confirm"));
-        assertFalse(BankingMenu.Access.CARD.allows("credit_adv_confirm"));
-        assertFalse(BankingMenu.Access.KIOSK.allows("credit_adv_confirm"));
+        for (var action : Set.of("credit_advance", "credit_adv_preview", "credit_adv_confirm")) {
+            for (var access : Set.of(BankingMenu.Access.ATM, BankingMenu.Access.TELLER, BankingMenu.Access.KIOSK))
+                assertTrue(access.allows(action), access + " " + action);
+            for (var access : Set.of(BankingMenu.Access.CARD, BankingMenu.Access.REGISTER,
+                    BankingMenu.Access.ADMIN, BankingMenu.Access.WORLD_SETUP))
+                assertFalse(access.allows(action), access + " " + action);
+        }
     }
 }

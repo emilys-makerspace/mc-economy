@@ -70,7 +70,7 @@ class MacroProviderTest {
     }
     private static EnumMap<EconomyCurrency,BigDecimal> vector(String value){var map=new EnumMap<EconomyCurrency,BigDecimal>(EconomyCurrency.class);for(var c:EconomyCurrency.all())map.put(c,new BigDecimal(value));return map;}
     private static void assertVector(Map<EconomyCurrency,BigDecimal> a,Map<EconomyCurrency,BigDecimal> b){assertEquals(a.keySet(),b.keySet());for(var c:a.keySet())assertEquals(0,a.get(c).compareTo(b.get(c)));}
-    private static final class Fixture implements AutoCloseable {
+    static final class Fixture implements AutoCloseable {
         final Path path;SqliteStorage store;final MacroProvider provider=new MacroProvider();DeadlineDispatcher dispatcher;EconomicClock clock;ActivityRuntime activity;
         final PlayerId actor=new PlayerId(UUID.randomUUID());final AccountId account=new AccountId(UUID.randomUUID());
         long now=Instant.parse("2026-11-07T23:20:00Z").toEpochMilli();final long origin=now,a=origin+CurrencyPrimes.DAY_MILLIS,f=a+CurrencyPrimes.DAY_MILLIS;

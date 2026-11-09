@@ -1,0 +1,41 @@
+Compiled from "BankingIntegration.java"
+public interface ca.emilybelnavis.mcmods.economy.api.BankingIntegration {
+  public static final int VERSION;
+  public abstract java.util.concurrent.CompletionStage<java.util.Optional<ca.emilybelnavis.mcmods.economy.pricing.PricingPolicy$Policy>> prime(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant);
+  public abstract java.util.concurrent.CompletionStage<java.util.Optional<ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes$Policy>> prime(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, ca.emilybelnavis.mcmods.economy.api.EconomyCurrency);
+  public abstract java.util.concurrent.CompletionStage<java.util.Optional<ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes$Policy>> primeAt(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, ca.emilybelnavis.mcmods.economy.api.EconomyCurrency, long);
+  public abstract java.util.concurrent.CompletionStage<java.util.Optional<ca.emilybelnavis.mcmods.economy.pricing.WealthValuation$Snapshot>> valuation(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant);
+  public abstract java.util.concurrent.CompletionStage<java.util.Optional<ca.emilybelnavis.mcmods.economy.pricing.ServicePricing$Quote>> feeQuote(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog$InstitutionId, ca.emilybelnavis.mcmods.economy.pricing.ServicePricing$Service, ca.emilybelnavis.mcmods.economy.api.Money);
+  public abstract java.util.concurrent.CompletionStage<java.util.Optional<ca.emilybelnavis.mcmods.economy.foundation.LedgerService$CreditDrawQuote>> quoteCreditDraw(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, java.util.UUID, ca.emilybelnavis.mcmods.economy.journal.TerminalPolicy$Anchor, java.util.UUID, ca.emilybelnavis.mcmods.economy.api.Identifiers$AccountId, long, boolean);
+  public abstract ca.emilybelnavis.mcmods.economy.journal.JournalService$Submission drawCredit(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, ca.emilybelnavis.mcmods.economy.api.Identifiers$OperationId, ca.emilybelnavis.mcmods.economy.api.Identifiers$RequestId, ca.emilybelnavis.mcmods.economy.credit.CreditFacilities$DrawRequest, ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission$Proof);
+  public abstract ca.emilybelnavis.mcmods.economy.journal.RegisterSales$SettlementComposer creditCheckout(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, ca.emilybelnavis.mcmods.economy.credit.CreditFacilities$DrawRequest, ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission$Proof);
+  public default int version();
+  public default ca.emilybelnavis.mcmods.economy.loan.Loans$Capabilities collateralCapabilities();
+}
+Compiled from "EconomicSimulationIntegration.java"
+public interface ca.emilybelnavis.mcmods.economy.api.EconomicSimulationIntegration {
+  public static final int VERSION;
+  public abstract java.util.Optional<ca.emilybelnavis.mcmods.economy.simulation.SimulationDiagnostics$Snapshot> snapshot(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant);
+  public abstract java.util.concurrent.CompletionStage<java.util.List<ca.emilybelnavis.mcmods.economy.simulation.macro.MacroPlans$Outcome>> history(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, long, int);
+  public default int version();
+}
+Compiled from "ItemValuationIntegration.java"
+public interface ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration {
+  public static final int VERSION;
+  public static final int ADAPTER_VERSION;
+  public abstract ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$Result currentCached(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$Request);
+  public abstract java.util.concurrent.CompletionStage<ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$Result> evaluate(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$Request);
+  public abstract java.util.concurrent.CompletionStage<java.util.List<ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$SnapshotMetadata>> history(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, java.util.Optional<java.util.UUID>, int);
+  public default int version();
+}
+Compiled from "ItemValuationIntegration.java"
+public interface ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$Provider {
+  public abstract java.util.concurrent.CompletionStage<ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$SnapshotMetadata> register(ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$Contribution);
+  public abstract java.util.concurrent.CompletionStage<ca.emilybelnavis.mcmods.economy.api.ItemValuationIntegration$SnapshotMetadata> remove(java.lang.String);
+}
+Compiled from "EconomicSimulationHistory.java"
+public interface ca.emilybelnavis.mcmods.economy.api.EconomicSimulationHistory {
+  public static final int VERSION;
+  public default int version();
+  public abstract java.util.concurrent.CompletionStage<java.util.Optional<ca.emilybelnavis.mcmods.economy.api.EconomicSimulationHistory$Page>> page(ca.emilybelnavis.mcmods.economy.foundation.PartyAuthorization$Grant, long, int);
+}

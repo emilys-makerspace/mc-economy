@@ -96,9 +96,11 @@ class BankingBoundaryTest {
             for (var access : BankingMenu.Access.values()) if (access != BankingMenu.Access.ADMIN)
                 assertFalse(access.allows(action), access + " " + action);
         }
-        for (String action : List.of("deposit", "deposit_confirm", "withdraw", "withdraw_confirm", "fx", "exchange_confirm",
-                "configure", "account_open", "account_close_preview"))
-            assertFalse(BankingMenu.Access.KIOSK.allows(action), action);
+        // Kiosks now offer cash services and account lifecycle previews alongside branch services.
+        for (String action : List.of("deposit", "deposit_preview", "deposit_confirm", "withdraw", "withdraw_preview",
+                "withdraw_confirm", "fx", "exchange_preview", "exchange_confirm", "account_open", "account_close_preview"))
+            assertTrue(BankingMenu.Access.KIOSK.allows(action), action);
+        assertFalse(BankingMenu.Access.KIOSK.allows("configure"));
         for (String action : List.of("account_open", "account_close_preview", "account_close_confirm"))
             for (var access : List.of(BankingMenu.Access.ATM, BankingMenu.Access.TELLER, BankingMenu.Access.CARD))
                 assertFalse(access.allows(action), access + " " + action);

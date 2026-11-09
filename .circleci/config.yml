@@ -8,7 +8,7 @@ orbs:
 
 jobs:
   test:
-    # Four workers total: each gets JUnit classes and one distinct live-client scenario.
+    # Four fixed workers: static JUnit class shards and one distinct live-client scenario each.
     parallelism: 4
     resource_class: large
     docker:
@@ -40,7 +40,7 @@ jobs:
             result=$?
             printf '%s\n' "$result" > build/circleci/setup.status
       - run:
-          name: Run the complete JUnit suite split across four nodes
+          name: Run the complete JUnit suite with static four-way splitting
           when: always
           command: |
             if bash .circleci/run-full-tests.sh; then result=0; else result=$?; fi

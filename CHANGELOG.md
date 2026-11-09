@@ -4,6 +4,10 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-09
 
+### Integration API
+
+- Added authenticated simulation history pages with explicit financial-day cursors and immutable API-owned captured values.
+
 ### ATM and branch menus
 
 - Replaced the terminal overview with direct Home services, bank-scoped account pages and bill selection, plus grouped branch services at kiosks.
