@@ -12,6 +12,8 @@ import time
 import traceback
 import xml.etree.ElementTree as ET
 
+# Self-contained integrated clients only. Manual authenticated/external-client
+# testing is excluded from this allowlist and from the CI coverage gate.
 PROBES = (
     ('bankingDashboardProbe', 'economy-a10-02-01-', 'banking-dashboard'),
     ('bankingHistoryProbe', 'economy-a10-02-02-', 'banking-history'),

@@ -432,3 +432,22 @@ if (providers.gradleProperty('layoutProbe').isPresent()) {
         }
     }
 }
+
+// Explicit A10-04 authenticated socket fixture; never included in ordinary artifacts.
+tasks.register('multiplayerProbeJar', Jar) {
+    dependsOn tasks.named('inventoryProbeClasses')
+    archiveClassifier = 'multiplayer-probe'
+    from sourceSets.inventoryProbe.output
+}
+if (providers.gradleProperty('multiplayerProbe').isPresent()) {
+    neoForge.mods { economy_inventory_probe { sourceSet sourceSets.inventoryProbe } }
+    tasks.named('runServer') {
+        systemProperty 'economy.multiplayerProbe', 'true'
+        systemProperty 'economy.multiplayerRoot', file(providers.gradleProperty('economyRunRoot').get()).absolutePath
+        doLast {
+            def root = file(providers.gradleProperty('economyRunRoot').get())
+            if (new File(root, 'multiplayer-failed.txt').exists() || !new File(root, 'multiplayer-passed.txt').exists())
+                throw new GradleException('Authenticated multiplayer fixture did not pass')
+        }
+    }
+}

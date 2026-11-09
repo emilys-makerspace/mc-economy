@@ -1,0 +1,63 @@
+2026-11-09T04:09:16.932576Z Dedicated online-mode socket witness; no fake players or credential files.
+2026-11-09T04:10:35.671298Z Explicit finite fixture funding B minor=20000 operation=79adca5b-c7e1-42fd-be95-d0c37ffa3c16
+2026-11-09T04:10:35.720766Z Explicit finite fixture funding A minor=10000 operation=0e89abce-2520-4827-9ac4-5eb898a61263
+2026-11-09T04:10:37.119456Z Ready role=B authenticatedUUID=[authenticated-profile-B] account=94b8926e-19a9-4e1a-86e4-01c0565ca5dd
+2026-11-09T04:10:37.168963Z Ready role=A authenticatedUUID=[authenticated-profile-A] account=505de91e-8022-4370-a024-d5352e50e030
+2026-11-09T04:10:37.169247Z Both authenticated clients funded/ready; 60-second proxy window armed.
+2026-11-09T04:10:37.169330Z stage=1
+2026-11-09T04:10:37.219263Z progress stage=1 role=A menu=home revision=2 busy=false state=READY status=Banking overview
+2026-11-09T04:10:37.219311Z progress stage=1 role=B menu=home revision=2 busy=false state=READY status=Banking overview
+2026-11-09T04:10:37.318671Z stage=31
+2026-11-09T04:10:38.367347Z A sent B menu/session history packet over actual socket; B revision unchanged, foreign grant read denied.
+2026-11-09T04:10:38.368114Z Simultaneous offered Home actions issued at server tick=1630
+2026-11-09T04:10:38.368133Z stage=2
+2026-11-09T04:10:38.618151Z stage=21
+2026-11-09T04:10:38.967820Z stage=3
+2026-11-09T04:10:39.417774Z stage=4
+2026-11-09T04:10:39.817873Z Simultaneous explicit confirmations and exact duplicate packets issued tick=1659
+2026-11-09T04:10:39.817916Z stage=5
+2026-11-09T04:10:40.717163Z Normal commits A=47fceacc-1b59-4376-8042-581d96d8e770 receipt=d7080f39-9f7e-480e-b726-6b3e3a5a79a9 B=c9290708-a261-47a8-a1ce-e04092b028e9 receipt=c35d4a0e-0442-4344-beb0-82d33982d2c9; banks8000/18000 cash2000/2000; duplicates caused no second effects.
+2026-11-09T04:10:40.717575Z stage=6
+2026-11-09T04:10:41.067494Z stage=7
+2026-11-09T04:10:41.417633Z stage=8
+2026-11-09T04:10:41.767670Z stage=9
+2026-11-09T04:10:42.268419Z progress stage=9 role=A menu=home revision=14 busy=false state=READY status=Banking overview
+2026-11-09T04:10:42.268465Z progress stage=9 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:10:42.817217Z Old review confirmation sent after legitimate Home revision; unchanged bank8000/cash2000.
+2026-11-09T04:10:42.817581Z stage=91
+2026-11-09T04:10:43.017503Z stage=10
+2026-11-09T04:10:43.467324Z stage=11
+2026-11-09T04:10:43.867650Z stage=12
+2026-11-09T04:10:43.917359Z stage=13
+2026-11-09T04:10:44.167247Z Controlled pending boundary operation=5ef45819-a9b8-42a1-884e-17cdd6e35ca0 service=economy:withdrawals type=economy:reserve UTC=2026-11-09T04:10:44.167160Z; bounded storage barrier separate from network delay.
+2026-11-09T04:10:44.167656Z stage=14
+2026-11-09T04:10:44.367528Z stage=15
+2026-11-09T04:10:44.416926Z Actual processing menu closed and reopened with original=5ef45819-a9b8-42a1-884e-17cdd6e35ca0 state=OUTCOME_UNCERTAIN
+2026-11-09T04:10:44.417304Z stage=16
+2026-11-09T04:10:44.470505Z Actual socket A disconnected; releasing storage barrier. Reconnect same signed-in A to proxy127.0.0.1:25566 now.
+2026-11-09T04:10:44.470627Z stage=17
+2026-11-09T04:10:47.316657Z progress stage=17 role=A menu=closed
+2026-11-09T04:10:47.316742Z progress stage=17 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:10:48.220350Z stage=18
+2026-11-09T04:10:48.317632Z stage=19
+2026-11-09T04:10:48.667212Z Original lookup resolved state=COMPLETED operation=5ef45819-a9b8-42a1-884e-17cdd6e35ca0 receipt=bdce4116-b371-4e48-951c-3b3e16d25fea; no automatic new submission.
+2026-11-09T04:10:48.667321Z stage=20
+2026-11-09T04:10:52.316828Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:10:52.316871Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:10:57.316849Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:10:57.316894Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:02.366642Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:11:02.366686Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:07.367065Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:11:07.367111Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:12.416683Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:11:12.416728Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:17.416736Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:11:17.416781Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:22.466847Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:11:22.466890Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:27.516687Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:11:27.516741Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:32.566744Z progress stage=20 role=A menu=claims revision=3 busy=false state=COMPLETED status=Original outcome resolved
+2026-11-09T04:11:32.566797Z progress stage=20 role=B menu=claims revision=11 busy=false state=COMPLETED status=Delivery complete
+2026-11-09T04:11:37.216693Z PASS authenticated A/B owner isolation, simultaneous offered actions, normal original receipts, duplicate/stale refusal, processing close/reopen, controlled disconnect/relogin original lookup; finalbanks8000/18000 cash2000/2000. Loopback only; no external-client claim.

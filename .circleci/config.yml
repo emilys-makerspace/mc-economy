@@ -1,5 +1,8 @@
 version: 2.1
 
+# A10-04 external-client testing is manual and excluded from CircleCI.
+# It is not a prerequisite for CI pass/fail or coverage aggregation.
+
 orbs:
   codecov: codecov/codecov@6.1.0
 

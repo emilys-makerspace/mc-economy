@@ -1,6 +1,6 @@
 # A10 shared package contract — revision 1
 
-Status: approved 2026-11-08 with all eleven selectable A10 prompts, subject to prerequisites; A10-01, [A10-02-01](../../.codex/A10-02-01.md) and [A10-02-02](../../.codex/A10-02-02.md) and [A10-02-03](../../.codex/A10-02-03.md)/[A10-03](../../.codex/A10-03.md) are complete in their recorded scopes; later packages remain unselected. See [frozen contracts](../../.codex/architecture/a10-source-contracts.md). [Planning](../../.codex/architecture/a10-planning.md) records inherited scope, evidence and open acceptance decisions. [Queue](EXECUTION.md) defines package boundaries.
+Status: approved 2026-11-08 with all eleven selectable A10 prompts, subject to prerequisites; A10-01, [A10-02-01](../../.codex/A10-02-01.md) and [A10-02-02](../../.codex/A10-02-02.md) and [A10-02-03](../../.codex/A10-02-03.md)/[A10-03](../../.codex/A10-03.md) are complete in their recorded scopes; [A10-04](../../.codex/A10-04.md) passes authenticated local multiplayer/recovery with external-client evidence pending under approved partial acceptance. Later packages remain unselected. See [frozen contracts](../../.codex/architecture/a10-source-contracts.md). [Planning](../../.codex/architecture/a10-planning.md) records inherited scope, evidence and open acceptance decisions. [Queue](EXECUTION.md) defines package boundaries.
 
 ## Authority and compatibility
 
