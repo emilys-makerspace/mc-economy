@@ -1,5 +1,7 @@
 # Current project state
 
+2026-11-09 — Direct ATM/kiosk changes deliver bank-branded cream screens, bank-scoped accounts/history and bills, kiosk cash services and physical-cash closure. [Current contract](architecture/terminal-ui.md) and [checks/limits](verification/terminal-ui.md) supersede earlier dense Home/footer descriptions; no phase status changes.
+
 **A1 foundation is complete and verified.** SQLite schema V53 (minimum V1); the initial reset is complete. A2-01 through A2-03-03 are complete and verified. A3-01 through A3-05 are verified. A4-01 through A4-06 are verified. A5-01-01 through A5-02-03 and A5-03 through A5-09 are verified. A6’s 23 prompts and policies are approved. [A6-01](A6-01.md) is complete as a document/source-review checkpoint. [A6-02-01](A6-02-01.md) scheduling/configuration, [A6-02-02](A6-02-02.md) diagnostics and [A6-02-03](A6-02-03.md) calendar foundation acceptance are verified. [A6-03-01](A6-03-01.md) CHF currency/cash and [A6-03](A6-03.md) institution/accounts are verified in their recorded scopes. [A6-04](A6-04.md) wealth qualification, pricing and funded yield are verified; live branch adapters are delivered by A6-05-01; fixed loan APIs are delivered by A6-09-01 with new exposure controlled by accepted reporting readiness; securities trading remains unimplemented. [Shared contract](../prompts/A6-credit-debt/CONTRACT.md); [approval and next-package queue](../prompts/A6-credit-debt/EXECUTION.md). Other later phases await explicit invocation.
 
 | Package | Prerequisite | Status |

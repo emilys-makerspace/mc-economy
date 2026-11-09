@@ -131,7 +131,7 @@ public final class Deposits {
         terminal = TerminalPolicy.effective(terminal, terminalCatalog);
         if (!terminal.active() || !terminal.generation().equals(binding.generation())
                 || terminal.revision() != binding.terminalRevision()) throw invalid("DEPOSIT_TERMINAL_STALE");
-        if (!terminal.settings().mode().deposits() || terminal.kind() == TerminalPolicy.Kind.REGISTER || terminal.kind() == TerminalPolicy.Kind.KIOSK)
+        if (!terminal.settings().mode().deposits() || terminal.kind() == TerminalPolicy.Kind.REGISTER)
             throw invalid("DEPOSIT_MODE");
         var publication = fx.current(reads);
         if (publication == null || !publication.revision().equals(binding.fxRevision())) throw invalid("DEPOSIT_FX_STALE");

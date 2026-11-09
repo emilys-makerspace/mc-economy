@@ -52,7 +52,7 @@ public final class BankingAccounts {
         TerminalPolicy.Snapshot fxTerminal;
         FxSettlement.Exchange exchange;
         FxQuotes.Quote quote;
-        FundedClosure.Instruction closure;
+        CashClosure.Instruction closure;
         long closureRevision;
         long closureTerminalRevision;
         Function<PartyAuthorization.Grant, JournalService.Submission> retry;
@@ -63,6 +63,10 @@ public final class BankingAccounts {
     private BankingAccounts() {}
     public static boolean handles(String action) { return ACTIONS.contains(action); }
     public static AccountId selected(BankingMenu menu) { var state = STATES.get(menu); return state == null ? null : state.selected; }
+    public static void selectTerminalAccount(BankingMenu menu, AccountId id) {
+        if (!BankingController.canChangeAccount(menu)) throw new IllegalStateException("Resolve the current cash transaction first.");
+        STATES.computeIfAbsent(menu, ignored -> new State()).selected = id;
+    }
     public static void closed(BankingMenu menu) { STATES.remove(menu); }
 
     public static void action(ServerPlayer player, BankingMenu menu, String action, String value) {
@@ -217,10 +221,10 @@ public final class BankingAccounts {
 
     private static void cards(Audience audience,ServerServices services,PartyAuthorization.Grant grant,State state,String selected) {
         audience.menu().setBusy(true);state.cardFee=null;state.cardBranch=null;
-        ownerAccounts(services,grant).whenComplete((found,error)->{
+        services.readAccounts(grant, false, reads -> Optional.of(TerminalMenus.bankAccounts(reads, grant.target(), TerminalMenus.bank(reads, grant, audience.menu(), services.financialMillis())))).whenComplete((found,error)->{
             if(!audience.live())return;
             if(error!=null || found.isEmpty()){unavailable(audience,"cards");return;}
-            state.offered=offeredAccounts(found.orElseThrow().accounts());
+            state.offered=offeredAccounts(found.orElseThrow());
             if(state.offered.isEmpty()){reply(audience,"cards",List.of(UiText.t("ui.bank.open_and_assign_an_account_at_its_bank_kiosk_f.79b3c2")),UiText.t("ui.bank.no_issued_debit_account.b1983d"),List.of());return;}
             var id=selected.isBlank()?state.offered.keySet().iterator().next():UUID.fromString(selected);
             var account=state.offered.get(id);if(account==null){unavailable(audience,"cards");return;}
@@ -376,7 +380,7 @@ public final class BankingAccounts {
         }
         String[] fields=value.split("\\|",-1);
         AccountId selected=action.equals("branch_open")?null:new AccountId(UUID.fromString(fields[0]));
-        if(selected!=null && !state.offered.containsKey(selected.value()))throw new IllegalArgumentException("Account not offered");
+        // Current offered action and branchContext independently bind this owner and account.
         audience.menu().setBusy(true);
         services.ledger().branchContext(grant,audience.menu().anchor(),selected).whenComplete((found,error)->{
             if(!audience.live())return;
@@ -388,12 +392,13 @@ public final class BankingAccounts {
                 if(action.equals("branch_close")) {
                     if(view.provider()==null || !view.provider().bankKey().equals(bank.id().key()))throw new IllegalArgumentException("Wrong account bank");
                     state.branchView=view;
+                    state.offered = Map.of(view.account().id().value(), view.account());
                     audience.menu().setBusy(false);
                     closePreview(audience,services,grant,state,value);return;
                 }
                 if(action.equals("branch_switch") && fields.length==1) {
                     if(view.account()==null || view.provider()==null || !view.provider().bankKey().equals(bank.id().key()))throw new IllegalArgumentException("Visit the source bank");
-                    var choices=InstitutionCatalog.banks().stream().filter(b->b.baseCurrency()==view.account().currency() && !b.id().equals(bank.id()))
+                    var choices=InstitutionCatalog.banks().stream().filter(b->b.baseCurrency()==view.account().currency() && !b.id().equals(bank.id()) && (!view.account().primary() || b.tier1()))
                             .map(b->new BankingNetwork.Choice("branch_switch",value+"|"+b.id().key(),UiText.t("ui.bank.switch_to.16f98e")+b.name(),false)).toList();
                     reply(audience,"branch_targets",List.of(UiText.t("ui.bank.authorize_one_target_bank_then_visit_that_targ.e51d98")),UiText.t("ui.bank.choose_target_bank.12c2be"),choices);return;
                 }
@@ -532,16 +537,31 @@ public final class BankingAccounts {
         var state = STATES.computeIfAbsent(menu, ignored -> new State());
         var audience = new Audience(player, menu, menu.session(), menu.revision());
         menu.setBusy(true);
-        services.ledger().bankingContext(new PlayerId(player.getUUID()), menu.anchor(), state.selected).whenComplete((context, error) -> {
+        java.util.concurrent.CompletionStage<LedgerService.BankingContext> contextRead;
+        if (page.equals("deposit")) {
+            contextRead = services.readAccounts(grant, false, reads -> TerminalMenus.bankAccounts(reads, grant.target(),
+                    TerminalMenus.bank(reads, grant, menu, services.financialMillis())).stream().findFirst())
+                    .thenCompose(found -> found.isEmpty()
+                            ? java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("No account at this bank"))
+                            : services.ledger().bankingContext(new PlayerId(player.getUUID()), menu.anchor(), found.orElseThrow().id()));
+        } else contextRead = services.ledger().bankingContext(new PlayerId(player.getUUID()), menu.anchor(), state.selected);
+        contextRead.whenComplete((context, error) -> {
             if (!audience.live()) return;
-            if (error != null || context.account() == null) { unavailable(audience, page); return; }
+            if (error != null || context.account() == null) {
+                if (page.equals("deposit")) reply(audience, page, List.of("Open an account with this bank before making a deposit."), "", List.of());
+                else unavailable(audience, page);
+                return;
+            }
             state.selected = context.account().id();
-            ownerAccounts(services, grant).whenComplete((found, accountError) -> {
+            ownerAccounts(services, grant).thenCombine(services.ledger().funds(grant, context.account().id()), Map::entry).whenComplete((result, accountError) -> {
                 if (!audience.live()) return;
-                if (accountError != null || found.isEmpty()) { unavailable(audience, page); return; }
-                state.offered = offeredAccounts(found.orElseThrow().accounts());
+                if (accountError != null || result.getKey().isEmpty() || result.getValue().isEmpty()) { unavailable(audience, page); return; }
+                state.offered = offeredAccounts(result.getKey().orElseThrow().accounts());
+                if (page.equals("deposit") || menu.access() == BankingMenu.Access.ATM)
+                    state.offered = Map.of(context.account().id().value(), context.account());
                 var display = new ArrayList<String>();
-                display.add(UiText.t("ui.bank.selected.ae3c35") + context.account().currency().code() + UiText.t("ui.bank.account.6f9a89"));
+                if (page.equals("withdraw")) display.add("Account Balance: " + money(result.getValue().orElseThrow().posted()));
+                else display.add(UiText.t("ui.bank.selected.ae3c35") + context.account().currency().code() + UiText.t("ui.bank.account.6f9a89"));
                 display.addAll(lines);
                 if(context.terminal()!=null && context.terminal().binding()!=null && context.terminal().binding().bound())
                     display.add(UiText.t("ui.bank.terminal_cash_currency.3ece81")+context.terminal().binding().nativeCurrency().code()+UiText.t("ui.bank.2a342dcae1")+context.account().currency().code());
@@ -662,26 +682,22 @@ public final class BankingAccounts {
                 }
                 var close = new AccountLifecycle.Close(source.id(), source.revision(), destination.id(), destination.revision());
                 state.closureTerminalRevision = context.terminal().revision();
-                if (funds.postedMinorUnits() == 0) {
-                    showClosure(audience, state, new FundedClosure.Instruction(close, null),
-                            List.of(UiText.t("ui.bank.close_your.94469f") + source.currency().code() + UiText.t("ui.bank.account.c9af10"), UiText.t("ui.bank.the_account_is_empty.d94936"),
-                                    UiText.t("ui.bank.its_transaction_history_will_be_preserved.903543"), UiText.t("ui.bank.closing_it_frees_one_of_your_four_account_slot.a1cd5e")));
-                } else services.ledger().quoteClosure(grant, new RequestId(UUID.randomUUID()),
-                        new FxQuotes.Pair(source.currency(), destination.currency()), funds.posted())
-                        .whenComplete((quote, quoteError) -> {
-                            if (!audience.live()) return;
-                            if (quoteError != null) { unavailable(audience, "manage"); return; }
-                            long credited = displayCredit(quote, true);
-                            showClosure(audience, state, new FundedClosure.Instruction(close, quote.id()),
-                                    List.of(UiText.t("ui.bank.close_your.94469f") + source.currency().code() + UiText.t("ui.bank.account.c9af10"),
-                                            UiText.t("ui.bank.transfer_balance.65d5ee") + money(funds.posted()),
-                                            UiText.t("ui.bank.to_primary.0a1146") + money(new Money(destination.currency(), credited)),
-                                            UiText.t("ui.bank.fee.1069ca") + money(quote.fee()), UiText.t("ui.bank.history_is_preserved_confirm_before_the_quote_.a2cd12")));
-                        });
+                try {
+                    var closure = new CashClosure.Instruction(close, funds.posted());
+                    if (closure.stacks() > 0 && !ca.emilybelnavis.mcmods.economy.cash.WithdrawalInventory.fits(audience.player(), closure.stacks())) {
+                        reply(audience, "close", List.of("Make room in your inventory for the full cash payout."), "Inventory space needed");
+                        return;
+                    }
+                    showClosure(audience, state, closure, List.of("Close your " + source.currency().code() + " account",
+                            "Cash payout: " + money(funds.posted()), "The cash will be placed in your inventory.",
+                            "Your transaction history will be preserved."));
+                } catch (IllegalArgumentException unavailableCash) {
+                    reply(audience, "close", List.of("This balance cannot be paid in one batch of notes and coins. Adjust the balance before closing the account."), "Cash payout unavailable");
+                }
             });
         });
     }
-    private static void showClosure(Audience audience, State state, FundedClosure.Instruction closure, List<String> lines) {
+    private static void showClosure(Audience audience, State state, CashClosure.Instruction closure, List<String> lines) {
         state.closure = closure;
         reply(audience, "close", lines, UiText.t("ui.bank.review_account_closure.011421"), List.of(
                 new BankingNetwork.Choice("account_close_confirm", "", UiText.t("ui.bank.confirm_closure.8648b3"), false)));
@@ -698,7 +714,8 @@ public final class BankingAccounts {
         var request=new BankProviders.Request(lease,0,closure.request().fields()).request();
         var operation = new OperationId(UUID.randomUUID()); var attempt = new RequestId(UUID.randomUUID());
         start(audience, services, grant, state, new Journal.Intent(operation,attempt,grant.actor(),BankProviders.CLOSE,request,null,null),
-                fresh -> services.ledger().closeAtBranch(fresh,operation,attempt,closure,BankingClosureClaims::read,lease), "close");
+                fresh -> services.ledger().closeCashAtBranch(fresh,operation,attempt,closure,BankingClosureClaims::read,lease,
+                        closure.stacks() == 0 || ca.emilybelnavis.mcmods.economy.cash.WithdrawalInventory.fits(audience.player(), closure.stacks())), "close");
         state.closure=null; state.branchView=null;
     }
 
@@ -1059,12 +1076,33 @@ public final class BankingAccounts {
                 && (intent.kind().equals(TerminalPolicy.Action.CONFIGURE.kind()) || intent.kind().equals(TerminalBanking.BIND)))
             action(audience.player(), audience.menu(), "settings", "");
         if (outcome != null && outcome.status() == Journal.Status.COMMITTED) {
+            if (intent.kind().equals(ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DRAW)
+                    && "ADVANCE".equals(intent.request().fields().get("kind"))) {
+                state.selected = new AccountId(UUID.fromString(intent.request().fields().get("destination")));
+                var services = Economy.serverServices(audience.player().server);
+                var current = new Audience(audience.player(), audience.menu(), audience.session(), audience.menu().revision());
+                services.ledger().bankingContext(new PlayerId(audience.player().getUUID()), audience.menu().anchor(), state.selected).whenComplete((context, error) -> {
+                    if (!current.live()) return;
+                    if (error == null && context.account() != null && context.terminal() != null && context.terminal().binding() != null
+                            && context.account().currency() == context.terminal().binding().nativeCurrency()) {
+                        var amount = new Money(context.account().currency(), Long.parseLong(intent.request().fields().get("amount")));
+                        ca.emilybelnavis.mcmods.economy.banking.BankingWithdrawals.action(audience.player(), audience.menu(), "withdraw_preview", amount.majorUnits().toPlainString());
+                    } else ca.emilybelnavis.mcmods.economy.banking.BankingWithdrawals.action(audience.player(), audience.menu(), "withdraw", "");
+                });
+                return;
+            }
             if(intent.kind().service().equals("economy:cards")) {cards(new Audience(audience.player(),audience.menu(),audience.menu().session(),audience.menu().revision()),Economy.serverServices(audience.player().server),grant(audience.player(),Economy.serverServices(audience.player().server)),state,state.cardAccount==null?"":state.cardAccount.value().toString());return;}
+            if (intent.kind().equals(BankProviders.CLOSE) && "physical-cash-v1".equals(intent.request().fields().get("payout"))
+                    && Long.parseLong(intent.request().fields().get("amount")) > 0) {
+                state.selected = null;
+                BankingController.deliver(audience.player(), audience.menu(), world, intent.operationId().value());
+                return;
+            }
             if ((intent.kind().equals(AccountLifecycle.CLOSE) || intent.kind().equals(BankProviders.CLOSE))) state.selected = null;
             if (intent.kind().service().equals("economy:providers") || intent.kind().equals(AccountLifecycle.OPEN) || (intent.kind().equals(AccountLifecycle.CLOSE) || intent.kind().equals(BankProviders.CLOSE)))
-                action(audience.player(), audience.menu(), "manage_accounts", "");
+                BankingController.action(audience.player(), audience.menu(), "manage_accounts", "");
             else if (intent.kind().equals(AccountCatalog.INITIALIZE_PRIMARY))
-                action(audience.player(), audience.menu(), "accounts", "");
+                BankingController.action(audience.player(), audience.menu(), "accounts", "");
         }
     }
     static String failureMessage(String code) {

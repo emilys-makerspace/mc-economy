@@ -64,6 +64,24 @@ class BankingDashboardTest {
                 assertEquals(Availability.AVAILABLE, view.loans().availability());
                 assertTrue(view.upcoming().rows().isEmpty());
 
+                var terminalHistory = TerminalMenus.detail(tx::query, owner, "", "bank/" + account.value(), 0, capturedAt);
+                assertEquals("account_overview", terminalHistory.page());
+                assertEquals(9, terminalHistory.lines().size(), "Three balances, five transactions and page counter");
+                assertEquals("Page 1 of 2", terminalHistory.lines().getLast());
+                assertEquals("terminal_history_next", terminalHistory.choices().getFirst().action());
+                var secondPage = TerminalMenus.detail(tx::query, owner, "", "bank/" + account.value(), 1, capturedAt);
+                assertEquals("Page 2 of 2", secondPage.lines().getLast());
+                assertEquals("terminal_history_prev", secondPage.choices().getFirst().action());
+                assertThrows(java.util.NoSuchElementException.class, () -> TerminalMenus.detail(tx::query,
+                        new PartyRef(owner.world(), new PartyRef.Player(stranger)), "", "bank/" + account.value(), 0, capturedAt));
+                tx.execute("INSERT INTO bank_account_providers VALUES(?,'economy:bank/crownstone',0,1,0)", List.of(account.value().toString()));
+                var terminalAccounts = TerminalMenus.accounts(tx::query, owner, "economy:bank/crownstone", false, 0);
+                assertEquals(1, terminalAccounts.choices().size());
+                assertEquals("terminal_account", terminalAccounts.choices().getFirst().action());
+                assertTrue(TerminalMenus.accounts(tx::query, owner, "economy:bank/other", false, 0).choices().isEmpty());
+                new ca.emilybelnavis.mcmods.economy.banking.BankingNetwork.Action(1, UUID.randomUUID(), 1,
+                        terminalAccounts.choices().getFirst().action(), terminalAccounts.choices().getFirst().value());
+
                 var denied = BankingDashboard.read(tx::query, owner, destination, null, capturedAt);
                 assertNull(denied.recentAccount());
                 assertEquals(Availability.UNAVAILABLE, denied.recent().availability());

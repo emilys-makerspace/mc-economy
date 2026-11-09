@@ -4,6 +4,14 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-09
 
+### ATM and branch menus
+
+- Replaced the terminal overview with direct Home services, bank-scoped account pages and bill selection, plus grouped branch services at kiosks.
+- Added bank-colored headers, issuer logos, cream pages and outlined controls, a Home shortcut, compact dates and five-row account history pages. Removed the bottom status bar and duplicate status tooltips.
+- Removed text shadows from banking headings, page counters, buttons and amount fields; added padding between menu and cash-selection buttons.
+- Cash selection shows banknote artwork, preferring horizontal notes, and loan applications have separate Loan Amount and Term fields.
+- Closing an eligible account now pays its balance in physical cash through protected inventory delivery instead of transferring it to the primary account.
+
 ### Banking fees
 
 - Added a CAD 3.00 base fee to every credit cash advance, financed on the card and included in its advance and credit limits.

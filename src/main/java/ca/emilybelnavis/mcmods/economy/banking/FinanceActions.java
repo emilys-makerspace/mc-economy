@@ -16,7 +16,7 @@ public final class FinanceActions {
     }
     public static boolean allowed(BankingMenu.Access access, String action) {
         if (!handles(action)) return false;
-        if (CreditUse.handles(action)) return access == BankingMenu.Access.ATM || access == BankingMenu.Access.TELLER;
+        if (CreditUse.handles(action)) return access == BankingMenu.Access.ATM || access == BankingMenu.Access.TELLER || access == BankingMenu.Access.KIOSK;
         if (access != BankingMenu.Access.ATM && access != BankingMenu.Access.TELLER
                 && access != BankingMenu.Access.KIOSK && access != BankingMenu.Access.CARD) return false;
         if (Set.of("finance_credit_apply", "finance_credit_network", "finance_credit_preview", "finance_credit_confirm",

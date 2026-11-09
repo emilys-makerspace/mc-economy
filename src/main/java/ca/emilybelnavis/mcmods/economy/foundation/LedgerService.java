@@ -644,6 +644,17 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         return services.submitOwned(grant, ca.emilybelnavis.mcmods.economy.institution.BankProviders.CLOSE, operation, attempt, unboundCreditRequest(grant,request), handler, null);
     }
 
+    public JournalService.Submission closeCashAtBranch(PartyAuthorization.Grant grant, OperationId operation, RequestId attempt,
+            CashClosure.Instruction instruction, FundedClosure.ClaimsReader claims,
+            ca.emilybelnavis.mcmods.economy.institution.BranchAdmission.Proof proof, boolean capacity) {
+        requireOwner(grant);
+        var handler = CashClosure.registration(grant.target(), instruction, claims, proof,
+                (intent, reads) -> capacity && proof.valid(intent, reads));
+        var request = new ca.emilybelnavis.mcmods.economy.institution.BankProviders.Request(proof, 0, instruction.request().fields()).request();
+        return services.submitOwned(grant, ca.emilybelnavis.mcmods.economy.institution.BankProviders.CLOSE, operation, attempt,
+                unboundCreditRequest(grant, request), handler, null);
+    }
+
     public CompletionStage<Optional<Deposits.Reservation>> deposit(PlayerId actor, UUID id) {
         return services.storage(actor, () -> store.transaction(tx -> Deposits.find(tx::query, actor, id)));
     }

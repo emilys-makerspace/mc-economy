@@ -178,6 +178,13 @@ public class WideTerminalBlock extends Block implements EntityBlock {
             }
         } finally { MUTATING.remove(guard); }
     }
+    @Override protected net.minecraft.world.ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
+            BlockPos position, Player player, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
+        if (ca.emilybelnavis.mcmods.economy.card.CardCatalog.find(stack).isEmpty())
+            return net.minecraft.world.ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        useWithoutItem(state, level, position, player, hit);
+        return net.minecraft.world.ItemInteractionResult.sidedSuccess(level.isClientSide);
+    }
     @Override protected net.minecraft.world.InteractionResult useWithoutItem(BlockState state, Level level,
             BlockPos position, Player player, net.minecraft.world.phys.BlockHitResult hit) {
         var anchor = TerminalGeometry.anchor(position, state);

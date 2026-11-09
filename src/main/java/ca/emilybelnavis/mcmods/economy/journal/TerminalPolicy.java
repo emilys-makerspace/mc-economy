@@ -63,7 +63,7 @@ public final class TerminalPolicy {
             Objects.requireNonNull(world); Objects.requireNonNull(anchor); Objects.requireNonNull(generation);
             Objects.requireNonNull(owner); Objects.requireNonNull(kind); Objects.requireNonNull(settings);
             if (revision < 1) throw new IllegalArgumentException("Terminal revision");
-            if ((kind == Kind.REGISTER || kind == Kind.KIOSK) && settings.mode() != Mode.DISABLED)
+            if (kind == Kind.REGISTER && settings.mode() != Mode.DISABLED)
                 throw new IllegalArgumentException("Register cash modes disabled");
         }
     }
@@ -93,6 +93,13 @@ public final class TerminalPolicy {
     /** Frozen legacy teller semantics; bound terminals retain their explicit native-currency settings. */
     public static Snapshot effective(Snapshot snapshot, Map<String, Denomination> catalog) {
         Objects.requireNonNull(snapshot);
+        if (snapshot.kind() == Kind.KIOSK && snapshot.binding() != null && snapshot.binding().bound()) {
+            var currency = snapshot.binding().nativeCurrency();
+            var denominations = new TreeSet<String>();
+            catalog.forEach((id, denomination) -> { if (denomination.currency() == currency) denominations.add(id); });
+            return new Snapshot(snapshot.world(), snapshot.anchor(), snapshot.generation(), snapshot.owner(), snapshot.kind(),
+                    snapshot.revision(), snapshot.active(), new Settings(Mode.BOTH, Set.of(currency), denominations), snapshot.binding());
+        }
         if (snapshot.kind() != Kind.TELLER || snapshot.binding() != null && snapshot.binding().bound()) return snapshot;
         return new Snapshot(snapshot.world(), snapshot.anchor(), snapshot.generation(), snapshot.owner(), snapshot.kind(),
                 snapshot.revision(), snapshot.active(), defaultSettings(Kind.TELLER, catalog));

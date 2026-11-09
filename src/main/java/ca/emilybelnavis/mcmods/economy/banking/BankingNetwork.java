@@ -32,7 +32,7 @@ public final class BankingNetwork {
         };
         public Action {
             identity(menuId, session, revision);
-            if (!ACTIONS.contains(action) && !BankingHistoryView.ACTIONS.contains(action) && !FinanceActions.handles(action)) throw new IllegalArgumentException("BANKING_ACTION");
+            if (!ACTIONS.contains(action) && !ca.emilybelnavis.mcmods.economy.foundation.TerminalMenus.ACTIONS.contains(action) && !BankingHistoryView.ACTIONS.contains(action) && !FinanceActions.handles(action)) throw new IllegalArgumentException("BANKING_ACTION");
             text(value, 2048, 2048);
         }
         @Override public Type<Action> type() { return TYPE; }
@@ -122,7 +122,7 @@ public final class BankingNetwork {
     /** Server-offered control. Destination choices are selected locally before requesting a quote. */
     public record Choice(String action, String value, String label, boolean selected) {
         public Choice {
-            if (!ACTIONS.contains(action) && !BankingHistoryView.ACTIONS.contains(action) && !FinanceActions.handles(action) && !action.equals("destination")) throw new IllegalArgumentException("BANKING_CHOICE_ACTION");
+            if (!ACTIONS.contains(action) && !ca.emilybelnavis.mcmods.economy.foundation.TerminalMenus.ACTIONS.contains(action) && !BankingHistoryView.ACTIONS.contains(action) && !FinanceActions.handles(action) && !action.equals("destination")) throw new IllegalArgumentException("BANKING_CHOICE_ACTION");
             text(value, 128, 512); text(label, UiText.isDeferred(label) ? UiText.MAX_DEFERRED : 128, UiText.isDeferred(label) ? UiText.MAX_DEFERRED * 4 : 512);
         }
     }
@@ -136,7 +136,7 @@ public final class BankingNetwork {
     }
     public static void initialize(IEventBus bus) { bus.addListener(BankingNetwork::register); }
     private static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("10");
+        var registrar = event.registrar("11");
         registrar.playToServer(Action.TYPE, Action.CODEC, (request, context) -> context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof BankingMenu menu
                     && menu.containerId == request.menuId()

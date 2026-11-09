@@ -11,6 +11,9 @@ import net.minecraft.server.level.ServerPlayer;
 
 /** Live audience and navigation around the detached, single-transaction dashboard. */
 public final class BankingHome {
+    private static final Map<BankingMenu, Boolean> RESTRICTED = new WeakHashMap<>();
+    public static boolean restricted(BankingMenu menu) { return RESTRICTED.getOrDefault(menu, false); }
+    public static void closed(BankingMenu menu) { RESTRICTED.remove(menu); }
     private BankingHome() {}
     public static void open(ServerPlayer player, BankingMenu menu) {
         var audience = FinanceMenuSupport.audience(player, menu);
@@ -23,25 +26,28 @@ public final class BankingHome {
                 .whenComplete((found, error) -> {
                     if (!audience.live()) return;
                     menu.setBusy(false);
-                    var choices = destinations(menu);
-                    if (error != null || found.isEmpty()) {
+                    boolean restricted = menu.access() == BankingMenu.Access.ATM && TerminalMenus.withdrawalOnly(player, found != null && found.isPresent() ? found.orElseThrow().institution() : "");
+                    RESTRICTED.put(menu, restricted);
+                    var choices = destinations(menu, restricted);
+                    if (error != null || found == null || found.isEmpty()) {
                         menu.publish("home", List.of(UiText.t("ui.bank.banking_summary_unavailable_refresh_when_servi.892e75")),
                                 UiText.t("ui.bank.summary_unavailable.0bee06"), choices, BankingOperation.View.ready(), null);
                         return;
                     }
                     var view = found.orElseThrow();
-                    menu.publish("home", lines(view), UiText.t("ui.bank.banking_overview.bd8549"), choices, BankingOperation.View.ready(), view);
+                    menu.publish("home", List.of(), UiText.t("ui.bank.banking_overview.bd8549"), choices, BankingOperation.View.ready(), view);
                 });
     }
     public static List<BankingNetwork.Choice> destinations(BankingMenu menu) {
+        return destinations(menu, false);
+    }
+    public static List<BankingNetwork.Choice> destinations(BankingMenu menu, boolean withdrawalOnly) {
         var choices = new ArrayList<BankingNetwork.Choice>();
-        offer(menu, choices, "accounts", UiText.t("ui.bank.accounts.36bae3"));
-        offer(menu, choices, "payments", UiText.t("ui.bank.payments.44357a"));
-        offer(menu, choices, "fx", "FX");
-        offer(menu, choices, "finance_home", UiText.t("ui.bank.credit.8a45d3"));
-        offer(menu, choices, "finance_loan_home", UiText.t("ui.bank.loans.d86fda"));
-        offer(menu, choices, "history", UiText.t("ui.bank.history.90ccd6"));
-        offer(menu, choices, "home", UiText.t("ui.bank.refresh.56e3ba"));
+        if (!withdrawalOnly) offer(menu, choices, "accounts", "My Accounts");
+        if (!withdrawalOnly) offer(menu, choices, "deposit", "Deposit");
+        offer(menu, choices, "withdraw", "Withdrawal");
+        if (!withdrawalOnly) offer(menu, choices, "payments", "Bill Payments");
+        if (menu.access() == BankingMenu.Access.KIOSK) offer(menu, choices, "manage_accounts", "Branch Services");
         return List.copyOf(choices);
     }
     public static void payments(BankingMenu menu) {

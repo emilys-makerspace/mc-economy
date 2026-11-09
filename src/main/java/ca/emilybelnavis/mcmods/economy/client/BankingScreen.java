@@ -22,7 +22,11 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         return UiTextClient.render(UiText.t(key, args));
     }
 
-    private static final int TEXT = 0xffd5e8e3, MUTED = 0xff91aaa7, TEAL = 0xff55c8b9;
+    private static final int ROW_STEP = 19, ROW_HEIGHT = 16, CASH_ROW_STEP = 20;
+    private static final int TEXT = 0xff263238, MUTED = 0xff5f655f, TEAL = 0xff526f68;
+    private BankingTheme theme = BankingTheme.DEFAULT;
+    private String institution = "", termDraft = "";
+    private EditBox termInput;
     private String renderedPage = "", destination = "", draft = "", reviewedDraft = "", currency = "CAD";
     private String chooser = "", submittedReview = "";
     private long revision = -1;
@@ -64,12 +68,13 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         return menu.choices().stream().filter(choice -> Set.of("retry", "bank_retry").contains(choice.action())).toList();
     }
     private Button button(int x, int y, int width, Component label, Runnable press) {
+        label = Component.literal(cleanText(label.getString()));
         long offeredRevision = menu.revision();
         var result = addRenderableWidget(new FinanceButton(leftPos + x, topPos + y, width, 18, label, ignored -> {
             if (offeredRevision == menu.revision()) press.run();
-        }));
+        }).themed(theme.accent()));
         result.active = !blocked();
-        result.setTooltip(Tooltip.create(label));
+        if (font.width(label) > width - 8) result.setTooltip(Tooltip.create(label));
         return result;
     }
     @Override protected void init() { super.init(); rebuild(); }
@@ -83,7 +88,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         return choices("account_select").stream().filter(BankingNetwork.Choice::selected).map(BankingNetwork.Choice::label)
                 .findFirst().orElse(ui("ui.client.choose_account"));
     }
-    private String reviewKey() { return draft + "|" + destination; }
+    private String reviewKey() { return draft + "|" + destination + "|" + termDraft; }
     private boolean reviewed() {
         var operation = menu.operation();
         return operation.state() == BankingOperation.State.REVIEW && reviewId != null
@@ -104,15 +109,17 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             settingsRevision = menu.revision();
         }
         menu.setDepositSlotsVisible(chooser.isEmpty() && !blocked());
-        clearWidgets(); input = null; primary = null; primaryAction = "";
-        var up = button(212, 32, 44, Component.literal("▲"), () -> scrollBy(-1));
-        var down = button(262, 32, 44, Component.literal("▼"), () -> scrollBy(1));
-        up.active = down.active = true;
-        up.setTooltip(Tooltip.create(text("scroll_up")));
-        down.setTooltip(Tooltip.create(text("scroll_down")));
-        if (!menu.page().equals("deposit")) {
-            var status = button(10, 212, 296, Component.literal(statusText()), () -> {});
-            status.active = true;
+        clearWidgets(); input = null; termInput = null; primary = null; primaryAction = "";
+        if (!menu.page().equals("home") && !menu.worldSetup()) {
+            var home = button(282, 9, 24, Component.literal("⌂"), () -> send(menu.access() == BankingMenu.Access.ADMIN ? "banking" : "home", ""));
+            home.setTooltip(Tooltip.create(Component.literal(terminalLabel("Home"))));
+        }
+        if (needsScrollControls()) {
+            var up = button(258, 34, 22, Component.literal("▲"), () -> scrollBy(-1));
+            var down = button(284, 34, 22, Component.literal("▼"), () -> scrollBy(1));
+            up.active = down.active = true;
+            up.setTooltip(Tooltip.create(text("scroll_up")));
+            down.setTooltip(Tooltip.create(text("scroll_down")));
         }
         if (menu.operation().state() == BankingOperation.State.PROCESSING) return;
         if (needsRetry()) {
@@ -128,10 +135,6 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             // World denomination selection is separate from opening a player's bank account.
         } else if (menu.access() == BankingMenu.Access.ADMIN) {
             button(10, 32, 136, UiTextClient.component(ui("ui.client.terminal_settings")), () -> send("settings", ""));
-        } else {
-            button(10, 32, 80, text("tab.home"), () -> send("home", ""));
-            if (!menu.page().equals("home") && menu.allows("accounts"))
-                button(100, 32, 106, text("tab.accounts"), () -> send("accounts", ""));
         }
         var destinations = choices("destination");
         if (destinations.stream().noneMatch(choice -> choice.value().equals(destination)))
@@ -142,11 +145,17 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             return;
         }
         switch (menu.page()) {
-            case "home" -> {
-                button(10, 188, 190, text("destinations"), () -> openChooser("home_choices"));
-                menu.choices().stream().filter(choice -> choice.action().equals("home")).findFirst().ifPresent(choice ->
-                        button(206, 188, 100, text("refresh"), () -> send(choice.action(), choice.value())));
+            case "home" -> buildRows(choices("home_choices"), false);
+            case "primary_bank" -> {
+                for (var choice : menu.choices()) button(10, 188, 296, UiTextClient.component(choice.label()), () -> send(choice.action(), choice.value()));
             }
+            case "account_overview" -> {
+                for (var choice : menu.choices()) {
+                    if (choice.action().endsWith("prev")) button(10, 210, 32, Component.literal("←"), () -> send(choice.action(), choice.value()));
+                    else if (choice.action().endsWith("next")) button(274, 210, 32, Component.literal("→"), () -> send(choice.action(), choice.value()));
+                }
+            }
+            case "branch_services", "account_settings", "credit_services", "loan_services", "terminal_accounts", "bill_accounts", "withdraw_sources", "withdrawal_sources", "card_services" -> buildRows(menu.choices(), false);
             case "payments" -> {
                 buildRows(menu.choices(), false);
                 button(10, 188, 136, text("tab.home"), () -> send("home", ""));
@@ -212,7 +221,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             }
             case "deposit", "withdraw", "fx" -> {
                 boolean deposit = menu.page().equals("deposit"), fx = menu.page().equals("fx");
-                button(deposit ? 164 : 10, 74, deposit ? 142 : fx ? 144 : 296,
+                if (!deposit) button(10, 74, fx ? 144 : 296,
                         UiTextClient.component(fx ? ui("ui.client.from", selectedLabel()) : selectedLabel() + " ▾"), () -> openChooser("account_select"));
                 if (fx) {
                     String label = destinations.stream().filter(choice -> choice.value().equals(destination))
@@ -232,7 +241,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 scroll = Math.clamp(scroll, 0, Math.max(0, rows.size() - 5));
                 for (int i = scroll; i < Math.min(rows.size(), scroll + 5); i++) {
                     var choice = rows.get(i);
-                    int y = 82 + (i - scroll) * 18;
+                    int y = 82 + (i - scroll) * CASH_ROW_STEP;
                     button(10, y, 28, UiTextClient.component("−"), () -> send("withdraw_mix_change", choice.value() + ";-1"));
                     button(278, y, 28, UiTextClient.component("+"), () -> send("withdraw_mix_change", choice.value() + ";1"));
                 }
@@ -313,9 +322,16 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                             case "credit_adv_preview" -> ui("ui.client.advance_amount");
                             default -> ui("ui.client.debt_payment");
                         };
-                        amountBox(10, 164, 136, label, choice.action().equals("finance_loan_preview") ? "1000 2"
+                        amountBox(10, 164, choice.action().equals("finance_loan_preview") ? 184 : 136, choice.action().equals("finance_loan_preview") ? terminalLabel("Loan Amount") : label, choice.action().equals("finance_loan_preview") ? "1000"
                                 : Set.of("finance_credit_preview", "finance_credit_limit").contains(choice.action()) ? "2500" : "100.00");
-                        button(160, 188, 146, UiTextClient.component(choice.label()), () -> send(choice.action(), draft));
+                        if (choice.action().equals("finance_loan_preview")) {
+                            termInput = addRenderableWidget(new EditBox(font, leftPos + 210, topPos + 164, 96, 18, Component.literal(terminalLabel("Term"))));
+                            termInput.setTextShadow(false);
+                            termInput.setMaxLength(3); termInput.setValue(termDraft); termInput.setHint(Component.literal(terminalLabel("Years")));
+                            termInput.setResponder(value -> termDraft = value);
+                        }
+                        button(160, 188, 146, UiTextClient.component(choice.label()), () -> send(choice.action(),
+                                choice.action().equals("finance_loan_preview") ? draft + " " + termDraft : draft));
                     }
                 }
             }
@@ -345,7 +361,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         for (int i = scroll; i < Math.min(rows.size(), scroll + 6); i++) {
             var choice = rows.get(i);
             String label = (choice.selected() ? "✓ " : "") + (choice.action().equals("collect") ? ui("ui.client.collect", choice.label()) : choice.label());
-            var control = button(10, 74 + (i - scroll) * 18, 286, UiTextClient.component(label), () -> {
+            var control = button(10, 74 + (i - scroll) * ROW_STEP, 286, UiTextClient.component(label), () -> {
                 if (choice.action().equals("destination")) {
                     destination = choice.value(); reviewedDraft = "";
                 } else if (choice.action().equals("account_open") && chooser.equals("account_open")) {
@@ -353,11 +369,13 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 } else send(choice.action(), choice.value());
                 if (selection) { chooser = ""; scroll = 0; rebuild(); }
             });
+            control.setHeight(ROW_HEIGHT);
             control.active = !blocked() && (!confirmation(choice.action()) || reviewed());
         }
     }
     private void amountBox(int x, int y, int width, String label, String hint) {
         input = addRenderableWidget(new EditBox(font, leftPos + x, topPos + y, width, 18, UiTextClient.component(label)));
+        input.setTextShadow(false);
         input.setMaxLength(menu.page().equals("settings") ? 2048 : 32); input.setValue(draft);
         input.setHint(UiTextClient.component(hint)); input.setEditable(!blocked());
         if (!Set.of("history_dates", "history_rate_date").contains(menu.page()))
@@ -378,6 +396,9 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     }
     @Override protected void containerTick() {
         super.containerTick();
+        if (menu.dashboard() != null && !menu.dashboard().institution().equals(institution)) {
+            institution = menu.dashboard().institution(); theme = BankingTheme.load(institution);
+        }
         if (revision != menu.revision() || wasBusy != menu.busy() || wasExpired != expiredReview()) {
             boolean revised = revision != menu.revision();
             if (!renderedPage.equals(menu.page())) {
@@ -408,24 +429,37 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         updatePrimary();
     }
     @Override protected void renderBg(GuiGraphics g, float partialTick, int mouseX, int mouseY) {
-        g.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xff142326);
-        g.fill(leftPos + 4, topPos + 4, leftPos + imageWidth - 4, topPos + imageHeight - 4, 0xff101e23);
-        g.fill(leftPos + 8, topPos + 8, leftPos + imageWidth - 8, topPos + 29, 0xff125752);
+        g.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, theme.accent());
+        g.fill(leftPos + 4, topPos + 4, leftPos + imageWidth - 4, topPos + imageHeight - 4, BankingTheme.CREAM);
+        g.fill(leftPos + 8, topPos + 8, leftPos + imageWidth - 8, topPos + 29, theme.primary());
         if (chooser.isEmpty() && menu.page().equals("deposit")) for (var slot : menu.slots) if (slot.isActive()) {
-            g.fill(leftPos + slot.x - 1, topPos + slot.y - 1, leftPos + slot.x + 17, topPos + slot.y + 17, 0xff335b5a);
-            g.fill(leftPos + slot.x, topPos + slot.y, leftPos + slot.x + 16, topPos + slot.y + 16, 0xff192c31);
+            g.fill(leftPos + slot.x - 1, topPos + slot.y - 1, leftPos + slot.x + 17, topPos + slot.y + 17, theme.accent());
+            g.fill(leftPos + slot.x, topPos + slot.y, leftPos + slot.x + 16, topPos + slot.y + 16, 0xffe7dfcd);
         }
-        if (!menu.page().equals("deposit")) g.fill(leftPos + 10, topPos + 209, leftPos + 306, topPos + 210, 0xff335b5a);
+
     }
     @Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
-        g.drawString(font, font.plainSubstrByWidth(title.getString(), 130), 13, 14, 0xffffffff, false);
-        String heading = menu.busy() ? text("busy").getString() : menu.worldSetup() ? ui("ui.client.world_currency") : text("tab." + menu.page()).getString();
-        g.drawString(font, font.plainSubstrByWidth(heading, 150), 154, 14, TEAL, false);
+        int nameX = theme.logo() == null ? 13 : 36;
+        if (theme.logo() != null) g.blitSprite(theme.logo(), 12, 10, 20, 18);
+        g.pose().pushPose();
+        float nameScale = Math.min(.8f, 80f / Math.max(1, font.width(theme.name())));
+        g.pose().translate(nameX, 14, 0); g.pose().scale(nameScale, nameScale, 1);
+        g.drawString(font, theme.name(), 0, 0, theme.headerText(), false);
+        g.pose().popPose();
+        String heading = terminalLabel(pageTitle());
+        g.pose().pushPose();
+        g.pose().translate(158, 14, 0); g.pose().scale(.8f, .8f, 1);
+        String visibleHeading = font.plainSubstrByWidth(heading, 102);
+        g.drawString(font, visibleHeading, -font.width(visibleHeading) / 2, 0, theme.headerText(), false);
+        g.pose().popPose();
+        if (Set.of(BankingOperation.State.PROCESSING, BankingOperation.State.OUTCOME_UNCERTAIN,
+                BankingOperation.State.COMPLETED, BankingOperation.State.DECLINED).contains(menu.operation().state()))
+            g.drawString(font, font.plainSubstrByWidth(cleanText(statusText()), 238), 10, 36, MUTED, false);
         if (!chooser.isEmpty()) { scrollbar(g, choices(chooser).size()); return; }
         boolean deposit = menu.page().equals("deposit");
         int x = deposit ? 164 : 10, y = deposit ? 98 : Set.of("fx", "withdraw").contains(menu.page()) ? 134 : 76;
         int bottom = (menu.page().startsWith("finance_") || menu.page().equals("credit_advance")) ? (input == null ? 180 : 148) : deposit ? 136 : Set.of("settings", "shop", "setup").contains(menu.page()) ? 154 : 184;
-        boolean rowPage = Set.of("accounts", "claims", "branch", "branch_targets", "brands", "branch_products", "cards", "card_funding", "credit_facilities", "payments", "history_filters", "history").contains(menu.page());
+        boolean rowPage = Set.of("accounts", "claims", "branch", "branch_targets", "brands", "branch_products", "cards", "card_funding", "credit_facilities", "payments", "history_filters", "history", "branch_services", "account_settings", "credit_services", "loan_services", "terminal_accounts", "bill_accounts", "withdraw_sources", "withdrawal_sources", "card_services").contains(menu.page());
         if (rowPage && !menu.lines().isEmpty())
             g.drawString(font, font.plainSubstrByWidth(menu.lines().getFirst(), 296), 10, 57, MUTED, false);
         boolean configurationForm = menu.page().equals("settings") && !choices("configure").isEmpty();
@@ -437,8 +471,10 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 g.drawString(font, font.plainSubstrByWidth(accounts.get(i).label(), 186), 10, 79 + i * 21, TEXT, false);
             String label = "";
             g.drawString(font, label, 10, 151, MUTED, false);
+        } else if (menu.page().equals("account_overview")) {
+            drawAccount(g);
         } else if (menu.page().equals("home")) {
-            drawLines(g, menu.lines(), 10, 62, 296, 180);
+            if (menu.choices().isEmpty()) drawLines(g, menu.lines(), 10, 62, 296, 180);
         } else if (Set.of("history_detail", "history_rates").contains(menu.page())) {
             drawLines(g, menu.lines(), 10, 62, 296, 180);
         } else if (Set.of("history_dates", "history_rate_date").contains(menu.page())) {
@@ -455,9 +491,19 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             for (int i = 0; i < Math.min(2, menu.lines().size()); i++)
                 g.drawString(font, font.plainSubstrByWidth(menu.lines().get(i), 296), 10, 55 + i * 11, TEXT, false);
             var rows = choices("withdraw_mix_change");
-            for (int i = scroll; i < Math.min(rows.size(), scroll + 5); i++)
-                g.drawString(font, rows.get(i).label(), 48, 87 + (i - scroll) * 18, TEXT, false);
-            if (rows.size() > 5) g.drawString(font, ui("ui.client.scroll_more"), 110, 178, MUTED, false);
+            for (int i = scroll; i < Math.min(rows.size(), scroll + 5); i++) {
+                var choice = rows.get(i);
+                String id = choice.value().replace("economy:", "");
+                var denomination = ca.emilybelnavis.mcmods.economy.cash.CashCatalog.all().stream()
+                        .filter(d -> d.id().equals(id)).findFirst().orElse(null);
+                if (denomination != null) {
+                    var display = ca.emilybelnavis.mcmods.economy.cash.CashCatalog.all().stream()
+                            .filter(d -> d.id().equals(id + "_horizontal")).findFirst().orElse(denomination);
+                    g.renderItem(new net.minecraft.world.item.ItemStack(display.item().get()), 44, 83 + (i - scroll) * CASH_ROW_STEP);
+                }
+                g.drawString(font, font.plainSubstrByWidth(choice.label(), 204), 66, 87 + (i - scroll) * CASH_ROW_STEP, TEXT, false);
+            }
+
         }
         else if (!rowPage || menu.choices().isEmpty()) drawLines(g, menu.lines(), x, y, 306 - x, bottom);
         if (rowPage) scrollbar(g, menu.page().equals("history") ? choices("history_detail").size() : menu.choices().size());
@@ -465,8 +511,72 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             String label = input.getMessage().getString();
             g.drawString(font, font.plainSubstrByWidth(label, 296), input.getX() - leftPos, input.getY() - topPos - 10, MUTED, false);
         }
+        if (termInput != null) g.drawString(font, terminalLabel("Term"), 210, 154, MUTED, false);
         if (deposit) g.drawString(font, Component.translatable("container.inventory"), 12, 134, MUTED, false);
         if (deposit) drawLines(g, List.of(statusText()), 184, 144, 122, needsRetry() ? 164 : 182);
+    }
+    private static String terminalLabel(String english) {
+        String key = "ui.terminal." + english.toLowerCase(Locale.ROOT).replace(' ', '_');
+        return I18n.exists(key) ? ui(key) : english;
+    }
+    private boolean needsScrollControls() {
+        if (Set.of("home", "account_overview").contains(menu.page())) return false;
+        if (!chooser.isEmpty()) return choices(chooser).size() > 6;
+        if (menu.page().equals("withdraw_mix")) return choices("withdraw_mix_change").size() > 5;
+        if (menu.choices().size() > 6) return true;
+        int textWidth = menu.page().equals("deposit") ? 142 : 296;
+        int rows = menu.lines().stream().mapToInt(line -> font.split(UiTextClient.component(line), textWidth).size()).sum();
+        return rows > (menu.page().equals("deposit") ? 3 : menu.page().startsWith("finance_") ? 7 : 10);
+    }
+    private static String cleanText(String text) {
+        return text.replaceAll("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "")
+                .replaceAll("(\\d{4}-\\d{2}-\\d{2})T(\\d{2}:\\d{2})(?::\\d{2}(?:\\.\\d+)?)?Z", "$1 $2");
+    }
+    private String pageTitle() {
+        if (menu.page().equals("finance_loan_payment") || menu.choices().stream().anyMatch(c ->
+                Set.of("finance_credit_amount", "finance_credit_pay_ok", "finance_loan_repay", "finance_loan_pay_ok").contains(c.action())))
+            return "Bill Payments";
+        return switch (menu.page()) {
+            case "home" -> "Home";
+            case "accounts", "terminal_accounts" -> "My Accounts";
+            case "account_overview" -> "Account";
+            case "deposit" -> "Deposit";
+            case "withdraw", "withdraw_sources", "withdrawal_sources", "credit_advance" -> "Withdrawal";
+            case "payments", "bill_accounts" -> "Bill Payments";
+            case "branch", "branch_services" -> "Branch Services";
+            case "account_settings", "primary_bank" -> "Account Settings";
+            case "credit_services" -> "Credit Services";
+            case "loan_services" -> "Loan Services";
+            case "cards", "card_funding", "card_services" -> "Card Services";
+            case "fx" -> "Currency Exchange";
+            default -> {
+                String key = "screen.economy.tab." + menu.page();
+                yield I18n.exists(key) ? I18n.get(key) : menu.page().startsWith("finance_loan") ? "Loans"
+                        : menu.page().startsWith("finance_credit") ? "Credit" : "Banking";
+            }
+        };
+    }
+    private void drawAccount(GuiGraphics g) {
+        var lines = menu.lines();
+        if (lines.size() < 3) { drawLines(g, lines, 10, 48, 296, 200); return; }
+        g.drawString(font, terminalLabel("Current Balance"), 14, 43, MUTED, false);
+        g.drawString(font, UiTextClient.component(lines.get(0)), 14, 57, TEXT, false);
+        if (!lines.get(1).isBlank()) {
+            g.drawString(font, terminalLabel(lines.get(2).startsWith("Pending") ? "Available Credit" : "Available Balance"), 172, 43, MUTED, false);
+            g.drawString(font, Component.literal(UiTextClient.render(lines.get(1)).replaceFirst("^Available Credit: ", "")), 172, 57, TEXT, false);
+            g.pose().pushPose(); g.pose().scale(.8f, .8f, 1);
+            g.drawString(font, UiTextClient.component(lines.get(2)).copy().withStyle(net.minecraft.ChatFormatting.BOLD), 215, 91, TEXT, false);
+            g.pose().popPose();
+        }
+        g.fill(10, 88, 306, 202, theme.accent());
+        g.fill(11, 89, 305, 201, BankingTheme.CREAM);
+        for (int i = 3; i < Math.min(lines.size() - 1, 8); i++) {
+            var parts = lines.get(i).split("\t", 2);
+            int y = 98 + (i - 3) * 20;
+            g.drawString(font, font.plainSubstrByWidth(parts[0], 136), 16, y, TEXT, false);
+            if (parts.length == 2) g.drawString(font, parts[1], 298 - font.width(parts[1]), y, TEXT, false);
+        }
+        g.drawString(font, lines.getLast(), 158 - font.width(lines.getLast()) / 2, 215, TEXT, false);
     }
     private String statusText() {
         Object[] arguments = menu.operation().args().stream().map(argument -> switch (argument.kind()) {
@@ -483,7 +593,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     }
     private void drawLines(GuiGraphics g, List<String> lines, int x, int y, int width, int bottom) {
         var wrapped = new ArrayList<net.minecraft.util.FormattedCharSequence>();
-        for (var line : lines) wrapped.addAll(font.split(UiTextClient.component(line), width));
+        for (var line : lines) wrapped.addAll(font.split(Component.literal(cleanText(UiTextClient.render(line))), width));
         int visible = Math.max(1, (bottom - y) / 10);
         boolean body = y != 212 && y != 144;
         int start = body ? Math.clamp(scroll, 0, Math.max(0, wrapped.size() - visible)) : 0;
@@ -496,13 +606,12 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     }
     private void scrollbar(GuiGraphics g, int count) {
         if (count <= 6) return;
-        int thumb = 108 * 6 / count, y = 74 + (108 - thumb) * scroll / Math.max(1, count - 6);
-        g.fill(300, 74, 303, 182, 0xff253e42); g.fill(300, y, 303, y + thumb, TEAL);
+        int track = ROW_STEP * 5 + ROW_HEIGHT;
+        int thumb = track * 6 / count, y = 74 + (track - thumb) * scroll / Math.max(1, count - 6);
+        g.fill(300, 74, 303, 74 + track, 0xff253e42); g.fill(300, y, 303, y + thumb, TEAL);
     }
     @Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         super.render(g, mouseX, mouseY, partialTick); renderTooltip(g, mouseX, mouseY);
-        if (mouseX >= leftPos + 10 && mouseX < leftPos + 306 && mouseY >= topPos + 211 && mouseY < topPos + 232)
-            g.renderComponentTooltip(font, List.of(UiTextClient.component(statusText())), mouseX, mouseY);
     }
     @Override public void removed() { menu.setDepositSlotsVisible(true); super.removed(); }
     private void scrollBy(int amount) {
@@ -525,7 +634,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             if (menu.page().equals("withdraw_mix")) {
                 scroll = Math.clamp(scroll - (int) vertical, 0, Math.max(0, choices("withdraw_mix_change").size() - 5));
                 rebuild();
-            } else if (!chooser.isEmpty() || Set.of("accounts", "claims", "branch", "branch_targets", "brands", "branch_products", "cards", "card_funding", "credit_facilities", "payments", "history_filters", "history").contains(menu.page())) {
+            } else if (!chooser.isEmpty() || Set.of("accounts", "claims", "branch", "branch_targets", "brands", "branch_products", "cards", "card_funding", "credit_facilities", "payments", "history_filters", "history", "branch_services", "account_settings", "credit_services", "loan_services", "terminal_accounts", "bill_accounts", "withdraw_sources", "withdrawal_sources", "card_services").contains(menu.page())) {
                 int count = chooser.isEmpty() ? (menu.page().equals("history") ? choices("history_detail").size() : menu.choices().size()) : choices(chooser).size();
                 scroll = Math.clamp(scroll - (int) vertical, 0, Math.max(0, count - 6)); rebuild();
             } else if (!menu.page().equals("deposit") || mouseX >= leftPos + 164) scroll = Math.max(0, scroll - (int) vertical);

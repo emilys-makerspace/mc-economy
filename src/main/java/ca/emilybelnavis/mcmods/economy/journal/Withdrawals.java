@@ -114,7 +114,7 @@ public final class Withdrawals {
         terminal = TerminalPolicy.effective(terminal, terminalCatalog);
         if (!terminal.active() || !terminal.generation().equals(binding.generation())
                 || terminal.revision() != binding.terminalRevision()) throw invalid("WITHDRAWAL_TERMINAL_STALE");
-        if (terminal.kind() == TerminalPolicy.Kind.REGISTER || terminal.kind() == TerminalPolicy.Kind.KIOSK || !terminal.settings().mode().withdrawals())
+        if (terminal.kind() == TerminalPolicy.Kind.REGISTER || !terminal.settings().mode().withdrawals())
             throw invalid("WITHDRAWAL_MODE");
         if (!terminal.settings().currencies().contains(cash.currency())) throw invalid("WITHDRAWAL_CURRENCY");
         var publication = fx.current(reads);

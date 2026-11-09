@@ -24,6 +24,22 @@ class TerminalPolicyTest {
             "economy:eur_bill_5", new Denomination(EconomyCurrency.EUR, true));
     private boolean live = true;
 
+    @Test void boundKioskEnablesNativeCashServicesWithoutChangingSavedSettings() {
+        var worldId = new WorldId(UUID.randomUUID());
+        var generation = UUID.randomUUID();
+        var binding = new TerminalBanking.Binding(worldId, anchor, generation,
+                ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.banks().getFirst().id(), TerminalBanking.CATALOG_REVISION,
+                EconomyCurrency.CAD, TerminalBanking.MigrationState.BOUND, Settings.disabled());
+        var saved = new Snapshot(worldId, anchor, generation, owner, TerminalPolicy.Kind.KIOSK, 1, true, Settings.disabled(), binding);
+        var live = effective(saved, catalog);
+        assertEquals(Mode.BOTH, live.settings().mode());
+        assertEquals(Set.of(EconomyCurrency.CAD), live.settings().currencies());
+        assertEquals(Set.of("economy:cad_bill_5", "economy:cad_coin_25"), live.settings().denominations());
+        assertEquals(Settings.disabled(), saved.settings());
+        var unbound = new Snapshot(worldId, anchor, UUID.randomUUID(), owner, TerminalPolicy.Kind.KIOSK, 1, true, Settings.disabled());
+        assertEquals(Settings.disabled(), effective(unbound, catalog).settings());
+    }
+
     @Test void ownerOperatorLiveAuthorityAndOptimisticRevisionAreRequired() throws Exception {
         var store = open();
         try {

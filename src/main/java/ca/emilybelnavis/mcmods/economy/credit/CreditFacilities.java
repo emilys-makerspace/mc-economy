@@ -158,7 +158,7 @@ public final class CreditFacilities {
             var fx = ca.emilybelnavis.mcmods.economy.fx.FxService.snapshot(reads);
             if (fx == null) throw new IllegalArgumentException("FEE_FX_UNAVAILABLE");
             var rates = new CurrencyConversion.Rates(fx.reference(), fx.rates());
-            if (terminal.kind() != TerminalPolicy.Kind.ATM && terminal.kind() != TerminalPolicy.Kind.TELLER)
+            if (terminal.kind() != TerminalPolicy.Kind.ATM && terminal.kind() != TerminalPolicy.Kind.TELLER && terminal.kind() != TerminalPolicy.Kind.KIOSK)
                 throw new IllegalArgumentException("CREDIT_PHYSICAL_ADMISSION");
             if (terminal.binding() == null || !terminal.binding().bound()) throw new IllegalArgumentException("UNBOUND_BANK");
             var bank = terminal.binding().institution();

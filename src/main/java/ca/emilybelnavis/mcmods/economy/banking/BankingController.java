@@ -60,7 +60,22 @@ public final class BankingController {
             case KIOSK -> BankingMenu.Access.KIOSK;
             case REGISTER -> BankingMenu.Access.REGISTER;
         };
-        open(player, new TerminalPolicy.Anchor(player.serverLevel().dimension().location().toString(), anchor.getX(), anchor.getY(), anchor.getZ()), entity.generation(), access);
+        var terminalAnchor = new TerminalPolicy.Anchor(player.serverLevel().dimension().location().toString(), anchor.getX(), anchor.getY(), anchor.getZ());
+        if (access == BankingMenu.Access.ATM) {
+            var services = services(player);
+            if (services == null || services.state() != ServerServices.State.READY || services.worldId() == null) return;
+            var mark = java.util.stream.Stream.of(player.getMainHandItem(), player.getOffhandItem())
+                    .map(stack -> ca.emilybelnavis.mcmods.economy.card.CardStackIdentity.mark(stack, services.worldId())).flatMap(Optional::stream).findFirst().orElse(null);
+            if (mark == null) { player.displayClientMessage(Component.literal("Use a bank or credit card to access this ATM."), true); return; }
+            services.ledger().usableCardAccess(actor(player), services.worldId(), mark.token()).whenComplete((found, error) -> {
+                if (player.server.getPlayerList().getPlayer(player.getUUID()) != player || error != null || found.isEmpty()
+                        || !heldIssuedCard(player, services.worldId(), found.orElseThrow())
+                        || !TerminalLifecycle.matches(player.serverLevel(), anchor, entity.generation())
+                        || !player.serverLevel().dimension().location().toString().equals(terminalAnchor.dimension())
+                        || player.distanceToSqr(anchor.getX() + .5, anchor.getY() + .5, anchor.getZ() + .5) > 36) return;
+                open(player, terminalAnchor, entity.generation(), access, mark.token());
+            });
+        } else open(player, terminalAnchor, entity.generation(), access);
     }
     public static boolean openAdmin(ServerPlayer player, BlockPos clicked) {
         var anchor = TerminalGeometry.resolveAnchor(player.serverLevel(), clicked);
@@ -95,6 +110,8 @@ public final class BankingController {
                 && ca.emilybelnavis.mcmods.economy.card.CardCatalog.find(stack).filter(item->item.id().equals(token.design())).isPresent());
     }
     public static void checkedAction(ServerPlayer player,BankingMenu menu,String action,String value) {
+        if (menu.access() == BankingMenu.Access.ATM && BankingHome.restricted(menu)
+                && !Set.of("home", "withdraw", "terminal_withdraw_bank", "terminal_withdraw_credit", "withdraw_preview", "withdraw_confirm", "withdraw_mix", "withdraw_mix_change", "withdraw_mix_review", "withdraw_mix_reset", "credit_advance", "credit_adv_preview", "credit_adv_confirm", "retry", "bank_retry", "cancel", "claims", "claims_next", "collect").contains(action)) return;
         if (menu.page().equals("home") && !action.equals("home") && !Set.of("retry", "bank_retry", "cancel").contains(action)
                 && menu.choices().stream().noneMatch(c -> c.action().equals(action) && c.value().equals(value))) return;
         if(menu.issuedToken()==null){action(player,menu,action,value);return;}
@@ -215,6 +232,7 @@ public final class BankingController {
             else CreditUse.action(player, menu, action, value);
             return;
         }
+        if (TerminalMenus.handles(action)) { TerminalMenus.action(player, menu, action, value); return; }
         if (BankingHistory.handles(action)) { BankingHistory.action(player, menu, action, value); return; }
         if (BankingAccounts.handles(action)) { BankingAccounts.action(player, menu, action, value); return; }
         if (BankingWithdrawals.handles(action)) { BankingWithdrawals.action(player, menu, action, value); return; }
@@ -902,7 +920,7 @@ public final class BankingController {
         if (!ids.isEmpty()) BankingReturns.create(player, menu, world, ids);
     }
     public static void closed(ServerPlayer player, BankingMenu menu) {
-        BankingHistory.closed(menu); BankingAccounts.closed(menu); BankingWithdrawals.closed(menu); AutopayMenus.closed(menu); CreditMenus.closed(menu); LoanMenus.closed(menu); FinanceReports.closed(menu); FinanceCollections.closed(menu); CreditUse.closed(menu);
+        BankingHome.closed(menu); TerminalMenus.closed(menu); BankingHistory.closed(menu); BankingAccounts.closed(menu); BankingWithdrawals.closed(menu); AutopayMenus.closed(menu); CreditMenus.closed(menu); LoanMenus.closed(menu); FinanceReports.closed(menu); FinanceCollections.closed(menu); CreditUse.closed(menu);
         if (player.server.getPlayerList().getPlayer(player.getUUID()) != player) return;
         var flow = FLOWS.get(menu);
         if (flow == null || !flow.ownsInputs) {

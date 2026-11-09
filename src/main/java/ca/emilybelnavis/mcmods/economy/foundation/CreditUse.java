@@ -12,6 +12,10 @@ import net.minecraft.server.level.ServerPlayer;
 /** Physical credit use. Advances and subsequent physical withdrawals have distinct confirmations. */
 public final class CreditUse {
     private static final Map<BankingMenu, LedgerService.CreditDrawQuote> QUOTES = new WeakHashMap<>();
+    private record AdvanceStart(CreditFacilities.Token token, CreditFacilities.Facility facility, CreditFacilities.AdvanceFees fees) {}
+    private static final Map<BankingMenu, UUID> SELECTED = new WeakHashMap<>();
+    private static final Map<BankingMenu, UUID> TOKENS = new WeakHashMap<>();
+    public static void selectFacility(BankingMenu menu, UUID facility) { SELECTED.put(menu, facility); }
     private CreditUse() {}
     public static boolean handles(String action) { return Set.of("credit_advance", "credit_adv_preview", "credit_adv_confirm").contains(action); }
     public static UUID heldToken(ServerPlayer player, ca.emilybelnavis.mcmods.economy.api.Identifiers.WorldId world) {
@@ -20,10 +24,10 @@ public final class CreditUse {
                 .map(stack -> ca.emilybelnavis.mcmods.economy.card.CardStackIdentity.mark(stack, world))
                 .flatMap(Optional::stream).map(ca.emilybelnavis.mcmods.economy.card.CardStackIdentity.Mark::token).findFirst().orElse(null);
     }
-    public static void closed(BankingMenu menu) { QUOTES.remove(menu); }
+    public static void closed(BankingMenu menu) { QUOTES.remove(menu); SELECTED.remove(menu); TOKENS.remove(menu); }
     public static void action(ServerPlayer player, BankingMenu menu, String action, String value) {
         var audience = FinanceMenuSupport.audience(player, menu);
-        if (!audience.live() || menu.busy() || (menu.access() != BankingMenu.Access.ATM && menu.access() != BankingMenu.Access.TELLER)) return;
+        if (!audience.live() || menu.busy() || (menu.access() != BankingMenu.Access.ATM && menu.access() != BankingMenu.Access.TELLER && menu.access() != BankingMenu.Access.KIOSK)) return;
         var services = Economy.serverServices(player.server);
         if (services == null || services.state() != ServerServices.State.READY) return;
         var grant = FinanceMenuSupport.grant(player, services);
@@ -31,12 +35,32 @@ public final class CreditUse {
         try {
             if (action.equals("credit_advance")) {
                 QUOTES.remove(menu);
-                audience.reply("credit_advance", List.of(UiText.t("ui.finance.credituse.2"),UiText.t("ui.finance.credituse.3"),UiText.t("ui.finance.credituse.4")),UiText.t("ui.finance.credituse.1"),
-                        List.of(new BankingNetwork.Choice("credit_adv_preview", "",UiText.t("ui.finance.credituse.5"), false)));
+                var token = heldToken(player, grant.target().world());
+                menu.setBusy(true);
+                services.readAccounts(grant, false, reads -> {
+                    var selected = SELECTED.get(menu);
+                    var resolved = selected == null ? (token == null ? Optional.<CreditFacilities.Token>empty() : CreditFacilities.usableToken(reads, grant.target().world(), ((PartyRef.Player) grant.target().owner()).id(), token, services.financialMillis()))
+                            : CreditFacilities.tokenForFacility(reads, grant.target().world(), selected).flatMap(t -> CreditFacilities.usableToken(reads, grant.target().world(), ((PartyRef.Player) grant.target().owner()).id(), t.id(), services.financialMillis()));
+                    return resolved.flatMap(t -> CreditFacilities.find(reads, t.facility()).map(f -> {
+                        var terminal = ca.emilybelnavis.mcmods.economy.journal.TerminalPolicy.find(reads, grant.target().world(), menu.anchor(), grant.actor(), true).orElseThrow();
+                        return new AdvanceStart(t, f, CreditFacilities.AdvanceFees.capture(reads, f, terminal));
+                    }));
+                }).whenComplete((found, error) -> {
+                    if (!audience.live()) return;
+                    if (error != null || found.isEmpty()) { unavailable(audience); return; }
+                    var f = found.orElseThrow().facility();
+                    TOKENS.put(menu, found.orElseThrow().token().id());
+                    var fees = found.orElseThrow().fees();
+                    long fee = Math.addExact(fees.advanceMinor(), fees.atmMinor());
+                    long available = Math.max(0, Math.min(f.limitMinor() - f.owedMinor(), f.limitMinor() / 5 - f.advance().principalMinor()) - fee);
+                    audience.reply("credit_advance", List.of("Cash Advance Available: " + CreditReport.money(f.currency(), available),
+                            "Fees: " + CreditReport.money(f.currency(), fee), "Enter the amount to withdraw in " + f.currency().code() + ".",
+                            "After the advance, review the physical cash withdrawal to receive your notes."), "", List.of(new BankingNetwork.Choice("credit_adv_preview", "", "Review Cash Advance", false)));
+                });
             } else if (action.equals("credit_adv_preview")) {
                 if (!FinanceMenuSupport.offered(audience, action, "")) return;
                 var account = BankingAccounts.selected(menu);
-                var token = heldToken(player, grant.target().world());
+                var token = TOKENS.get(menu);
                 if (account == null || token == null) throw new IllegalArgumentException();
                 menu.setBusy(true);
                 // Resolve currency first, then parse exact currency minor units.
@@ -67,7 +91,7 @@ public final class CreditUse {
                 });
             } else if (FinanceMenuSupport.offered(audience, action, "")) {
                 var q = Objects.requireNonNull(QUOTES.remove(menu));
-                var proof = CreditDrawAdmission.capture(player, menu, q.request(), q.terminal());
+                var proof = CreditDrawAdmission.captureAssisted(player, menu, q.request(), q.terminal());
                 FinanceMenuSupport.submit(audience, services, grant, CreditFacilities.DRAW, q.request().request(),
                         (operation, attempt) -> services.ledger().drawCredit(grant, operation, attempt, q.request(), proof));
             }

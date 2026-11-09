@@ -129,7 +129,9 @@ public final class LoanMenus {
                 choices.add(choice("repay", "",UiText.t("ui.finance.loanmenus.11"), false));
                 choices.add(choice("payoff", "",UiText.t("ui.finance.loanmenus.12"), false));
             }
-            reply(audience, "finance_loan_payment", LoanReport.owner(found), UiText.t("ui.finance.loan_contract"), choices);
+            reply(audience, "finance_loan_payment", List.of("Current Balance: " + money(state.loan.currency(), state.loan.owedMinor()),
+                    "Due Date: " + (found.oldestDueAt() == null ? java.time.Instant.ofEpochMilli(state.loan.nextMonth()).atZone(java.time.ZoneOffset.UTC).toLocalDate() : java.time.Instant.ofEpochMilli(found.oldestDueAt()).atZone(java.time.ZoneOffset.UTC).toLocalDate()),
+                    "Minimum Payment: " + money(state.loan.currency(), found.requiredMinor() > 0 ? found.requiredMinor() : state.loan.servicing().installmentMinor())), UiText.t("ui.finance.loan_contract"), choices);
         });
     }
     private static void schedule(FinanceMenuSupport.Audience audience, ServerServices services, PartyAuthorization.Grant grant,

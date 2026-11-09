@@ -204,8 +204,8 @@ public final class BankingWithdrawals {
                 && context.account().status() == AccountIdentity.Status.OPEN && context.terminal() != null && context.fx() != null
                 && context.terminal().active() && context.terminal().generation().equals(menu.generation())
                 && context.terminal().binding()!=null && context.terminal().binding().bound()
-                && context.terminal().kind() != TerminalPolicy.Kind.REGISTER && context.terminal().kind()!=TerminalPolicy.Kind.KIOSK
-                && context.terminal().settings().mode().withdrawals();
+                && context.terminal().kind() != TerminalPolicy.Kind.REGISTER
+                && (context.terminal().kind() == TerminalPolicy.Kind.KIOSK || context.terminal().settings().mode().withdrawals());
     }
     private static void confirm(ServerPlayer player, BankingMenu menu, State state) {
         if (state.preview == null || !menu.page().equals("withdraw") || menu.revision() != state.previewRevision

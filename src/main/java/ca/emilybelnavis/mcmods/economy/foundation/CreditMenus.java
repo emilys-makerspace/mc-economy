@@ -162,6 +162,35 @@ public final class CreditMenus {
                 (operation, attempt) -> services.ledger().issueCreditFacility(grant, operation, attempt, request));
     }
 
+    /** The terminal's bank-scoped bill selector has already offered this exact owner facility. */
+    public static void terminalPayment(net.minecraft.server.level.ServerPlayer player, BankingMenu menu, UUID id) {
+        var services = BankingController.services(player);
+        var grant = FinanceMenuSupport.grant(player, services);
+        if (grant == null || menu.busy()) return;
+        var audience = FinanceMenuSupport.audience(player, menu);
+        var state = STATES.computeIfAbsent(menu, ignored -> new State());
+        menu.setBusy(true);
+        services.readAccounts(grant, false, reads -> CreditFacilities.find(reads, id).filter(f -> f.party().equals(grant.target())))
+                .whenComplete((found, error) -> {
+                    if (!audience.live()) return;
+                    menu.setBusy(false);
+                    if (error != null || found.isEmpty()) { unavailable(audience); return; }
+                    state.facilities = Map.of(id, found.orElseThrow());
+                    state.facility = found.orElseThrow(); state.repayment = null; state.fx = null;
+                    menu.setBusy(true);
+                    ownedAccounts(services, grant).whenComplete((accounts, failure) -> {
+                        if (!audience.live()) return;
+                        if (failure != null || accounts.isEmpty() || accounts.orElseThrow().isEmpty()) { unavailable(audience); return; }
+                        state.accounts = accounts.orElseThrow();
+                        var selected = BankingAccounts.selected(menu);
+                        state.funding = selected == null ? null : state.accounts.get(selected);
+                        if (state.funding == null) state.funding = state.accounts.values().stream().filter(a -> a.currency() == state.facility.currency()).findFirst()
+                                .orElseGet(() -> state.accounts.values().stream().filter(AccountIdentity::primary).findFirst().orElse(state.accounts.values().iterator().next()));
+                        audience.reply("finance_credit", paymentSummary(state.facility), "", List.of(choice("finance_credit_amount", "", "Review Payment")));
+                    });
+                });
+    }
+
     private static void facilities(FinanceMenuSupport.Audience audience, ServerServices services,
                                    PartyAuthorization.Grant grant, State state, String value, boolean increase) {
         if (increase) requireKiosk(audience);
@@ -192,7 +221,7 @@ public final class CreditMenus {
     private static void facilityPage(FinanceMenuSupport.Audience audience, ServerServices services,
                                      PartyAuthorization.Grant grant, State state) {
         audience.menu().setBusy(true);
-        services.ledger().creditFacilities(grant, state.after, 16).whenComplete((found, error) -> {
+        services.readAccounts(grant, false, reads -> Optional.of(CreditFacilities.history(reads, grant.target(), state.after, 16).stream().filter(f -> f.issuer().key().equals(TerminalMenus.bank(reads, grant, audience.menu(), services.financialMillis()))).toList())).whenComplete((found, error) -> {
             if (!audience.live()) return;
             if (error != null || found.isEmpty()) { unavailable(audience); return; }
             var page = found.orElseThrow();
@@ -371,7 +400,14 @@ public final class CreditMenus {
         requireOffered(audience, "finance_credit_fund", value);
         state.funding = state.accounts.get(new AccountId(UUID.fromString(value)));
         if (state.funding == null || state.facility == null) throw new IllegalArgumentException("Funding not offered");
-        audience.reply("finance_credit", List.of(UiText.t("ui.finance.creditmenus.58", state.facility.currency().code()),UiText.t("ui.finance.creditmenus.59", money(state.facility.currency(), state.facility.owedMinor())),UiText.t("ui.finance.creditmenus.60")),UiText.t("ui.finance.creditmenus.57"), List.of(choice("finance_credit_amount", "",UiText.t("ui.finance.creditmenus.61"))));
+        audience.reply("finance_credit", paymentSummary(state.facility),UiText.t("ui.finance.creditmenus.57"), List.of(choice("finance_credit_amount", "",UiText.t("ui.finance.creditmenus.61"))));
+    }
+
+    private static List<String> paymentSummary(CreditFacilities.Facility facility) {
+        var due = facility.requirements().stream().filter(r -> r.unmetMinor() > 0).mapToLong(r -> r.dueAt()).min();
+        return List.of("Current Balance: " + money(facility.currency(), facility.owedMinor()),
+                "Due Date: " + (due.isEmpty() ? "No payment due" : java.time.Instant.ofEpochMilli(due.getAsLong()).atZone(java.time.ZoneOffset.UTC).toLocalDate()),
+                "Minimum Payment: " + money(facility.currency(), facility.requiredMinor()));
     }
 
     private static void paymentPreview(FinanceMenuSupport.Audience audience, ServerServices services,
