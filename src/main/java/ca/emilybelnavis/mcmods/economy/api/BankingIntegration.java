@@ -61,6 +61,8 @@ public interface BankingIntegration {
       ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
       ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof);
 
+  // Integration mods rely on both VERSION and version().
+  @SuppressWarnings("java:S1845")
   default int version() {
     return VERSION;
   }

@@ -153,7 +153,7 @@ public final class AutopayRuntime {
                 .orElseThrow()
             : null;
     var loan =
-        settings.kind() == Kind.LOAN
+        card == null
             ? Loans.find(reads, settings.facility())
                 .filter(l -> l.party().equals(settings.party()))
                 .orElseThrow()
@@ -270,7 +270,7 @@ public final class AutopayRuntime {
               Math.min(Math.addExact(at, 30_000), loan.nextMonth()),
               false);
       paid =
-          Loans.repay(
+          Loans.planRepayment(
               reads,
               loan,
               new Loans.PaymentQuote(request, null),

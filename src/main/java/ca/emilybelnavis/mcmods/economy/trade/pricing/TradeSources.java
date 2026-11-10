@@ -14,8 +14,8 @@ import java.util.*;
 /** Trusted worker-only source transitions. No command, startup activation or monetary authority. */
 public final class TradeSources {
   public static final String TYPE = "economy:a9/source-transition",
-      PRICE = "economy:a9/reference-demand";
-  public static final Journal.Kind TRANSITION =
+      PRICE_RECORD = "economy:a9/reference-demand";
+  public static final Journal.Kind TRANSITION_OPERATION =
       new Journal.Kind("economy:a9", "economy:a9/source-transition");
   private static final Gson JSON =
       new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
@@ -121,7 +121,7 @@ public final class TradeSources {
   public static RecordCatalog register(RecordCatalog catalog) {
     return catalog
         .with(new RecordCatalog.Key(TYPE, 1), TradeSources::decodeBoundary)
-        .with(new RecordCatalog.Key(PRICE, 1), TradeSources::decodePrice);
+        .with(new RecordCatalog.Key(PRICE_RECORD, 1), TradeSources::decodePrice);
   }
 
   public static SourceRef current(JournalEngine.ReadView reads, UUID market, String item) {
@@ -168,14 +168,14 @@ public final class TradeSources {
             });
     return new JournalEngine(
             store,
-            (a, k) -> a.equals(actor) && k.equals(TRANSITION),
-            Map.of(TRANSITION, registration))
+            (a, k) -> a.equals(actor) && k.equals(TRANSITION_OPERATION),
+            Map.of(TRANSITION_OPERATION, registration))
         .submit(
             new Journal.Intent(
                 new OperationId(operation),
                 new RequestId(operation),
                 actor,
-                TRANSITION,
+                TRANSITION_OPERATION,
                 request,
                 null,
                 null));
@@ -339,7 +339,7 @@ public final class TradeSources {
             quote);
     String payload = encode(event);
     return new JournalEngine.Commit(
-        List.of(new Journal.Record(PRICE, 1, payload)),
+        List.of(new Journal.Record(PRICE_RECORD, 1, payload)),
         new Journal.Result(1, "REFERENCE_DEMAND_RECORDED", operation.toString()),
         tx -> {
           long seq = sequence(tx::query, operation);
@@ -532,7 +532,7 @@ public final class TradeSources {
               || !Objects.equals(
                   e.previous(), priceBefore(reads, e.next().market(), e.next().item(), seq)))
             throw new IllegalArgumentException("Reference demand history");
-          requireFact(reads, e.operation(), PRICE, rows.getString("payload"), seq);
+          requireFact(reads, e.operation(), PRICE_RECORD, rows.getString("payload"), seq);
           var receipts =
               reads.query(
                   "SELECT COUNT(*) AS n FROM journal_records WHERE sequence=? AND record_type IN ('economy:a9/reference-npc-trade','economy:a9/reference-cash-trade')",
@@ -578,7 +578,7 @@ public final class TradeSources {
       for (var pair :
           List.of(
               List.of("trade_source_events", TYPE),
-              List.of("reference_trade_price_events", PRICE))) {
+              List.of("reference_trade_price_events", PRICE_RECORD))) {
         var a = reads.query("SELECT COUNT(*) AS n FROM " + pair.get(0), List.of(), 1);
         var b =
             reads.query(

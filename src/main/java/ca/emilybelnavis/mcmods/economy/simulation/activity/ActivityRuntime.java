@@ -103,7 +103,7 @@ public final class ActivityRuntime {
           planned.put(cash.id(), cash);
           if (lendingProvider(cash.bank())) banks.add(cash.bank());
         }
-      } else if (fact.type().equals(InstitutionCapital.ALLOCATION)) {
+      } else if (fact.type().equals(InstitutionCapital.ALLOCATION_RECORD)) {
         requireVersion(fact, 1);
         var p = fact.payload().split("\\|", -1);
         if (p.length != 13 || !p[0].equals(world.value().toString()))

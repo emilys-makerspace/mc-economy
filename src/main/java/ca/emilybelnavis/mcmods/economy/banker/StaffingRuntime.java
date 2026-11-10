@@ -463,6 +463,7 @@ public final class StaffingRuntime {
   private static BlockPos standing(MinecraftServer server, Slot w) {
     var l = level(server, w);
     var a = anchor(w);
+    if (l == null || a == null) throw new IllegalStateException("Missing banker desk location");
     var p = pos(a.position());
     return DeskGeometry.standing(p, l.getBlockState(p).getValue(DeskBlock.FACING));
   }

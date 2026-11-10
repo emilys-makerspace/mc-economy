@@ -271,7 +271,7 @@ public final class MacroActivation {
             c,
             "SELECT r.payload FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version=1",
             operation,
-            DeadlineDispatcher.PROGRESS);
+            DeadlineDispatcher.PROGRESS_RECORD);
     if (progress == null) throw new SQLException("Macro child lacks dispatcher progress");
     String[] f = progress.split("\\|", -1);
     String world = scalar(c, "SELECT world_id FROM foundation_metadata WHERE singleton=1");

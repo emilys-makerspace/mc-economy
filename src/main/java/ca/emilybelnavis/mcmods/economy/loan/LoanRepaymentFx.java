@@ -216,7 +216,7 @@ public final class LoanRepaymentFx {
                       PostingBatch.Role.CLEARING,
                       to,
                       -q.amountMinor()));
-          var decision = Loans.repay(reads, loan, quote.payment(), now, legs, List.of());
+          var decision = Loans.planRepayment(reads, loan, quote.payment(), now, legs, List.of());
           if (!(decision instanceof JournalEngine.Commit base)) return decision;
           if (fx.pricing() != null) {
             decision =

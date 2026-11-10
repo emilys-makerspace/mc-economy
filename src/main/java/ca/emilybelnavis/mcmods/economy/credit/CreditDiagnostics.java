@@ -558,11 +558,9 @@ public final class CreditDiagnostics {
                       witness);
                 })
             .toList();
-    var last = entries.isEmpty() ? null : entries.getLast();
-    return new DailyPage(
-        entries,
-        rows.size() > limit ? new EventCursor(last.sequence(), last.position()) : null,
-        frontier);
+    if (rows.size() <= limit) return new DailyPage(entries, null, frontier);
+    var last = entries.getLast();
+    return new DailyPage(entries, new EventCursor(last.sequence(), last.position()), frontier);
   }
 
   private static PaymentPage payments(
@@ -593,11 +591,9 @@ public final class CreditDiagnostics {
                       witness);
                 })
             .toList();
-    var last = entries.isEmpty() ? null : entries.getLast();
-    return new PaymentPage(
-        entries,
-        rows.size() > limit ? new EventCursor(last.sequence(), last.position()) : null,
-        frontier);
+    if (rows.size() <= limit) return new PaymentPage(entries, null, frontier);
+    var last = entries.getLast();
+    return new PaymentPage(entries, new EventCursor(last.sequence(), last.position()), frontier);
   }
 
   private static List<Map<String, String>> auditRows(

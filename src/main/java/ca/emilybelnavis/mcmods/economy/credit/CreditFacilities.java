@@ -720,6 +720,8 @@ public final class CreditFacilities {
     }
   }
 
+  // Keep the published method and identifier names.
+  @SuppressWarnings("java:S1845")
   public static Registration draw(
       PartyRef owner, DrawRequest request, InputSource inputs, LiveDraw live, LongSupplier clock) {
     Objects.requireNonNull(inputs);
@@ -992,6 +994,8 @@ public final class CreditFacilities {
    * Trusted FX/autopay adapters provide balanced funding debit/clearing legs; cannot be invoked by
    * a client DTO.
    */
+  // Keep the published method and identifier names.
+  @SuppressWarnings("java:S1845")
   public static Decision repay(
       ReadView reads,
       Facility f,
@@ -1056,7 +1060,8 @@ public final class CreditFacilities {
     return withState(
         audited(
             withAccounts(reads, money, accounts),
-            CreditAuditFacts.payment(f, effective, amount, principalPaid, interestPaid, payment)),
+            CreditAuditFacts.paymentRecord(
+                f, effective, amount, principalPaid, interestPaid, payment)),
         next,
         event(
             "REPAYMENT",
@@ -1100,7 +1105,7 @@ public final class CreditFacilities {
                 + a.postedMinor());
     if (posted == 0)
       return new Commit(
-          List.of(fact(next), event, CreditAuditFacts.daily(f, effective, p, a)),
+          List.of(fact(next), event, CreditAuditFacts.dailyRecord(f, effective, p, a)),
           new Journal.Result(1, "CREDIT_INTEREST_POSTED", f.id().toString()),
           tx -> write(tx, next));
     var receivable = financial(f, FinancialAccounts.Role.RECEIVABLE);
@@ -1120,7 +1125,8 @@ public final class CreditFacilities {
     if (!(money instanceof Commit committed)) return money;
     return withState(
         audited(
-            withAccounts(reads, committed, accounts), CreditAuditFacts.daily(f, effective, p, a)),
+            withAccounts(reads, committed, accounts),
+            CreditAuditFacts.dailyRecord(f, effective, p, a)),
         next,
         event,
         "CREDIT_INTEREST_POSTED",
@@ -1478,6 +1484,8 @@ public final class CreditFacilities {
     }
   }
 
+  // Keep the published method and identifier names.
+  @SuppressWarnings("java:S1845")
   public static Registration increase(
       PartyRef owner,
       IncreaseRequest request,
@@ -2135,6 +2143,8 @@ public final class CreditFacilities {
     return new Decline(new Journal.Result(1, code, ""));
   }
 
+  // Keep the published method and identifier names.
+  @SuppressWarnings("java:S1845")
   public static Journal.Record fact(Facility f) {
     return new Journal.Record(FACT, VERSION, encode(f));
   }
@@ -2431,9 +2441,12 @@ public final class CreditFacilities {
 
   public static void validateFact(String payload) {
     var f = decode(payload);
+    // Persisted APRs must match the canonical decimal representation, including trailing zeros.
+    String purchaseApr = apr(f.network(), false).toPlainString();
+    String advanceApr = apr(f.network(), true).toPlainString();
     if (!encode(f).equals(payload)
-        || !f.purchase().apr().equals(apr(f.network(), false))
-        || !f.advance().apr().equals(apr(f.network(), true)))
+        || !purchaseApr.equals(f.purchase().apr().toPlainString())
+        || !advanceApr.equals(f.advance().apr().toPlainString()))
       throw new IllegalArgumentException("Credit facility canonical fields");
   }
 

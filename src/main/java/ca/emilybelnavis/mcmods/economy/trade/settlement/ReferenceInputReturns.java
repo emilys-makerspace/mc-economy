@@ -15,7 +15,7 @@ import java.util.function.BooleanSupplier;
 public final class ReferenceInputReturns {
   private ReferenceInputReturns() {}
 
-  public static final String ABANDON = "economy:a9/reference-untouched-abandon";
+  public static final String ABANDON_RECORD = "economy:a9/reference-untouched-abandon";
   private static final Journal.Kind KIND =
       new Journal.Kind("economy:a9", "economy:a9/reference-npc/abandon");
 
@@ -50,7 +50,7 @@ public final class ReferenceInputReturns {
 
   public static RecordCatalog register(RecordCatalog c) {
     return c.with(
-        new RecordCatalog.Key(ABANDON, 1),
+        new RecordCatalog.Key(ABANDON_RECORD, 1),
         p -> {
           if (!encode(decode(p)).equals(p)) throw new IllegalArgumentException("Abandon canonical");
         });
@@ -170,7 +170,7 @@ public final class ReferenceInputReturns {
                       .prepare(child, r);
               if (!(decision instanceof JournalEngine.Commit quarantined)) return decision;
               var records = new ArrayList<>(quarantined.records());
-              records.add(new Journal.Record(ABANDON, 1, payload));
+              records.add(new Journal.Record(ABANDON_RECORD, 1, payload));
               return new JournalEngine.Commit(
                   records,
                   new Journal.Result(1, "NPC_UNTOUCHED_ABANDONED", quote.toString()),
@@ -288,7 +288,7 @@ public final class ReferenceInputReturns {
     try (var q =
         c.prepareStatement(
             "SELECT r.payload,t.operation_id FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE r.record_type=?")) {
-      q.setString(1, ABANDON);
+      q.setString(1, ABANDON_RECORD);
       try (var rows = q.executeQuery()) {
         while (rows.next()) {
           var s = decode(rows.getString(1));

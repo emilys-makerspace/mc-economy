@@ -289,7 +289,7 @@ class CreditDiagnosticsTest {
     try (var f = new Fixture()) {
       var p = CardServicing.day(EconomyCurrency.CAD, f.facility.purchase());
       var a = CardServicing.day(EconomyCurrency.CAD, f.facility.advance());
-      var first = CreditAuditFacts.daily(f.facility, DUE, p, a);
+      var first = CreditAuditFacts.dailyRecord(f.facility, DUE, p, a);
       var token = UUID.randomUUID().toString();
       var account = UUID.randomUUID().toString();
       f.record(
@@ -304,7 +304,7 @@ class CreditDiagnosticsTest {
                           f.id.toString(),
                           Long.toString(DUE),
                           "100|" + token + "|" + account)))));
-      f.record(List.of(CreditAuditFacts.daily(f.facility, DUE, p, a)));
+      f.record(List.of(CreditAuditFacts.dailyRecord(f.facility, DUE, p, a)));
       var page =
           f.store.transaction(
               tx ->
@@ -418,7 +418,7 @@ class CreditDiagnosticsTest {
               f.facility.slices(),
               100,
               DUE + 1);
-      var fact = CreditAuditFacts.payment(f.facility, DUE + 1, 100, 93, 7, payment);
+      var fact = CreditAuditFacts.paymentRecord(f.facility, DUE + 1, 100, 93, 7, payment);
       f.record(List.of(CreditFacilities.fact(f.facility), fact));
       var page =
           f.store.transaction(
@@ -460,7 +460,7 @@ class CreditDiagnosticsTest {
               f.facility.slices(),
               100,
               DUE + 1);
-      f.record(List.of(CreditAuditFacts.payment(f.facility, DUE + 1, 100, 93, 7, payment)));
+      f.record(List.of(CreditAuditFacts.paymentRecord(f.facility, DUE + 1, 100, 93, 7, payment)));
       var receipt = f.inspect().payments().entries().getFirst();
       assertEquals(100, receipt.witness().amountMinor());
       assertEquals(93, receipt.witness().principalMinor());

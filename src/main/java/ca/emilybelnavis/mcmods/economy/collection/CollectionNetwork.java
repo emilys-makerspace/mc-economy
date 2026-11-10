@@ -32,7 +32,7 @@ public final class CollectionNetwork {
 
   public record Action(int menuId, UUID session, long revision, String action, String value)
       implements CustomPacketPayload {
-    public static final Type<Action> TYPE =
+    public static final Type<Action> PAYLOAD_TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath("economy", "collection_action"));
     public static final StreamCodec<RegistryFriendlyByteBuf, Action> CODEC =
         new StreamCodec<>() {
@@ -57,7 +57,7 @@ public final class CollectionNetwork {
     }
 
     public Type<Action> type() {
-      return TYPE;
+      return PAYLOAD_TYPE;
     }
   }
 
@@ -79,7 +79,7 @@ public final class CollectionNetwork {
       boolean busy,
       List<Choice> choices)
       implements CustomPacketPayload {
-    public static final Type<Snapshot> TYPE =
+    public static final Type<Snapshot> PAYLOAD_TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath("economy", "collection_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, Snapshot> CODEC =
         new StreamCodec<>() {
@@ -144,7 +144,7 @@ public final class CollectionNetwork {
     }
 
     public Type<Snapshot> type() {
-      return TYPE;
+      return PAYLOAD_TYPE;
     }
   }
 
@@ -168,7 +168,7 @@ public final class CollectionNetwork {
   private static void register(RegisterPayloadHandlersEvent event) {
     var registrar = event.registrar("1");
     registrar.playToServer(
-        Action.TYPE,
+        Action.PAYLOAD_TYPE,
         Action.CODEC,
         (action, context) ->
             context.enqueueWork(
@@ -180,7 +180,7 @@ public final class CollectionNetwork {
                     CollectionDialogue.action(player, menu, action.action(), action.value());
                 }));
     registrar.playToClient(
-        Snapshot.TYPE,
+        Snapshot.PAYLOAD_TYPE,
         Snapshot.CODEC,
         (snapshot, context) ->
             context.enqueueWork(

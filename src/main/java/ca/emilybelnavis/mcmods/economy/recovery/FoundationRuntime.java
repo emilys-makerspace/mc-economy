@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Storage recovery -> compatibility/migrations -> projections -> catch-up -> consistent
@@ -153,11 +154,11 @@ public final class FoundationRuntime implements FoundationStore {
   private boolean economicProjectionsPending;
   private Path world;
   private volatile WorldShutdown.Evidence closedEvidence;
-  private volatile long observedDeadlineTurns;
+  private final AtomicLong observedDeadlineTurns = new AtomicLong();
 
   /** Actual dispatcher advances observed in this runtime session. */
   public long observedDeadlineTurns() {
-    return observedDeadlineTurns;
+    return observedDeadlineTurns.get();
   }
 
   public FoundationRuntime(Configuration configuration) {
@@ -327,7 +328,7 @@ public final class FoundationRuntime implements FoundationStore {
                 p ->
                     p.id()
                         .equals(ca.emilybelnavis.mcmods.economy.autopay.AutopayRuntime.PROVIDER))) {
-      if (!ca.emilybelnavis.mcmods.economy.autopay.Autopay.bootstrap(store))
+      if (!ca.emilybelnavis.mcmods.economy.autopay.Autopay.bootstrapHistory(store))
         return new Progress("autopay-statement-history", 0, 1, false);
       autopayMigrated = true;
     }
@@ -405,7 +406,7 @@ public final class FoundationRuntime implements FoundationStore {
       return new EconomicStep<>(economicProgress(scheduledProgress(true)), null, null);
     }
     if (domainFirst()) {
-      observedDeadlineTurns = Math.addExact(observedDeadlineTurns, 1);
+      observedDeadlineTurns.updateAndGet(Math::incrementExact);
       deadlines.advance();
       economicProjectionsPending = true;
       return new EconomicStep<>(economicProgress(scheduledProgress(true)), null, null);
@@ -472,7 +473,7 @@ public final class FoundationRuntime implements FoundationStore {
     if (baseScheduledProgress(true).ready() && capitalPending())
       capital.advance(configuration.wall().instant());
     else if (domainFirst()) {
-      observedDeadlineTurns = Math.addExact(observedDeadlineTurns, 1);
+      observedDeadlineTurns.updateAndGet(Math::incrementExact);
       deadlines.advance();
     } else clock.runBatch(1);
     return scheduledProgress(true);
@@ -484,7 +485,7 @@ public final class FoundationRuntime implements FoundationStore {
       if (record.type().equals(ca.emilybelnavis.mcmods.economy.clock.EconomicRecord.TYPE))
         return ca.emilybelnavis.mcmods.economy.clock.EconomicRecord.decode(record.payload())
             .endMillis();
-      if (record.type().equals(DeadlineDispatcher.PROGRESS)
+      if (record.type().equals(DeadlineDispatcher.PROGRESS_RECORD)
           || record.type().equals(DeadlineDispatcher.COMPLETION))
         return Long.parseLong(record.payload().split("\\|", -1)[3]);
     }

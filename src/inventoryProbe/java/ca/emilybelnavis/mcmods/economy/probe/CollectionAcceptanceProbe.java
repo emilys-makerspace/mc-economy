@@ -71,7 +71,7 @@ public final class CollectionAcceptanceProbe {
         p.setInvulnerable(true);
         net.neoforged.neoforge.network.registration.ChannelAttributes.getOrCreateAdHocChannels(
                 p.connection.getConnection())
-            .add(CollectionNetwork.Snapshot.TYPE.id());
+            .add(CollectionNetwork.Snapshot.PAYLOAD_TYPE.id());
       }
       deadline = server.getTickCount() + 1800;
       stage = 1;

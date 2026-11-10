@@ -16,7 +16,7 @@ import java.util.*;
 public final class InstitutionCapital {
   public static final String CATALOG = "economy:a6/catalog-publication";
   public static final String MANIFEST = "economy:a6/capital-manifest";
-  public static final String ALLOCATION = "economy:a6/capital-allocation";
+  public static final String ALLOCATION_RECORD = "economy:a6/capital-allocation";
   public static final String ACCOUNT = "economy:a6/institution-account";
   public static final long TOTAL_MAJOR = 28_000_000_000L;
   public static final InstitutionCatalog.InstitutionId TREASURY =
@@ -114,7 +114,7 @@ public final class InstitutionCapital {
     return catalog
         .with(new RecordCatalog.Key(CATALOG, 1), InstitutionCapital::validateCatalog)
         .with(new RecordCatalog.Key(MANIFEST, 1), InstitutionCapital::validateManifest)
-        .with(new RecordCatalog.Key(ALLOCATION, 1), InstitutionCapital::validateAllocation)
+        .with(new RecordCatalog.Key(ALLOCATION_RECORD, 1), InstitutionCapital::validateAllocation)
         .with(new RecordCatalog.Key(ACCOUNT, 1), InstitutionCapital::validateAccount);
   }
 
@@ -245,7 +245,7 @@ public final class InstitutionCapital {
     var allocation = allocation(world, current.next, current.currency, current.publication);
     var financial = poster.allocate(reads, allocation);
     var records = new ArrayList<>(financial.records());
-    records.add(new Journal.Record(ALLOCATION, 1, allocationPayload(allocation)));
+    records.add(new Journal.Record(ALLOCATION_RECORD, 1, allocationPayload(allocation)));
     var accounts = List.of(allocation.cash, allocation.equity, allocation.rounding);
     accounts.forEach(a -> records.add(new Journal.Record(ACCOUNT, 1, accountPayload(a))));
     int next = current.next + 1;

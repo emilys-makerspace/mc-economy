@@ -454,7 +454,7 @@ public final class Autopay {
         .equals("1");
   }
 
-  public static boolean bootstrap(FoundationStore store) {
+  public static boolean bootstrapHistory(FoundationStore store) {
     return AutopayHistory.bootstrap(store);
   }
 

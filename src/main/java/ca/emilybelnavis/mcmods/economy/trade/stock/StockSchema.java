@@ -199,6 +199,8 @@ public final class StockSchema {
         scalar(c, "SELECT sequence FROM trade_stock_events WHERE operation_id=?", operation));
   }
 
+  // All identifiers come from fixed schema literals at the call sites. Row values are bound.
+  @SuppressWarnings("java:S2077")
   private static void validateLatest(Connection c, String table, String eventKey)
       throws SQLException {
     String projectionKey =

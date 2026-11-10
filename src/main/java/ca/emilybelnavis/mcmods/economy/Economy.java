@@ -100,6 +100,8 @@ public final class Economy {
    * Trusted release-excluded fixture hook; no packet, command or production configuration exposes
    * this.
    */
+  // The temporary root is resolved only for a path comparison. This hook creates no files.
+  @SuppressWarnings("java:S5443")
   public static void installFixtureClock(MinecraftServer server, Clock clock) {
     if (!server.isSameThread()
         || !Boolean.getBoolean("economy.debtCompositeProbe")

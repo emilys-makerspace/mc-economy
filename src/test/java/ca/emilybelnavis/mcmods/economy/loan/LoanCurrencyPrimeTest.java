@@ -71,10 +71,11 @@ class LoanCurrencyPrimeTest {
       assertEquals(cad.id(), cadLoan.primePolicyId());
       assertEquals(cad.revision(), cadLoan.primePolicyRevision());
       assertEquals(0, cad.primeApr().compareTo(cadLoan.primeApr()));
-      assertEquals(2, Loans.fact(cadLoan).version());
-      assertEquals(cadLoan, Loans.decode(Loans.fact(cadLoan).payload(), 2));
+      assertEquals(2, Loans.contractRecord(cadLoan).version());
+      assertEquals(cadLoan, Loans.decode(Loans.contractRecord(cadLoan).payload(), 2));
       assertThrows(
-          IllegalArgumentException.class, () -> Loans.decode(Loans.fact(cadLoan).payload(), 1));
+          IllegalArgumentException.class,
+          () -> Loans.decode(Loans.contractRecord(cadLoan).payload(), 1));
       var usdAccount = new AccountId(UUID.randomUUID());
       f.store.transaction(
           tx ->
@@ -164,7 +165,7 @@ class LoanCurrencyPrimeTest {
   void oldFixedFactsRemainV1AndSubprimeDoesNotCaptureCurrencyPrime() throws Exception {
     try (var f = new LoanTestFixture(path.toRealPath())) {
       var old = f.originate();
-      var fact = Loans.fact(old);
+      var fact = Loans.contractRecord(old);
       assertEquals(1, fact.version());
       assertNull(old.primePolicyId());
       assertEquals(old, Loans.decode(fact.payload(), 1));
@@ -178,8 +179,8 @@ class LoanCurrencyPrimeTest {
       assertNull(loan.primePolicyId());
       assertEquals(0, loan.primePolicyRevision());
       assertEquals(0, loan.primeVersion());
-      assertEquals(1, Loans.fact(loan).version());
-      assertEquals(fact, Loans.fact(f.get(old.id())));
+      assertEquals(1, Loans.contractRecord(loan).version());
+      assertEquals(fact, Loans.contractRecord(f.get(old.id())));
     }
   }
 

@@ -9,6 +9,7 @@ final class BankingPresentation {
   private static final Pattern UUID =
       Pattern.compile(
           "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+  private static final Pattern NUMBERED_LINE = Pattern.compile("[1-8]\\. .*");
   private static final Pattern CODE = Pattern.compile("[A-Z][A-Z0-9_]{2,}");
 
   private BankingPresentation() {}
@@ -37,7 +38,9 @@ final class BankingPresentation {
         clean = UiText.mapText(clean, text -> UUID.matcher(text).replaceFirst("").stripTrailing());
       if (english.matches("#[0-9]+ .+"))
         clean = UiText.mapText(clean, text -> text.replaceFirst("^#[0-9]+ ", ""));
-      if (english.matches("[1-8]\\. .* — .*") && UUID.matcher(english).find()) {
+      if (english.indexOf(" — ", 3) >= 0
+          && NUMBERED_LINE.matcher(english).matches()
+          && UUID.matcher(english).find()) {
         String number = english.substring(0, english.indexOf('.') + 1);
         String kind = english.substring(english.lastIndexOf('—') + 1).strip();
         clean =

@@ -44,7 +44,7 @@ public final class CreditAuditFacts {
 
   private CreditAuditFacts() {}
 
-  public static Journal.Record daily(
+  public static Journal.Record dailyRecord(
       CreditFacilities.Facility f,
       long effective,
       CardServicing.Accrual purchase,
@@ -69,7 +69,7 @@ public final class CreditAuditFacts {
             Long.toString(advance.postedMinor())));
   }
 
-  public static Journal.Record payment(
+  public static Journal.Record paymentRecord(
       CreditFacilities.Facility f,
       long effective,
       long amount,

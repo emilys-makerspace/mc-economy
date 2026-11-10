@@ -9,14 +9,14 @@ import java.util.*;
  * One bounded provider for monthly loan closes; autopay/default/reporting remain separate domains.
  */
 public final class LoanRuntime {
-  public static final String PROVIDER = "economy:a6/loan-monthly";
+  public static final String MONTHLY_PROVIDER_ID = "economy:a6/loan-monthly";
 
   private LoanRuntime() {}
 
   public static DeadlineDispatcher.Provider provider() {
     return new DeadlineDispatcher.Provider() {
       public String id() {
-        return PROVIDER;
+        return MONTHLY_PROVIDER_ID;
       }
 
       public Map<Integer, String> versions() {

@@ -13,7 +13,7 @@ import java.util.*;
 /** Worker-confined arbitrary UTC deadlines. One child or event completion commits per advance. */
 public final class DeadlineDispatcher {
   public static final String ACTIVATION = "economy:a6/calendar-activation";
-  public static final String PROGRESS = "economy:a6/deadline-progress";
+  public static final String PROGRESS_RECORD = "economy:a6/deadline-progress";
   public static final String POLICY = "economy:a6/policy-effective";
   public static final String COMPLETION = "economy:a6/deadline-completion";
   private static final Journal.Kind KIND =
@@ -148,7 +148,9 @@ public final class DeadlineDispatcher {
   public static RecordCatalog register(RecordCatalog catalog) {
     return catalog
         .with(new RecordCatalog.Key(ACTIVATION, 1), DeadlineDispatcher::validateActivation)
-        .with(new RecordCatalog.Key(PROGRESS, 1), payload -> validateProgressType(payload, false))
+        .with(
+            new RecordCatalog.Key(PROGRESS_RECORD, 1),
+            payload -> validateProgressType(payload, false))
         .with(new RecordCatalog.Key(COMPLETION, 1), payload -> validateProgressType(payload, true))
         .with(new RecordCatalog.Key(POLICY, 1), DeadlineDispatcher::validatePolicy);
   }
@@ -238,7 +240,7 @@ public final class DeadlineDispatcher {
                 || !fields[4].equals(calendar.get("last_stage"))
                 || !fields[9].equals(calendar.get("completed_effects")))
               throw failure("Calendar global checkpoint mismatch");
-            String type = fields[8].equals("1") ? COMPLETION : PROGRESS;
+            String type = fields[8].equals("1") ? COMPLETION : PROGRESS_RECORD;
             if (tx.query(
                     "SELECT payload FROM journal_records WHERE record_type IN ('economy:a6/calendar-activation','economy:a6/deadline-progress','economy:a6/deadline-completion','economy:a6/policy-effective') AND record_type=? AND record_version=1 AND payload=? LIMIT 1",
                     List.of(type, payload),
@@ -358,7 +360,7 @@ public final class DeadlineDispatcher {
                       : Objects.requireNonNull(
                           providers.get(event.provider()).prepare(event, target, queries));
               var records = new ArrayList<Journal.Record>();
-              records.add(new Journal.Record(complete ? COMPLETION : PROGRESS, 1, payload));
+              records.add(new Journal.Record(complete ? COMPLETION : PROGRESS_RECORD, 1, payload));
               records.addAll(output.records());
               return new JournalEngine.Commit(
                   records,
@@ -552,7 +554,7 @@ public final class DeadlineDispatcher {
     if (reads
         .query(
             "SELECT payload FROM journal_records WHERE record_type IN ('economy:a6/calendar-activation','economy:a6/deadline-progress','economy:a6/deadline-completion','economy:a6/policy-effective') AND record_type=? AND record_version=1 AND payload=? LIMIT 1",
-            List.of(complete ? COMPLETION : PROGRESS, payload),
+            List.of(complete ? COMPLETION : PROGRESS_RECORD, payload),
             1)
         .isEmpty()) throw failure("Deadline checkpoint lacks authoritative fact");
   }
@@ -700,7 +702,7 @@ public final class DeadlineDispatcher {
             throw failure("Stored calendar policy mismatch");
         }
       }
-    } else if (type.equals(PROGRESS) || type.equals(COMPLETION)) {
+    } else if (type.equals(PROGRESS_RECORD) || type.equals(COMPLETION)) {
       validateProgress(payload);
       String[] fields = payload.split("\\|", -1);
       if (type.equals(COMPLETION) != fields[8].equals("1"))

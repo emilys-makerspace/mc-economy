@@ -371,6 +371,8 @@ public final class MarketSchema {
       throw invalid("Spatial projection count");
   }
 
+  // All identifiers come from fixed schema literals at the call sites. Row values are bound.
+  @SuppressWarnings("java:S2077")
   private static void validateLatest(
       Connection c, String table, String eventKey, String projectionKey) throws SQLException {
     try (var s = c.createStatement();

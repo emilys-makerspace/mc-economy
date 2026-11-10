@@ -63,7 +63,7 @@ class ReportingDagAcceptanceTest {
                     Loans.quote(
                         reads, fixture.owner, loan.id(), fixture.account, amount, false, boundary);
                 var decision =
-                    Loans.repay(
+                    Loans.planRepayment(
                         reads,
                         current,
                         quote,

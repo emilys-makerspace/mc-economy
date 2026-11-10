@@ -911,7 +911,7 @@ public final class Loans {
     records.addAll(accountFacts(reads, contract, accounts));
     records.addAll(money.records());
     records.addAll(plan.facts());
-    records.add(fact(contract));
+    records.add(contractRecord(contract));
     records.add(
         event(
             "ORIGINATED",
@@ -976,7 +976,7 @@ public final class Loans {
     var records = new ArrayList<Journal.Record>();
     if (money != null) records.addAll(money.records());
     records.addAll(accountFacts(reads, loan, accounts));
-    records.add(fact(next));
+    records.add(contractRecord(next));
     var installment =
         new InstallmentSnapshot(
             loan.world(),
@@ -1141,7 +1141,7 @@ public final class Loans {
           var funding = AccountCatalog.find(reads, owner, request.funding()).orElse(null);
           if (funding == null || funding.currency() != loan.currency())
             return decline("LOAN_EXPLICIT_FX_REQUIRED");
-          return repay(
+          return planRepayment(
               reads,
               loan,
               quote,
@@ -1182,7 +1182,7 @@ public final class Loans {
    * The funding legs provide exactly the contract-currency debit; fees are composed separately on a
    * posting overlay.
    */
-  public static Decision repay(
+  public static Decision planRepayment(
       ReadView reads,
       Contract loan,
       PaymentQuote quote,
@@ -1231,7 +1231,7 @@ public final class Loans {
     if (!(decision instanceof Commit money)) return decision;
     var records = new ArrayList<>(money.records());
     records.addAll(accountFacts(reads, loan, accounts));
-    records.add(fact(next));
+    records.add(contractRecord(next));
     records.add(
         event(
             "PAYMENT",
@@ -1566,7 +1566,7 @@ public final class Loans {
         id.value(), PostingBatch.Role.ACCOUNT, currency, new Money(currency, amount));
   }
 
-  public static Journal.Record fact(Contract loan) {
+  public static Journal.Record contractRecord(Contract loan) {
     return new Journal.Record(FACT, loan.primePolicyId() == null ? 1 : 2, encode(loan));
   }
 

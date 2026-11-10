@@ -388,7 +388,7 @@ class AutopayTest {
       long facilityRevision,
       boolean enabled,
       Autopay.Mode mode) {
-    for (int turn = 0; !Autopay.bootstrap(f.store); turn++)
+    for (int turn = 0; !Autopay.bootstrapHistory(f.store); turn++)
       assertTrue(turn < 128, "Bounded autopay bootstrap");
     long revision = settings(f, kind, id).map(Autopay.Settings::revision).orElse(0L);
     long fundingRevision =

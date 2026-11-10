@@ -150,7 +150,7 @@ public final class EffectiveFxSchema {
                   c,
                   "SELECT payload FROM journal_records WHERE sequence=? AND record_type=? AND record_version=1",
                   Long.toString(sequence),
-                  DeadlineDispatcher.PROGRESS);
+                  DeadlineDispatcher.PROGRESS_RECORD);
           if (progress == null)
             throw new SQLException("Effective FX lacks actual stage-0 provider child");
           String[] fields = progress.split("\\|", -1);

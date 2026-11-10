@@ -184,7 +184,7 @@ public final class DebtFinance {
         recognized);
     var facts =
         List.of(
-            Loans.fact(next),
+            Loans.contractRecord(next),
             freezeFact(
                 old.world(),
                 DebtRecords.Kind.LOAN,
@@ -407,7 +407,9 @@ public final class DebtFinance {
             reads,
             legs,
             accounts,
-            List.of(Loans.fact(next), accountingFact(debt, "PAYMENT", effective, amount, discount)),
+            List.of(
+                Loans.contractRecord(next),
+                accountingFact(debt, "PAYMENT", effective, amount, discount)),
             "COLLECTION_PAID",
             tx -> Loans.write(tx, next));
     return new PaymentPlan(
@@ -463,7 +465,7 @@ public final class DebtFinance {
               false,
               List.of());
       var next = loan(old, cleared, Loans.Status.DEFAULTED);
-      facts.add(Loans.fact(next));
+      facts.add(Loans.contractRecord(next));
       clearRequirements = tx -> Loans.write(tx, next);
     }
     return compose(

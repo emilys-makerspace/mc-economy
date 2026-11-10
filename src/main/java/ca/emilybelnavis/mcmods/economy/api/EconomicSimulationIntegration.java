@@ -17,6 +17,8 @@ public interface EconomicSimulationIntegration {
   CompletionStage<List<MacroPlans.Outcome>> history(
       PartyAuthorization.Grant grant, long beforeDay, int limit);
 
+  // Integration mods rely on both VERSION and version().
+  @SuppressWarnings("java:S1845")
   default int version() {
     return VERSION;
   }

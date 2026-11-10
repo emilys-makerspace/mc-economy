@@ -38,7 +38,7 @@ public final class PricingAdmission {
             SameCurrency.TRANSFER,
             SameCurrency.CREDIT,
             FxSettlement.EXCHANGE,
-            ca.emilybelnavis.mcmods.economy.trade.settlement.NpcTrades.SETTLE)
+            ca.emilybelnavis.mcmods.economy.trade.settlement.NpcTrades.SETTLE_OPERATION)
         .contains(intent.kind())) return commit;
     var checked = new HashSet<String>();
     for (var record : commit.records())

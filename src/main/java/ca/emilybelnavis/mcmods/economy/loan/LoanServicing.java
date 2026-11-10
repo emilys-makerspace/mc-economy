@@ -325,7 +325,7 @@ public final class LoanServicing {
         posted);
   }
 
-  public static Close month(State s, String id, long effective) {
+  public static Close closeMonth(State s, String id, long effective) {
     return monthClose(s, id, effective);
   }
 

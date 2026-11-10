@@ -377,7 +377,7 @@ public final class HistoryDetails {
                 new Money(
                     receipt.publication() == null ? receipt.currency() : receipt.fxSourceCurrency(),
                     receipt.feeMinor()));
-            counterparty("Trader " + receipt.trader());
+            captureCounterparty("Trader " + receipt.trader());
             if (receipt.publication() != null)
               addFx(
                   capturedFx(
@@ -398,7 +398,7 @@ public final class HistoryDetails {
                 new Money(
                     receipt.publication() == null ? receipt.currency() : receipt.fxSourceCurrency(),
                     receipt.feeMinor()));
-            counterparty("Trader " + receipt.trader());
+            captureCounterparty("Trader " + receipt.trader());
             if (receipt.publication() != null)
               addFx(
                   capturedFx(
@@ -438,7 +438,7 @@ public final class HistoryDetails {
         else if (type.equals(CreditFacilities.FACT) && version == CreditFacilities.VERSION) {
           var facility = CreditFacilities.decodeSnapshot(payload);
           if (facility.party().equals(owner)) {
-            counterparty(facility.issuer().key());
+            captureCounterparty(facility.issuer().key());
             addProvenance(type, version, facility.id().toString());
           }
         } else if (type.equals(CreditFacilities.EVENT_FACT) && version == 1) {
@@ -468,13 +468,13 @@ public final class HistoryDetails {
         } else if (type.equals(Loans.FACT) && (version == 1 || version == 2)) {
           var loan = Loans.decode(payload, version);
           if (loan.party().equals(owner)) {
-            counterparty(loan.lender().key());
+            captureCounterparty(loan.lender().key());
             addProvenance(type, version, loan.id().toString());
           }
         } else if (type.equals(DebtRecords.CASE_FACT) && version == DebtRecords.VERSION) {
           var value = DebtRecords.decodeCase(payload);
           if (value.world().equals(owner.world()) && value.owner().equals(player)) {
-            counterparty(value.creditor().key());
+            captureCounterparty(value.creditor().key());
             addProvenance(type, version, value.id().toString());
           }
         } else if (!type.equals("economy:posting")) additional = true;
@@ -578,7 +578,7 @@ public final class HistoryDetails {
       if (receipt.isPresent()
           && receipt.get().invoice().equals(invoice)
           && receipt.get().action() == action) {
-        counterparty(Journal.actorKey(capturedOther[0]));
+        captureCounterparty(Journal.actorKey(capturedOther[0]));
         addProvenance(type, version, invoice.toString());
       } else additional = true;
     }
@@ -630,7 +630,7 @@ public final class HistoryDetails {
           : new Fee(Availability.KNOWN, values.getFirst());
     }
 
-    void counterparty(String label) {
+    void captureCounterparty(String label) {
       if (counterparty.visibility() == Visibility.PRIVATE) return;
       if (counterparty.visibility() == Visibility.CAPTURED && !counterparty.label().equals(label))
         counterparty = new Counterparty(Visibility.PRIVATE, "");

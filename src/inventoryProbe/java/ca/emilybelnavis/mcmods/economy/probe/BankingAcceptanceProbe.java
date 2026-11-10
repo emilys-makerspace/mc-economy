@@ -834,7 +834,7 @@ public final class BankingAcceptanceProbe {
     var channels =
         net.neoforged.neoforge.network.registration.ChannelAttributes.getOrCreateAdHocChannels(
             connection);
-    channels.add(BankingNetwork.Snapshot.TYPE.id());
+    channels.add(BankingNetwork.Snapshot.PAYLOAD_TYPE.id());
     channels.add(net.neoforged.neoforge.network.payload.AdvancedOpenScreenPayload.TYPE.id());
     players(server).add(result);
     byId(server).put(id, result);

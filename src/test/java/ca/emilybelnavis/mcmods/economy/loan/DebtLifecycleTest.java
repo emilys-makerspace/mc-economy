@@ -307,7 +307,7 @@ class DebtLifecycleTest {
                     Loans.quote(reads, f.owner, loan.id(), f.account, amount, false, reportAt);
                 try {
                   var decision =
-                      Loans.repay(
+                      Loans.planRepayment(
                           reads,
                           current,
                           quote,

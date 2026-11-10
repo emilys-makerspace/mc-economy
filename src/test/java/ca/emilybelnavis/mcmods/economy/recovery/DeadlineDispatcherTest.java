@@ -327,7 +327,7 @@ class DeadlineDispatcherTest {
               tx ->
                   tx.query(
                           "SELECT count(*) AS n FROM journal_records WHERE record_type=?",
-                          List.of(DeadlineDispatcher.PROGRESS),
+                          List.of(DeadlineDispatcher.PROGRESS_RECORD),
                           1)
                       .getFirst()
                       .get("n")));

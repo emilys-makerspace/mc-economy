@@ -299,7 +299,6 @@ final class SchemaMigrations {
     }
     if (target != registry.size() || from >= target)
       throw new StorageException(StorageException.Kind.SCHEMA, "Invalid migration target");
-    boolean canReset = true;
     try {
       connection.setAutoCommit(false);
       for (Migration migration : registry) {
@@ -335,10 +334,11 @@ final class SchemaMigrations {
       }
       connection.commit();
     } catch (Throwable e) {
+      boolean rolledBack = false;
       try {
         connection.rollback();
+        rolledBack = true;
       } catch (SQLException rollback) {
-        canReset = false;
         e.addSuppressed(rollback);
         try {
           connection.close();
@@ -346,19 +346,23 @@ final class SchemaMigrations {
           e.addSuppressed(close);
         }
       }
+      if (rolledBack) {
+        try {
+          connection.setAutoCommit(true);
+        } catch (SQLException reset) {
+          e.addSuppressed(reset);
+        }
+      }
       if (e instanceof Error error) throw error;
       throw new StorageException(
           StorageException.Kind.MIGRATION,
           "Migration failed; no automatic retry. Inspect schema before restart",
           e);
-    } finally {
-      if (canReset) {
-        try {
-          connection.setAutoCommit(true);
-        } catch (SQLException e) {
-          throw StorageException.sql(e);
-        }
-      }
+    }
+    try {
+      connection.setAutoCommit(true);
+    } catch (SQLException reset) {
+      throw StorageException.sql(reset);
     }
   }
 }

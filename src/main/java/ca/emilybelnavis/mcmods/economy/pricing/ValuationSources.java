@@ -15,7 +15,7 @@ public final class ValuationSources {
   private ValuationSources() {}
 
   public static final String FACT = "economy:a6/valuation-source-registration";
-  public static final Journal.Kind REGISTER =
+  public static final Journal.Kind REGISTER_OPERATION =
       new Journal.Kind("economy:a6", "economy:a6/valuation-sources/register");
   private static final int MAX_SOURCES = 8;
 
@@ -89,12 +89,18 @@ public final class ValuationSources {
     var engine =
         new JournalEngine(
             store,
-            (candidate, kind) -> candidate.equals(actor) && kind.equals(REGISTER),
-            Map.of(REGISTER, registration));
+            (candidate, kind) -> candidate.equals(actor) && kind.equals(REGISTER_OPERATION),
+            Map.of(REGISTER_OPERATION, registration));
     var outcome =
         engine.submit(
             new Journal.Intent(
-                operation, new RequestId(operation.value()), actor, REGISTER, request, null, null));
+                operation,
+                new RequestId(operation.value()),
+                actor,
+                REGISTER_OPERATION,
+                request,
+                null,
+                null));
     if (outcome.status() != Journal.Status.COMMITTED)
       throw failure("Could not register required valuation source");
     // Detect lost projections even if A1 resolved an old operation rather than replaying its

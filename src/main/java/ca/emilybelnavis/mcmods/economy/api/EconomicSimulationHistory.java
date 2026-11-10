@@ -12,6 +12,8 @@ import java.util.concurrent.CompletionStage;
 public interface EconomicSimulationHistory {
   int VERSION = 1;
 
+  // Integration mods rely on both VERSION and version().
+  @SuppressWarnings("java:S1845")
   default int version() {
     return VERSION;
   }

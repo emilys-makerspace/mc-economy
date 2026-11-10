@@ -23,7 +23,7 @@ import java.util.*;
 public final class ReferenceNpcTrades {
   public static final Journal.Kind BOOK =
       new Journal.Kind("economy:a9", "economy:a9/reference-npc/quote");
-  public static final Journal.Kind SETTLE =
+  public static final Journal.Kind SETTLE_OPERATION =
       new Journal.Kind("economy:a9", "economy:a9/reference-npc/settle");
 
   public enum Phase {
@@ -236,7 +236,7 @@ public final class ReferenceNpcTrades {
         new OperationId(original),
         new RequestId(original),
         actor,
-        SETTLE,
+        SETTLE_OPERATION,
         settleRequest(quoteId(world, original)),
         null,
         null);
@@ -250,8 +250,8 @@ public final class ReferenceNpcTrades {
     var engine =
         new JournalEngine(
             store,
-            (a, k) -> a instanceof PlayerId && k.equals(SETTLE),
-            Map.of(SETTLE, new JournalEngine.Registration(1, this::prepare)));
+            (a, k) -> a instanceof PlayerId && k.equals(SETTLE_OPERATION),
+            Map.of(SETTLE_OPERATION, new JournalEngine.Registration(1, this::prepare)));
     return engine.submit(intent);
   }
 

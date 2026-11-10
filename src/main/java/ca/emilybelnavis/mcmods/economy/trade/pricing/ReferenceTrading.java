@@ -27,7 +27,7 @@ public final class ReferenceTrading {
   private ReferenceTrading() {}
 
   public static final String TYPE = "economy:a9/reference-activation";
-  public static final Journal.Kind ACTIVATE =
+  public static final Journal.Kind ACTIVATE_OPERATION =
       new Journal.Kind("economy:a9", "economy:a9/reference-activation");
   private static final Gson JSON =
       new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
@@ -445,14 +445,14 @@ public final class ReferenceTrading {
     var outcome =
         new JournalEngine(
                 store,
-                (a, k) -> a.equals(actor) && k.equals(ACTIVATE),
-                Map.of(ACTIVATE, registration))
+                (a, k) -> a.equals(actor) && k.equals(ACTIVATE_OPERATION),
+                Map.of(ACTIVATE_OPERATION, registration))
             .submit(
                 new Journal.Intent(
                     new OperationId(operation),
                     new RequestId(operation),
                     actor,
-                    ACTIVATE,
+                    ACTIVATE_OPERATION,
                     request,
                     null,
                     null));

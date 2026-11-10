@@ -155,6 +155,7 @@ public final class Journal {
 
   static ActorId actor(String value) {
     String[] parts = value.split(":", 2);
+    if (parts.length != 2) throw new IllegalArgumentException("Stored actor format");
     UUID id = UUID.fromString(parts[1]);
     return switch (parts[0]) {
       case "player" -> new PlayerId(id);

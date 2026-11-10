@@ -446,6 +446,8 @@ public final class SqliteStorage implements FoundationStore {
           "SQLite durability settings were not applied");
   }
 
+  // Callers supply fixed SQLite settings. The only interpolated value is an int timeout.
+  @SuppressWarnings("java:S2077")
   private void executePragma(String pragma) throws SQLException {
     try (Statement statement = connection.createStatement()) {
       statement.execute("PRAGMA " + pragma);

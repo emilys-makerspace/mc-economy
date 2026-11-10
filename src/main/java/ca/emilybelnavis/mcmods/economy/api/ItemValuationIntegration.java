@@ -174,6 +174,8 @@ public interface ItemValuationIntegration {
   CompletionStage<List<SnapshotMetadata>> history(
       PartyAuthorization.Grant grant, Optional<UUID> beforeSnapshot, int limit);
 
+  // Integration mods rely on both VERSION and version().
+  @SuppressWarnings("java:S1845")
   default int version() {
     return VERSION;
   }

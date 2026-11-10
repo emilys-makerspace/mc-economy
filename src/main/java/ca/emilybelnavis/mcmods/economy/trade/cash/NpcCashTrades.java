@@ -26,7 +26,7 @@ import java.util.*;
 public final class NpcCashTrades {
   public static final Journal.Kind
       BOOK = new Journal.Kind("economy:a8", "economy:a8/npc-cash/quote"),
-      SETTLE = new Journal.Kind("economy:a8", "economy:a8/npc-cash/settle");
+      SETTLE_OPERATION = new Journal.Kind("economy:a8", "economy:a8/npc-cash/settle");
 
   public enum Phase {
     BOOK,
@@ -65,7 +65,7 @@ public final class NpcCashTrades {
         new OperationId(original),
         new RequestId(original),
         actor,
-        SETTLE,
+        SETTLE_OPERATION,
         request(quoteId(world, original)),
         null,
         null);
@@ -334,8 +334,8 @@ public final class NpcCashTrades {
   public Journal.Outcome settle(Journal.Intent intent) {
     return new JournalEngine(
             store,
-            (a, k) -> a instanceof PlayerId && k.equals(SETTLE),
-            Map.of(SETTLE, new JournalEngine.Registration(1, this::prepare)))
+            (a, k) -> a instanceof PlayerId && k.equals(SETTLE_OPERATION),
+            Map.of(SETTLE_OPERATION, new JournalEngine.Registration(1, this::prepare)))
         .submit(intent);
   }
 
@@ -570,9 +570,9 @@ public final class NpcCashTrades {
     var terminal =
         new JournalEngine(
                 store,
-                (a, k) -> a.equals(q.terms().actor()) && k.equals(SETTLE),
+                (a, k) -> a.equals(q.terms().actor()) && k.equals(SETTLE_OPERATION),
                 Map.of(
-                    SETTLE,
+                    SETTLE_OPERATION,
                     new JournalEngine.Registration(
                         1,
                         (i, r) -> {
