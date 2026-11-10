@@ -8,7 +8,7 @@ orbs:
 
 jobs:
   test:
-    # Four fixed workers: static JUnit class shards and one distinct live-client scenario each.
+    # Four fixed workers: complete JUnit shards and all autonomous client scenarios.
     parallelism: 4
     resource_class: large
     docker:
@@ -16,6 +16,7 @@ jobs:
     environment:
       LIBGL_ALWAYS_SOFTWARE: "1"
       GALLIUM_DRIVER: llvmpipe
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - checkout
       - restore_cache:
@@ -32,6 +33,7 @@ jobs:
             set +e
             (
             set -eo pipefail
+            python3 -m unittest discover -s .circleci -p test_ci_runners.py
             sudo apt-get update
             if apt-cache show libasound2t64 >/dev/null 2>&1; then audio_package=libasound2t64; else audio_package=libasound2; fi
             sudo apt-get install -y xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libopenal1 "$audio_package" libxrandr2 libxcursor1 libxi6 libxinerama1 libxxf86vm1
@@ -46,7 +48,7 @@ jobs:
             if bash .circleci/run-full-tests.sh; then result=0; else result=$?; fi
             printf '%s\n' "$result" > build/circleci/junit.status
       - run:
-          name: Run this node's real Minecraft menu or inventory scenario
+          name: Run all assigned automated Minecraft client scenarios
           when: always
           no_output_timeout: 20m
           command: |
@@ -66,6 +68,8 @@ jobs:
               done
             if [[ -f build/circleci/all-tests.txt ]]; then cp build/circleci/all-tests.txt "$node_dir/all-tests.txt"; fi
             if [[ -f build/circleci/node-tests.txt ]]; then cp build/circleci/node-tests.txt "$node_dir/selected-tests.txt"; fi
+            if [[ -f build/circleci/all-probes.txt ]]; then cp build/circleci/all-probes.txt "$node_dir/all-probes.txt"; fi
+            if [[ -f build/circleci/node-probes.txt ]]; then cp build/circleci/node-probes.txt "$node_dir/selected-probes.txt"; fi
             mkdir -p "$node_dir/junit"
             find build/circleci/junit -name '*.xml' -type f -exec cp {} "$node_dir/junit/" \;
             cp build/circleci/*.status "$node_dir/"
@@ -87,6 +91,10 @@ jobs:
           path: build/circleci/all-tests.txt
       - store_artifacts:
           path: build/circleci/node-tests.txt
+      - store_artifacts:
+          path: build/circleci/all-probes.txt
+      - store_artifacts:
+          path: build/circleci/node-probes.txt
       - store_artifacts:
           path: build/circleci/batches
       - store_artifacts:
@@ -129,12 +137,26 @@ jobs:
           path: build/reports/jacoco/test/jacocoTestReport.xml
       - codecov/upload:
           files: build/reports/jacoco/test/jacocoTestReport.xml
-
+  code-scanning:
+    docker:
+      - image: cimg/openjdk:21.0
+    steps:
+      - checkout
+      - run:
+          name: Run SonarQube analysis
+          command: |
+            ./gradlew build sonarqube
 workflows:
   test:
     jobs:
       - test
       - aggregate-coverage:
+          requires:
+            - test:
+                - success
+                - failed
+      - code-scanning:
+          context: sonarqube
           requires:
             - test:
                 - success

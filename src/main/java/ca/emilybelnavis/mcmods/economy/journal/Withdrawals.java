@@ -334,7 +334,7 @@ public final class Withdrawals {
                 + (provider == null ? 0 : provider.revision())
                 + "|"
                 + fee.minorUnits()
-                + "|CAD_FEE_V2|"
+                + "|CAD_FEE_V3|"
                 + publication
                     .rates()
                     .perMajorUnit()
@@ -1038,7 +1038,8 @@ public final class Withdrawals {
               .setScale(0, java.math.RoundingMode.CEILING)
               .longValueExact();
     } else {
-      if (!fields[4].equals("CAD_FEE_V2")) throw invalid("WITHDRAWAL_ATM_FEE");
+      if (!fields[4].equals("CAD_FEE_V2") && !fields[4].equals("CAD_FEE_V3"))
+        throw invalid("WITHDRAWAL_ATM_FEE");
       var cadRate = new java.math.BigDecimal(fields[5]);
       var targetRate = new java.math.BigDecimal(fields[6]);
       if (cadRate.signum() <= 0
@@ -1047,7 +1048,11 @@ public final class Withdrawals {
           || !targetRate.stripTrailingZeros().toPlainString().equals(fields[6]))
         throw invalid("WITHDRAWAL_ATM_FEE");
       expected =
-          BankingFees.convert(new java.math.BigDecimal("2.50"), currency, cadRate, targetRate)
+          (fields[4].equals("CAD_FEE_V2")
+                  ? BankingFees.legacyConvert(
+                      new java.math.BigDecimal("2.50"), currency, cadRate, targetRate)
+                  : BankingFees.convert(
+                      new java.math.BigDecimal("2.50"), currency, cadRate, targetRate))
               .minorUnits();
     }
     if (revision < 0

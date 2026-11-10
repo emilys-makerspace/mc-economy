@@ -384,7 +384,7 @@ class ChfFxActivationTest {
           current.transaction(tx -> FxDiagnostics.read(tx, wall.instant())).chfScheduledDay());
       var clock = clock(current, wall);
       assertEquals(
-          "2",
+          "3",
           current
               .transaction(
                   tx ->

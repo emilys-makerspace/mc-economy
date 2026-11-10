@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one isolated integrated-client probe per CircleCI node and publish JUnit evidence."""
+"""Run every assigned isolated integrated-client probe on a CircleCI node and publish JUnit evidence."""
 import argparse
 import os
 from pathlib import Path
@@ -12,14 +12,7 @@ import time
 import traceback
 import xml.etree.ElementTree as ET
 
-# Self-contained integrated clients only. Manual authenticated/external-client
-# testing is excluded from this allowlist and from the CI coverage gate.
-PROBES = (
-    ('bankingDashboardProbe', 'economy-a10-02-01-', 'banking-dashboard'),
-    ('bankingHistoryProbe', 'economy-a10-02-02-', 'banking-history'),
-    ('traderHookProbe', 'economy-a8-04-01-', 'trader-hook'),
-    ('traderCustodyProbe', 'economy-a8-04-02-', 'trader-custody'),
-)
+from ci_inventory import NODES, PROBES, assigned, validate_probes
 
 
 def stop_owned_process(process):
@@ -66,44 +59,34 @@ def junit(path, name, elapsed, failure):
     ET.ElementTree(suite).write(path, encoding='utf-8', xml_declaration=True)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--node', type=int, default=int(os.environ.get('CIRCLE_NODE_INDEX', '-1')))
-    parser.add_argument('--timeout', type=int, default=900)
-    args = parser.parse_args()
-    if args.node not in range(4) or args.timeout < 1:
-        parser.error('node must be 0..3 and timeout must be positive')
-    if os.environ.get('CIRCLE_NODE_TOTAL', '4') != '4':
-        parser.error('live probes require the four-node test job')
-    prop, prefix, marker = PROBES[args.node]
-    output = Path('build/circleci/live') / marker
-    output.mkdir(parents=True, exist_ok=True)
-    root = Path(tempfile.mkdtemp(prefix=prefix)).resolve()
+def run_phase(probe, phase, phase_number, root, timeout):
     client = root / 'client'
+    output = Path('build/circleci/live') / probe.name / f'phase-{phase_number}'
+    output.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
     environment.update(LIBGL_ALWAYS_SOFTWARE='1', GALLIUM_DRIVER='llvmpipe')
     command = ['xvfb-run', '-a', '-s', '-screen 0 1280x1024x24 -nolisten tcp',
-               './gradlew', 'runClient', '-P' + prop, '-PeconomyRunRoot=' + str(root),
-               '-PcircleciLiveDir=' + str(output), '-I', '.circleci/gradle-tests.init.gradle',
-               '--console=plain', '--no-daemon']
+               './gradlew', 'runClient', *('-P' + prop for prop in phase.properties),
+               '-PeconomyRunRoot=' + str(root), '-PcircleciLiveDir=' + str(output),
+               '-I', '.circleci/gradle-tests.init.gradle', '--console=plain', '--no-daemon']
     started = time.monotonic()
     process = None
     failure = ''
     exit_code = 1
+    label = f'{probe.name}/phase-{phase_number}'
 
     def interrupted(signum, frame):
         raise InterruptedError('Runner received signal ' + str(signum))
 
-    signal.signal(signal.SIGTERM, interrupted)
-    signal.signal(signal.SIGINT, interrupted)
+    handlers = {sig: signal.signal(sig, interrupted) for sig in (signal.SIGTERM, signal.SIGINT)}
     try:
-        print('Running ' + marker + ' in fresh disposable root ' + str(root), flush=True)
+        print('Running ' + label + ' in fresh disposable root ' + str(root), flush=True)
         with (output / 'gradle.log').open('w', encoding='utf-8') as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                        env=environment, start_new_session=True)
-            exit_code = process.wait(timeout=args.timeout)
-        failed = client / (marker + '-failed.txt')
-        passed = client / (marker + '-passed.txt')
+            exit_code = process.wait(timeout=timeout)
+        failed = client / (phase.marker + '-failed.txt')
+        passed = client / (phase.marker + '-passed.txt')
         if exit_code != 0:
             failure = 'Gradle exited with status ' + str(exit_code)
         if failed.exists():
@@ -113,7 +96,7 @@ def main():
         if failure:
             exit_code = exit_code or 1
     except subprocess.TimeoutExpired:
-        failure = 'Minecraft client exceeded the ' + str(args.timeout) + '-second deadline.'
+        failure = 'Minecraft client exceeded the ' + str(timeout) + '-second deadline.'
         exit_code = 124
         stop_owned_process(process)
     except BaseException as error:
@@ -123,19 +106,55 @@ def main():
             stop_owned_process(process)
     finally:
         try:
-            copy_evidence(client, output, marker)
+            copy_evidence(client, output, phase.marker)
         except Exception:
             failure += '\nCould not collect probe evidence:\n' + traceback.format_exc()
             exit_code = exit_code or 1
-        junit(Path('build/circleci/junit') / ('TEST-minecraft-live-' + marker + '.xml'),
-              marker, time.monotonic() - started, failure)
-        # This directory was just created above, never an existing player world.
-        shutil.rmtree(root)
+        junit(Path('build/circleci/junit') / f'TEST-minecraft-live-{probe.name}-{phase_number}.xml',
+              label, time.monotonic() - started, failure)
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
     if failure:
-        print(failure, file=sys.stderr)
+        print(label + ': ' + failure, file=sys.stderr)
     else:
-        print(marker + ' passed; evidence: ' + str(output))
+        print(label + ' passed; evidence: ' + str(output), flush=True)
     return exit_code if 0 <= exit_code <= 255 else 1
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--node', type=int, default=int(os.environ.get('CIRCLE_NODE_INDEX', '-1')))
+    parser.add_argument('--timeout', type=int, default=900, help='deadline per client process')
+    parser.add_argument('--list', action='store_true', help='list this node without launching clients')
+    args = parser.parse_args()
+    if args.node not in range(NODES) or args.timeout < 1:
+        parser.error('node must be 0..3 and timeout must be positive')
+    if os.environ.get('CIRCLE_NODE_TOTAL', str(NODES)) != str(NODES):
+        parser.error('live probes require the four-node test job')
+    validate_probes()
+    selected = assigned(PROBES, args.node)
+    if args.list:
+        print('\n'.join(probe.name for probe in selected))
+        return 0
+    directory = Path('build/circleci')
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / 'all-probes.txt').write_text(''.join(p.name + '\n' for p in PROBES))
+    (directory / 'node-probes.txt').write_text(''.join(p.name + '\n' for p in selected))
+    status = 0
+    for probe in selected:
+        root = Path(tempfile.mkdtemp(prefix=probe.prefix)).resolve()
+        try:
+            for index, phase in enumerate(probe.phases, 1):
+                result = run_phase(probe, phase, index, root, args.timeout)
+                if result:
+                    status = status or result
+                    if result == 130:
+                        return status
+                    break  # A failed setup phase cannot supply a valid restart world.
+        finally:
+            # This root was created above; never delete an existing player world.
+            shutil.rmtree(root)
+    return status
 
 
 if __name__ == '__main__':

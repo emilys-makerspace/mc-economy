@@ -470,7 +470,7 @@ class WithdrawalsTest {
       // CAD2.50 / 1.5 EUR rounds from EUR1.666... to the nearest quarter: EUR1.75.
       assertEquals(175, Withdrawals.atmFee(preview).minorUnits());
       assertEquals(4175, preview.debit().minorUnits());
-      assertTrue(preview.atmFee().endsWith("|175|CAD_FEE_V2|0.75|1.125"));
+      assertTrue(preview.atmFee().endsWith("|175|CAD_FEE_V3|0.75|1.125"));
       assertEquals(
           "ATM_FEE_MINOR_V5", Withdrawals.reserveRequest(preview).fields().get("settlement"));
       var reserve = intent(Withdrawals.Action.RESERVE, Withdrawals.reserveRequest(preview));

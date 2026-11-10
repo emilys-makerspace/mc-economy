@@ -135,7 +135,12 @@ public final class DebtFinance {
         new CardServicing.Bucket(
             old.kind(), old.principalMinor(), interest, ZERO, old.periodEarnedMajor(), old.apr());
     return new FrozenBucket(
-        next, posted, old.residualMajor().subtract(major(currency, posted)).setScale(18));
+        next,
+        posted,
+        old.residualMajor()
+            .subtract(major(currency, posted))
+            .setScale(8, RoundingMode.DOWN)
+            .setScale(18));
   }
 
   private static Frozen freezeLoan(ReadView reads, UUID id, long effective) {
@@ -664,8 +669,9 @@ public final class DebtFinance {
 
   private static long minor(EconomyCurrency currency, BigDecimal major) {
     return major
+        .setScale(8, RoundingMode.DOWN)
         .multiply(BigDecimal.valueOf(currency.minorUnitsPerMajor()))
-        .setScale(0, RoundingMode.HALF_EVEN)
+        .setScale(0, RoundingMode.HALF_UP)
         .longValueExact();
   }
 
@@ -690,7 +696,7 @@ public final class DebtFinance {
             facility.toString(),
             Long.toString(effective),
             Long.toString(recognized),
-            disposition.setScale(18).toPlainString()));
+            disposition.setScale(8, RoundingMode.DOWN).setScale(18).toPlainString()));
   }
 
   private static Journal.Record accountingFact(

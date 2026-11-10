@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-09
 
+### Monetary precision
+
+- New FX rates and conversion calculations retain eight decimal places. FX rates display exactly eight places in bank screens.
+- Converted proceeds truncate to cents, or round to the nearest whole yen. Exact requested payouts charge the nearest account minor unit, with halfway values rounding up.
+- Interest accruals and residuals truncate to eight decimal places before settlement to cents or whole yen, with halfway values rounding up. Existing balances and historical records are preserved.
+
 ### Terminal navigation localization
 
 - Added English and French text for current bank-scoped account, service and activity pages, including balances, holds, primary-bank instructions and paging.

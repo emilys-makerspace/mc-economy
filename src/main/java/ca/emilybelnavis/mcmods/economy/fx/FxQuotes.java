@@ -1,10 +1,10 @@
 package ca.emilybelnavis.mcmods.economy.fx;
 
+import ca.emilybelnavis.mcmods.economy.api.CurrencyConversion;
 import ca.emilybelnavis.mcmods.economy.api.EconomyCurrency;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.PlayerId;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.WorldId;
 import ca.emilybelnavis.mcmods.economy.api.Money;
-import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
@@ -107,19 +107,15 @@ public final class FxQuotes {
     quotes.values().removeIf(quote -> !fresh(quote, publication, PRICING_VERSION, now));
     if (quotes.size() >= CAPACITY) throw new IllegalStateException("FX_QUOTE_OVERLOAD");
 
-    BigDecimal numerator =
-        BigDecimal.valueOf(requested.minorUnits())
-            .multiply(publication.rates().get(source))
-            .multiply(BigDecimal.valueOf(target.minorUnitsPerMajor()));
-    BigDecimal denominator =
-        publication.rates().get(target).multiply(BigDecimal.valueOf(source.minorUnitsPerMajor()));
-    long units =
-        numerator
-            .divide(denominator, 0, exactDebit ? RoundingMode.FLOOR : RoundingMode.CEILING)
-            .longValueExact();
+    var converted =
+        CurrencyConversion.convert(
+            requested,
+            target,
+            new CurrencyConversion.Rates(publication.reference(), publication.rates()),
+            exactDebit ? CurrencyConversion.receivedRounding(target) : RoundingMode.HALF_UP);
+    long units = converted.minorUnits();
     if (units < 0 || (!exactDebit && units == 0))
       throw new IllegalArgumentException("FX_ZERO_CREDIT");
-    var converted = new Money(target, units);
     var quote =
         new Quote(
             UUID.randomUUID(),

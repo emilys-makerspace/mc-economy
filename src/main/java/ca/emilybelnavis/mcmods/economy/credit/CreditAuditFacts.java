@@ -51,14 +51,14 @@ public final class CreditAuditFacts {
       CardServicing.Accrual advance) {
     return new Journal.Record(
         DAILY,
-        1,
+        2,
         String.join(
             "|",
             f.id().toString(),
             f.world().value().toString(),
             Long.toString(effective),
             f.currency().name(),
-            "1",
+            "2",
             bucket(f.purchase()),
             bucket(f.advance()),
             bucket(purchase.bucket()),
@@ -115,8 +115,17 @@ public final class CreditAuditFacts {
     var purchase = new CardServicing.Accrual(bucket(p[7]), decimal(p[9]), number(p[11]));
     var advance = new CardServicing.Accrual(bucket(p[8]), decimal(p[10]), number(p[12]));
     var currency = EconomyCurrency.valueOf(p[3]);
-    if (!CardServicing.day(currency, beforeP).equals(purchase)
-        || !CardServicing.day(currency, beforeA).equals(advance)
+    int policy = Integer.parseInt(p[4]);
+    var expectedP =
+        policy == 1
+            ? CardServicing.dayLegacy(currency, beforeP)
+            : CardServicing.day(currency, beforeP);
+    var expectedA =
+        policy == 1
+            ? CardServicing.dayLegacy(currency, beforeA)
+            : CardServicing.day(currency, beforeA);
+    if (!expectedP.equals(purchase)
+        || !expectedA.equals(advance)
         || beforeP.kind() != CardServicing.Kind.PURCHASE
         || beforeA.kind() != CardServicing.Kind.ADVANCE)
       throw new IllegalArgumentException("Daily calculation mismatch");
@@ -125,7 +134,7 @@ public final class CreditAuditFacts {
         new WorldId(uuid(p[1])),
         number(p[2]),
         currency,
-        1,
+        policy,
         beforeP,
         beforeA,
         purchase,
@@ -134,6 +143,7 @@ public final class CreditAuditFacts {
 
   public static Payment decodePayment(String payload) {
     var p = fields(payload, 10);
+    if (!p[4].equals("1")) throw new IllegalArgumentException("Payment witness policy");
     var bytes = Base64.getUrlDecoder().decode(p[9]);
     String text = new String(bytes, StandardCharsets.UTF_8);
     if (!Base64.getUrlEncoder()
@@ -180,7 +190,7 @@ public final class CreditAuditFacts {
     if (text.getBytes(StandardCharsets.UTF_8).length > 16 * 1024)
       throw new IllegalArgumentException("Credit witness size");
     var p = text.split("\\|", -1);
-    if (p.length != count || !p[4].equals("1") || number(p[2]) < 0)
+    if (p.length != count || !Set.of("1", "2").contains(p[4]) || number(p[2]) < 0)
       throw new IllegalArgumentException("Credit witness fields");
     return p;
   }
@@ -230,9 +240,15 @@ public final class CreditAuditFacts {
     return id;
   }
 
+  private static void requireDailyPolicy(String payload, int version) {
+    if (decodeDaily(payload).policyVersion() != version)
+      throw new IllegalArgumentException("Daily witness policy version");
+  }
+
   public static RecordCatalog register(RecordCatalog catalog) {
     return catalog
-        .with(new RecordCatalog.Key(DAILY, 1), CreditAuditFacts::decodeDaily)
+        .with(new RecordCatalog.Key(DAILY, 1), p -> requireDailyPolicy(p, 1))
+        .with(new RecordCatalog.Key(DAILY, 2), p -> requireDailyPolicy(p, 2))
         .with(new RecordCatalog.Key(PAYMENT, 1), CreditAuditFacts::decodePayment);
   }
 

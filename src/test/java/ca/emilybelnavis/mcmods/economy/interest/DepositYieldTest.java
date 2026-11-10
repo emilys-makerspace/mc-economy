@@ -192,10 +192,11 @@ class DepositYieldTest {
     var full =
         DepositYield.dailyInterest(
             basis.multiply(BigDecimal.valueOf(DepositYield.DAY)), BigDecimal.ZERO, APR);
+    // Independent eight-place truncations can differ by one last-place unit.
     assertTrue(
         full.subtract(half.multiply(BigDecimal.valueOf(2)))
                 .abs()
-                .compareTo(new BigDecimal("0.000000000000000001"))
+                .compareTo(new BigDecimal("0.00000001"))
             <= 0);
     assertTrue(
         DepositYield.dailyInterest(basis.multiply(BigDecimal.valueOf(DepositYield.DAY)), full, APR)
@@ -222,8 +223,8 @@ class DepositYieldTest {
               new BigDecimal("100000").multiply(BigDecimal.valueOf(DepositYield.DAY)),
               BigDecimal.ZERO,
               APR);
-      assertTrue(
-          sum.subtract(expected).abs().compareTo(new BigDecimal("0.000000000000000001")) <= 0);
+      assertTrue(sum.compareTo(expected) <= 0, "Splitting the balance cannot increase yield");
+      assertTrue(expected.subtract(sum).compareTo(new BigDecimal("0.00000001")) <= 0);
       assertEquals(0, f.balance(account));
       assertEquals(10_000_000, f.balance(recipient));
     }
@@ -743,7 +744,8 @@ class DepositYieldTest {
             .add(residual)
             .multiply(APR, DepositYield.MC)
             .divide(new BigDecimal("364"), DepositYield.MC)
-            .setScale(18, RoundingMode.HALF_EVEN);
+            .setScale(8, RoundingMode.DOWN)
+            .setScale(18);
     assertEquals(expected, actual);
     assertTrue(actual.compareTo(DepositYield.dailyInterest(weighted, BigDecimal.ZERO, APR)) < 0);
     assertEquals(0, DepositYield.dailyInterest(BigDecimal.ZERO, residual, APR).signum());

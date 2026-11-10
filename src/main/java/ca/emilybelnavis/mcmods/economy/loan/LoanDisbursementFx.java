@@ -243,7 +243,7 @@ public final class LoanDisbursementFx {
             ServicePricing.fact(pricing),
             new Journal.Record(
                 FACT,
-                1,
+                2,
                 String.join(
                     "|",
                     quote.id().toString(),
@@ -278,14 +278,14 @@ public final class LoanDisbursementFx {
       FxFacts.Publication fx,
       RoundingMode rounding) {
     if (minor == 0) return 0;
-    return BigDecimal.valueOf(minor)
-        .multiply(fx.rates().get(source))
-        .multiply(BigDecimal.valueOf(target.minorUnitsPerMajor()))
-        .divide(
-            fx.rates().get(target).multiply(BigDecimal.valueOf(source.minorUnitsPerMajor())),
-            0,
-            rounding)
-        .longValueExact();
+    return CurrencyConversion.convert(
+            new Money(source, minor),
+            target,
+            new CurrencyConversion.Rates(fx.reference(), fx.rates()),
+            rounding == RoundingMode.FLOOR
+                ? CurrencyConversion.receivedRounding(target)
+                : RoundingMode.HALF_UP)
+        .minorUnits();
   }
 
   private static BigDecimal value(long minor, EconomyCurrency currency, FxFacts.Publication fx) {
@@ -314,10 +314,12 @@ public final class LoanDisbursementFx {
   }
 
   public static RecordCatalog register(RecordCatalog catalog) {
-    return catalog.with(new RecordCatalog.Key(FACT, 1), LoanDisbursementFx::validate);
+    return catalog
+        .with(new RecordCatalog.Key(FACT, 1), payload -> validate(payload, false))
+        .with(new RecordCatalog.Key(FACT, 2), payload -> validate(payload, true));
   }
 
-  private static void validate(String payload) {
+  private static void validate(String payload, boolean signedResidual) {
     var p = payload.split("\\|", -1);
     if (p.length != 15) throw new IllegalArgumentException("Loan disbursement fields");
     for (int i : new int[] {0, 1, 2, 3, 4, 14}) UUID.fromString(p[i]);
@@ -327,8 +329,10 @@ public final class LoanDisbursementFx {
         throw new IllegalArgumentException("Loan disbursement principal");
     for (int i : new int[] {9, 10})
       if (Long.parseLong(p[i]) < 0) throw new IllegalArgumentException("Loan disbursement fee");
+    // Nearest-minor settlement can round either side of the exact reference value.
     for (int i : new int[] {12, 13})
-      if (new BigDecimal(p[i]).signum() < 0 || new BigDecimal(p[i]).precision() > 64)
+      if ((!signedResidual && new BigDecimal(p[i]).signum() < 0)
+          || new BigDecimal(p[i]).precision() > 64)
         throw new IllegalArgumentException("Loan disbursement residual");
   }
 }

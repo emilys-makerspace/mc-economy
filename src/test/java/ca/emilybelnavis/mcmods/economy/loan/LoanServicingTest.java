@@ -47,6 +47,28 @@ class LoanServicingTest {
   }
 
   @Test
+  void historicalSchedulesRetainEighteenPlaceResidualWitnesses() {
+    var legacy = LoanServicing.scheduleLegacy(CAD, 123456, new BigDecimal("0.1999"), 1, false);
+    assertEquals(10550, legacy.installmentMinor());
+    assertEquals(1898, legacy.installments().getFirst().interestMinor());
+    assertEquals(
+        new BigDecimal("-0.000962495913064378"),
+        legacy.installments().getLast().residualDisposition());
+    var current = LoanServicing.schedule(CAD, 123456, new BigDecimal("0.1999"), 1, false);
+    assertNotEquals(
+        legacy.installments().getLast().residualDisposition(),
+        current.installments().getLast().residualDisposition());
+    assertEquals(
+        0,
+        current
+            .installments()
+            .getLast()
+            .residualDisposition()
+            .remainder(new BigDecimal("0.00000001"))
+            .signum());
+  }
+
+  @Test
   void zeroRateAndSmallestUnitFinalPaymentCloseWithoutPhantomDebt() {
     var schedule = LoanServicing.schedule(EconomyCurrency.JPY, 10000, BigDecimal.ZERO, 1, false);
     assertEquals(770, schedule.installmentMinor());
@@ -63,7 +85,9 @@ class LoanServicingTest {
     assertTrue(payment.state().closed());
     assertEquals(0, payment.state().exactDebtMajor().signum());
     assertTrue(payment.residualDisposition().signum() > 0);
-    assertTrue(payment.additionalInterestWaived().signum() > 0);
+    assertEquals(0, payment.additionalInterestWaived().signum());
+    var laterPayment = LoanServicing.settlePayoff(state, quote, quote.capturedAt() + 100);
+    assertTrue(laterPayment.additionalInterestWaived().signum() > 0);
   }
 
   @Test
@@ -181,7 +205,8 @@ class LoanServicingTest {
             .multiply(new BigDecimal("0.12"), LoanServicing.MC)
             .divide(BigDecimal.valueOf(13), LoanServicing.MC)
             .divide(BigDecimal.valueOf(2), LoanServicing.MC)
-            .setScale(18, RoundingMode.HALF_EVEN);
+            .setScale(8, RoundingMode.DOWN)
+            .setScale(18);
     assertEquals(expected, rest.accruedMajor());
     var old = LoanServicing.initial(CAD, 100000, new BigDecimal("0.12345"), 1, false, 0);
     var closed = LoanServicing.monthClose(old, "old", old.nextDue());

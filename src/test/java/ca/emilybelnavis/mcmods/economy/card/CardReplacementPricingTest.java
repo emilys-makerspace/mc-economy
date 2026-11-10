@@ -237,13 +237,19 @@ class CardReplacementPricingTest {
   }
 
   @Test
-  void foreignFundingUsesCeilingConversionAndOneCombinedFxFee() throws Exception {
+  void foreignFundingUsesNearestMinorConversionAndOneCombinedFxFee() throws Exception {
     try (var f = new Fixture(EconomyCurrency.EUR, 10000)) {
       var fx = f.fxQuote();
       long principal =
-          BigDecimal.valueOf(2500)
-              .multiply(f.publication.rates().get(EconomyCurrency.CAD))
-              .divide(f.publication.rates().get(EconomyCurrency.EUR), 0, RoundingMode.CEILING)
+          new BigDecimal("25.00")
+              .multiply(
+                  f.publication
+                      .rates()
+                      .get(EconomyCurrency.CAD)
+                      .divide(f.publication.rates().get(EconomyCurrency.EUR), 8, RoundingMode.DOWN))
+              .setScale(8, RoundingMode.DOWN)
+              .movePointRight(2)
+              .setScale(0, RoundingMode.HALF_UP)
               .longValueExact();
       assertEquals(principal, fx.debit().minorUnits());
       assertEquals(2500, fx.credit().minorUnits());

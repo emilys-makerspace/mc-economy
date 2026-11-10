@@ -67,7 +67,7 @@ class SimulationHistoryTest {
         var actual = all.get(index);
         var saved = expected.get(index);
         long at = thirdAt - index * CurrencyPrimes.DAY_MILLIS;
-        assertEquals(1, actual.recordVersion());
+        assertEquals(2, actual.recordVersion());
         assertEquals(at, actual.effectiveMillis());
         assertEquals((at - f.origin) / CurrencyPrimes.DAY_MILLIS - 1, actual.financialDay());
         assertEquals(saved.window(), actual.window());

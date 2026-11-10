@@ -80,6 +80,23 @@ class LoanIntegrationTest {
       var result = f.submit(Loans.APPLY, registration, intent);
       assertEquals("LOAN_ORIGINATED", result.result().code());
       assertEquals(result, f.submit(Loans.APPLY, registration, intent));
+      var receipt =
+          f.store.transaction(
+              tx ->
+                  tx.query(
+                          "SELECT record_version,payload FROM journal_records WHERE record_type=?",
+                          List.of(LoanDisbursementFx.FACT),
+                          1)
+                      .getFirst());
+      assertEquals("2", receipt.get("record_version"));
+      assertTrue(new BigDecimal(receipt.get("payload").split("\\|", -1)[13]).signum() < 0);
+      var catalog = ca.emilybelnavis.mcmods.economy.recovery.RecordCatalog.core();
+      assertDoesNotThrow(
+          () -> catalog.validate(LoanDisbursementFx.FACT, 2, receipt.get("payload")));
+      assertThrows(
+          ca.emilybelnavis.mcmods.economy.storage.StorageException.class,
+          () -> catalog.validate(LoanDisbursementFx.FACT, 1, receipt.get("payload")));
+
       assertEquals(100000, f.get(app.loan()).owedMinor());
       assertEquals(
           cash - 100000 + 500, f.amount(LoanTestFixture.BANK, FinancialAccounts.Role.CASH));

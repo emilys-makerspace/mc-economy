@@ -53,6 +53,13 @@ public final class FxService {
                     "fx-daily-v2-chf",
                     update -> {
                       throw new IllegalStateException("FX requires detached publication inputs");
+                    }),
+            3,
+                new EconomicClock.Version(
+                    3,
+                    "fx-daily-v3-eight-decimal",
+                    update -> {
+                      throw new IllegalStateException("FX requires detached publication inputs");
                     })),
         Set.of());
   }
@@ -65,7 +72,15 @@ public final class FxService {
           var opening =
               readPublication(
                   reads::query, PUBLICATIONS + " ORDER BY " + DAY_KEY + " LIMIT 1", List.of());
-          return opening == null ? 1 : opening.version();
+          if (opening == null) return 1;
+          var facts =
+              reads.query(
+                  "SELECT record_version FROM journal_records WHERE record_type=? ORDER BY sequence LIMIT 1",
+                  List.of(PUBLICATION),
+                  1);
+          return !facts.isEmpty() && facts.getFirst().get("record_version").equals("3")
+              ? 3
+              : opening.version();
         });
   }
 
@@ -292,7 +307,7 @@ public final class FxService {
 
   private static EconomicClock.Calculation prepare(
       EconomicClock.Update update, EconomicClock.Queries reads) {
-    if (update.version() != 1 && update.version() != 2)
+    if (update.version() != 1 && update.version() != 2 && update.version() != 3)
       throw new IllegalArgumentException("Unsupported FX simulation version");
     LocalDate day = utcDay(Instant.ofEpochMilli(update.endMillis()));
     var previous = publication(reads::query, day.minusDays(1));
@@ -317,9 +332,12 @@ public final class FxService {
     @Override
     public EconomicClock.Output compute() {
       var rates =
-          FxMath.advance(
-              previous.reference(), previous.rates(), policy.settings(), update.randomSeed());
-      if (update.version() == 2 && previous.version() == 1) {
+          update.version() == 3
+              ? FxMath.advanceEight(
+                  previous.reference(), previous.rates(), policy.settings(), update.randomSeed())
+              : FxMath.advance(
+                  previous.reference(), previous.rates(), policy.settings(), update.randomSeed());
+      if (update.version() >= 2 && previous.version() == 1) {
         var expandedRates = new EnumMap<EconomyCurrency, BigDecimal>(EconomyCurrency.class);
         expandedRates.putAll(rates);
         BigDecimal baseline =
@@ -327,6 +345,8 @@ public final class FxService {
                 .get(EconomyCurrency.CAD)
                 .multiply(new BigDecimal("1.6"))
                 .setScale(FxMath.SCALE, RoundingMode.HALF_EVEN);
+        if (update.version() == 3)
+          baseline = baseline.setScale(8, RoundingMode.DOWN).setScale(FxMath.SCALE);
         var settings = new EnumMap<EconomyCurrency, FxMath.Settings>(EconomyCurrency.class);
         settings.putAll(policy.settings());
         settings.put(EconomyCurrency.CHF, new FxMath.Settings(baseline, 3_000, 100_000, 50_000));
@@ -337,10 +357,13 @@ public final class FxService {
         var activation = new Policy(day, policyId, previous.reference(), settings);
         var next = new Publication(day, previous.reference(), update.id(), policyId, expandedRates);
         return new EconomicClock.Output(
-            next.encode(), tx -> {}, List.of(activation.record(), next.record()));
+            next.encode(),
+            tx -> {},
+            List.of(activation.record(), publicationRecord(next, update.version())));
       }
       var next = new Publication(day, previous.reference(), update.id(), policy.id(), rates);
-      return new EconomicClock.Output(next.encode(), tx -> {}, List.of(next.record()));
+      return new EconomicClock.Output(
+          next.encode(), tx -> {}, List.of(publicationRecord(next, update.version())));
     }
   }
 
@@ -359,9 +382,11 @@ public final class FxService {
           }
           var id = intent.operationId().value();
           var policy = new Policy(day, id, reference, FxMath.defaults(reference));
-          var publication = new Publication(day, reference, id, id, FxMath.opening(reference));
+          var publication =
+              new Publication(
+                  day, reference, id, id, FxMath.eightDecimalRates(FxMath.opening(reference)));
           return new JournalEngine.Commit(
-              List.of(policy.record(), publication.record()),
+              List.of(policy.record(), publicationRecord(publication, 3)),
               new Journal.Result(1, "FX_OPENED", publication.encode()),
               tx -> {});
         });
@@ -422,36 +447,45 @@ public final class FxService {
         : EconomyCurrency.all().stream().filter(current.rates()::containsKey).toList();
   }
 
-  /**
-   * After legacy backlog is current, install the CHF algorithm at a strictly future UTC boundary.
-   */
+  /** After legacy backlog is current, install eight-place arithmetic at a future UTC boundary. */
   public static void prepareChfActivation(FoundationStore store, EconomicClock clock, Clock wall) {
-    var state =
+    Long boundary =
         store.transaction(
             tx -> {
               if (ca.emilybelnavis.mcmods.economy.clock.FixedRetirements.read(tx::query, SYSTEM)
                       != null
                   || ca.emilybelnavis.mcmods.economy.simulation.prime.CurrencyPrimes.activation(
                           tx::query, store.snapshot().worldId())
-                      .isPresent()) return false;
-              var current = latestDaily(tx::query);
-              if (current == null || current.version() == 2) return false;
+                      .isPresent()
+                  || latestDaily(tx::query) == null) return null;
+              if (!tx.query(
+                      "SELECT version FROM economic_versions WHERE system_id=? AND version=3 LIMIT 1",
+                      List.of(SYSTEM),
+                      1)
+                  .isEmpty()) return null;
+              long next =
+                  utcDay(wall.instant())
+                      .plusDays(1)
+                      .atStartOfDay(ZoneOffset.UTC)
+                      .toInstant()
+                      .toEpochMilli();
               var scheduled =
                   tx.query(
-                      "SELECT version FROM economic_versions WHERE system_id=? AND version=2 LIMIT 1",
+                      "SELECT MAX(effective_end_ms) AS latest FROM economic_versions WHERE system_id=?",
                       List.of(SYSTEM),
                       1);
-              return scheduled.isEmpty();
+              String latest = scheduled.isEmpty() ? null : scheduled.getFirst().get("latest");
+              if (latest != null)
+                next = Math.max(next, Math.addExact(Long.parseLong(latest), DAY_MILLIS));
+              return next;
             });
-    if (state) {
-      long boundary =
-          utcDay(wall.instant())
-              .plusDays(1)
-              .atStartOfDay(ZoneOffset.UTC)
-              .toInstant()
-              .toEpochMilli();
-      clock.scheduleVersion(SYSTEM, 2, boundary);
-    }
+    if (boundary != null) clock.scheduleVersion(SYSTEM, 3, boundary);
+  }
+
+  private static Journal.Record publicationRecord(Publication publication, int arithmeticVersion) {
+    return arithmeticVersion == 3
+        ? new Journal.Record(PUBLICATION, 3, publication.encode())
+        : publication.record();
   }
 
   public static LocalDate chfActivationDay(JournalEngine.ReadView reads) {
@@ -460,7 +494,7 @@ public final class FxService {
     if (opening != null && opening.version() == 2) return opening.day();
     var rows =
         reads.query(
-            "SELECT effective_end_ms FROM economic_versions WHERE system_id=? AND version=2 ORDER BY effective_end_ms LIMIT 1",
+            "SELECT effective_end_ms FROM economic_versions WHERE system_id=? AND version IN (2,3) ORDER BY effective_end_ms LIMIT 1",
             List.of(SYSTEM),
             1);
     return rows.isEmpty()

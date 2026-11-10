@@ -45,16 +45,14 @@ public final class ReferenceTraderClient {
     try {
       if (!opened && client.getOverlay() == null && client.screen != null && client.level == null) {
         opened = true;
-        Path root = client.gameDirectory.toPath().toAbsolutePath().normalize();
-        require(
-            root.startsWith(Path.of("/private/tmp"))
-                && root.getParent().getFileName().toString().startsWith("economy-a9-06-"),
-            "Guarded disposable client root required");
+        Path root =
+            DisposableProbeWorld.requireClientDirectory(
+                client.gameDirectory.toPath(), "economy-a9-06-");
         require(
             !Files.exists(root.resolve("config/economy-valuation.json")),
             "Existing fixture valuation config refused");
         String name = "economy-reference-trader-" + UUID.randomUUID();
-        require(!Files.exists(root.resolve("saves").resolve(name)), "Fresh world only");
+        DisposableProbeWorld.requireFreshWorld(root, name);
         var settings =
             new LevelSettings(
                 name,

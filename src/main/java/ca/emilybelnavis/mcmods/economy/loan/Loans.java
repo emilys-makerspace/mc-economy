@@ -2077,8 +2077,19 @@ public final class Loans {
             loan.years(),
             loan.product() == CreditUnderwriting.Product.SUBPRIME_LOAN);
     if (!loan.scheduleHash().equals(scheduleHash(schedule))
-        || schedule.installmentMinor() != loan.servicing().installmentMinor())
-      throw new IllegalArgumentException("Loan schedule witness");
+        || schedule.installmentMinor() != loan.servicing().installmentMinor()) {
+      // Existing contracts retain their original immutable schedule witness.
+      var legacy =
+          LoanServicing.scheduleLegacy(
+              loan.currency(),
+              loan.originalPrincipalMinor(),
+              loan.apr(),
+              loan.years(),
+              loan.product() == CreditUnderwriting.Product.SUBPRIME_LOAN);
+      if (!loan.scheduleHash().equals(scheduleHash(legacy))
+          || legacy.installmentMinor() != loan.servicing().installmentMinor())
+        throw new IllegalArgumentException("Loan schedule witness");
+    }
   }
 
   private static void validateEvent(String payload) {

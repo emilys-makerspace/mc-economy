@@ -66,16 +66,14 @@ public final class ValuationApiClient {
     try {
       if (!opened && client.getOverlay() == null && client.screen != null && client.level == null) {
         opened = true;
-        Path root = client.gameDirectory.toPath().toAbsolutePath().normalize();
-        require(
-            root.startsWith(Path.of("/private/tmp"))
-                && root.getParent().getFileName().toString().startsWith("economy-a9-04-"),
-            "guarded disposable run root");
+        Path root =
+            DisposableProbeWorld.requireClientDirectory(
+                client.gameDirectory.toPath(), "economy-a9-04-");
         require(
             !Files.exists(FMLPaths.CONFIGDIR.get().resolve("economy-valuation.json")),
             "existing valuation config refused");
         String name = "economy-valuation-api-" + UUID.randomUUID();
-        require(!Files.exists(root.resolve("saves").resolve(name)), "fresh world only");
+        DisposableProbeWorld.requireFreshWorld(root, name);
         client
             .createWorldOpenFlows()
             .createFreshLevel(

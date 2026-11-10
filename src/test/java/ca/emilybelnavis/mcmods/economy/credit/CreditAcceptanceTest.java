@@ -314,7 +314,8 @@ class CreditAcceptanceTest {
         .add(bucket.residualMajor(), CardServicing.MC)
         .multiply(bucket.apr(), CardServicing.MC)
         .divide(BigDecimal.valueOf(364), CardServicing.MC)
-        .setScale(18, RoundingMode.HALF_EVEN);
+        .setScale(8, RoundingMode.DOWN)
+        .setScale(18);
   }
 
   @Test
@@ -335,8 +336,8 @@ class CreditAcceptanceTest {
       line = f.get(id);
       // The CAD 3.00 advance fee is financed and earns interest with the CAD 100.00 proceeds.
       assertEquals(10300, line.advance().principalMinor());
-      assertEquals(new BigDecimal("0.067548626373626374"), line.purchase().periodEarnedMajor());
-      assertEquals(new BigDecimal("0.062224450549450549"), line.advance().periodEarnedMajor());
+      assertEquals(new BigDecimal("0.067548620000000000"), line.purchase().periodEarnedMajor());
+      assertEquals(new BigDecimal("0.062224450000000000"), line.advance().periodEarnedMajor());
       assertEquals("CREDIT_REPAID", f.pay(id, 5000).result().code());
       line = f.get(id);
       assertEquals(12300, line.purchase().principalMinor());

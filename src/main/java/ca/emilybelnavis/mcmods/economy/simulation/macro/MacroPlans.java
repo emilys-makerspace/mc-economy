@@ -142,6 +142,7 @@ public final class MacroPlans {
   public static RecordCatalog register(RecordCatalog catalog) {
     return catalog
         .with(new RecordCatalog.Key(FACT, 1), MacroPlans::decode)
+        .with(new RecordCatalog.Key(FACT, 2), MacroPlans::decodeEightDecimal)
         .with(new RecordCatalog.Key(COMPLETE, 1), MacroPlans::decodeCompletion);
   }
 
@@ -218,10 +219,10 @@ public final class MacroPlans {
         || !MacroControls.current(reads, world, open.boundaryMillis()).equals(policy)
         || !open.config().equals(policy.config().id()))
       throw new IllegalArgumentException("Macro selection source mismatch");
-    var outcome = select(world, window, open.boundaryMillis(), policy, automatic);
+    var outcome = select(world, window, open.boundaryMillis(), policy, automatic, true);
     String payload = encode(outcome);
     return new JournalEngine.Commit(
-        List.of(new Journal.Record(FACT, 1, payload)),
+        List.of(new Journal.Record(FACT, 2, payload)),
         new Journal.Result(1, "MACRO_PLAN_SELECTED", outcome.hash()),
         tx ->
             tx.execute(
@@ -240,7 +241,8 @@ public final class MacroPlans {
       UUID window,
       long boundary,
       MacroControls.Policy policy,
-      ModelPlanStore.Plan automatic) {
+      ModelPlanStore.Plan automatic,
+      boolean eightDecimal) {
     var input = automatic.input();
     var output = automatic.output();
     if (!input.windowId().equals(window)
@@ -274,7 +276,8 @@ public final class MacroPlans {
           new Selection(manual.primes(), manual.fx(), manual.alpha(), manual.explanations());
     }
     var primes = ordered(selection.primes(), 6);
-    var fx = ordered(selection.fx(), 12);
+    var fx =
+        eightDecimal ? eightDecimalRates(input, selection.fx(), mode) : ordered(selection.fx(), 12);
     requireBounds(input, primes, fx);
     String hash =
         outcomeHash(
@@ -399,7 +402,17 @@ public final class MacroPlans {
           var automatic = ActivationModelPlans.read(reads, selected.window());
           if (automatic == null
               || !select(
-                      selected.world(), selected.window(), open.boundaryMillis(), policy, automatic)
+                      selected.world(),
+                      selected.window(),
+                      open.boundaryMillis(),
+                      policy,
+                      automatic,
+                      factVersion(
+                              connection,
+                              rows.getString("operation_id"),
+                              FACT,
+                              rows.getString("payload"))
+                          == 2)
                   .equals(selected))
             throw new IllegalArgumentException("Selected-plan frozen source mismatch");
           long sequence =
@@ -645,12 +658,63 @@ public final class MacroPlans {
     }
   }
 
+  /**
+   * New publications use an eight-place grid; frozen v1 selections keep their original arithmetic.
+   */
+  private static Map<EconomyCurrency, BigDecimal> eightDecimalRates(
+      MacroModel.Input input, Map<EconomyCurrency, BigDecimal> selected, MacroControls.Mode mode) {
+    var candidate = FxMath.eightDecimalRates(selected);
+    if (MacroModel.validRounded(input, candidate)) return candidate;
+    if (mode != MacroControls.Mode.AUTO)
+      throw new IllegalArgumentException(
+          "Eight-decimal FX selection exceeds bounds; review the requested basket");
+    // Independent quantization can cross a pairwise cap by a fraction of the last place.
+    // Retreat toward the prior basket without relaxing any exact step or anchor bound.
+    BigDecimal weight = BigDecimal.ONE;
+    for (int attempt = 0; attempt < 64; attempt++) {
+      weight = weight.divide(BigDecimal.valueOf(2));
+      var blended = new EnumMap<EconomyCurrency, BigDecimal>(EconomyCurrency.class);
+      for (var currency : selected.keySet()) {
+        BigDecimal prior = input.priorFx().get(currency);
+        blended.put(currency, prior.add(selected.get(currency).subtract(prior).multiply(weight)));
+      }
+      candidate = FxMath.eightDecimalRates(blended);
+      if (MacroModel.validRounded(input, candidate)) return candidate;
+    }
+    candidate = FxMath.eightDecimalRates(input.priorFx());
+    if (MacroModel.validRounded(input, candidate)) return candidate;
+    throw new IllegalArgumentException("No coherent eight-decimal FX basket within exact bounds");
+  }
+
+  private static Outcome decodeEightDecimal(String payload) {
+    var value = decode(payload);
+    if (value.fx().values().stream().anyMatch(rate -> rate.stripTrailingZeros().scale() > 8))
+      throw new IllegalArgumentException("Eight-decimal selected FX precision");
+    return value;
+  }
+
+  private static int factVersion(Connection c, String operation, String type, String payload)
+      throws SQLException {
+    String version =
+        scalar(
+            c,
+            "SELECT r.record_version FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.payload=?",
+            operation,
+            type,
+            payload);
+    if (version == null) throw new IllegalArgumentException("Selected macro fact source");
+    return Integer.parseInt(version);
+  }
+
   private static long fact(Connection c, String operation, String type, String payload)
       throws SQLException {
+    int version = factVersion(c, operation, type, payload);
+    if (version != 1 && (!type.equals(FACT) || version != 2))
+      throw new IllegalArgumentException("Selected macro fact version");
     String value =
         scalar(
             c,
-            "SELECT t.sequence FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version=1 AND r.payload=?",
+            "SELECT t.sequence FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version IN (1,2) AND r.payload=?",
             operation,
             type,
             payload);
@@ -659,7 +723,7 @@ public final class MacroPlans {
             .equals(
                 scalar(
                     c,
-                    "SELECT COUNT(*) FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version=1 AND r.payload=?",
+                    "SELECT COUNT(*) FROM journal_transactions t JOIN journal_records r ON r.sequence=t.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version IN (1,2) AND r.payload=?",
                     operation,
                     type,
                     payload))) throw new IllegalArgumentException("Selected macro fact source");

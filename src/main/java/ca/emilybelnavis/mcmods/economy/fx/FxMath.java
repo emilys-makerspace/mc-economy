@@ -57,6 +57,20 @@ public final class FxMath {
     }
   }
 
+  /** Eight-place numeric precision with legacy twelve-place journal padding. */
+  public static Map<EconomyCurrency, BigDecimal> eightDecimalRates(
+      Map<EconomyCurrency, BigDecimal> values) {
+    var result = new EnumMap<EconomyCurrency, BigDecimal>(EconomyCurrency.class);
+    values.forEach(
+        (currency, value) -> {
+          BigDecimal rate = value.setScale(8, RoundingMode.DOWN).setScale(SCALE);
+          if (rate.signum() <= 0)
+            throw new IllegalArgumentException("FX rate below eight-place precision");
+          result.put(currency, rate);
+        });
+    return Map.copyOf(result);
+  }
+
   public static Map<EconomyCurrency, BigDecimal> opening(EconomyCurrency reference) {
     Objects.requireNonNull(reference, "reference");
     var rates = new EnumMap<EconomyCurrency, BigDecimal>(EconomyCurrency.class);
@@ -121,6 +135,27 @@ public final class FxMath {
       rates.put(currency, bounded.setScale(SCALE, RoundingMode.HALF_EVEN));
     }
     return Map.copyOf(rates);
+  }
+
+  /** New daily arithmetic; legacy advance remains frozen for historical clock replay. */
+  public static Map<EconomyCurrency, BigDecimal> advanceEight(
+      EconomyCurrency reference,
+      Map<EconomyCurrency, BigDecimal> previous,
+      Map<EconomyCurrency, Settings> policy,
+      long seed) {
+    var values = advance(reference, previous, policy, seed);
+    var result = new EnumMap<EconomyCurrency, BigDecimal>(EconomyCurrency.class);
+    for (var entry : values.entrySet()) {
+      var settings = policy.get(entry.getKey());
+      BigDecimal lower = settings.lower().setScale(8, RoundingMode.CEILING);
+      BigDecimal upper = settings.upper().setScale(8, RoundingMode.FLOOR);
+      if (lower.compareTo(upper) > 0 || upper.signum() <= 0)
+        throw new IllegalArgumentException("FX policy has no positive eight-decimal rate");
+      result.put(
+          entry.getKey(),
+          entry.getValue().setScale(8, RoundingMode.DOWN).max(lower).min(upper).setScale(SCALE));
+    }
+    return Map.copyOf(result);
   }
 
   /** ASCII domain and code, big-endian seed/counter. Reject biased unsigned 32-bit words. */

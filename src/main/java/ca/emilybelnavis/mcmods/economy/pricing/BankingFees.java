@@ -36,7 +36,7 @@ public final class BankingFees {
         rates.perMajorUnit().get(currency));
   }
 
-  /** Rates share any reference currency; their ratio converts CAD without intermediate rounding. */
+  /** Rates share a reference; convert with an eight-place pair rate and major-unit result. */
   public static Money convert(
       BigDecimal cadMajor, EconomyCurrency currency, BigDecimal cadRate, BigDecimal targetRate) {
     Objects.requireNonNull(cadMajor);
@@ -48,10 +48,21 @@ public final class BankingFees {
         || targetRate.signum() <= 0)
       throw new IllegalArgumentException("Banking fee FX rates unavailable");
     long incrementMinor = 25; // 0.25 for currencies with cents; 25 for JPY.
+    var pairRate = cadRate.divide(targetRate, 8, RoundingMode.DOWN);
+    var convertedMajor = cadMajor.multiply(pairRate).setScale(8, RoundingMode.DOWN);
+    var minor = convertedMajor.multiply(BigDecimal.valueOf(currency.minorUnitsPerMajor()));
+    long increments =
+        minor.divide(BigDecimal.valueOf(incrementMinor), 0, RoundingMode.HALF_UP).longValueExact();
+    return new Money(currency, Math.multiplyExact(increments, incrementMinor));
+  }
+
+  /** Frozen fee arithmetic for validating previously committed CAD_FEE_V2 receipts. */
+  public static Money legacyConvert(
+      BigDecimal cadMajor, EconomyCurrency currency, BigDecimal cadRate, BigDecimal targetRate) {
     var numerator =
         cadMajor.multiply(cadRate).multiply(BigDecimal.valueOf(currency.minorUnitsPerMajor()));
-    var denominator = targetRate.multiply(BigDecimal.valueOf(incrementMinor));
+    var denominator = targetRate.multiply(BigDecimal.valueOf(25));
     long increments = numerator.divide(denominator, 0, RoundingMode.HALF_UP).longValueExact();
-    return new Money(currency, Math.multiplyExact(increments, incrementMinor));
+    return new Money(currency, Math.multiplyExact(increments, 25));
   }
 }

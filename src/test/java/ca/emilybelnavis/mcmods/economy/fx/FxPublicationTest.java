@@ -50,7 +50,7 @@ class FxPublicationTest {
       first = latest(runtime);
       assertEquals(LocalDate.parse("2026-11-03"), first.day());
       assertEquals(new BigDecimal("1.000000000000"), first.rates().get(JPY));
-      assertEquals(new BigDecimal("23.541851514092"), first.rates().get(DKK));
+      assertEquals(new BigDecimal("23.541851510000"), first.rates().get(DKK));
       assertEquals(0, clock.currentProgress().outstandingIntervals());
       assertEquals(0, clock.runBatch(16).completedSequence());
 

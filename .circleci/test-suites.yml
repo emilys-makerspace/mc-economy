@@ -1,9 +1,6 @@
 # Legacy testsuite descriptor; the active workflow runs run-full-tests.sh with static four-way splitting.
 name: economy tests
-discover: >-
-  find src/test/java -type f -name '*Test.java' |
-  sed 's#^src/test/java/##; s#/#.#g; s#\.java$##' |
-  sort
+discover: python3 .circleci/ci_inventory.py junit
 run: bash .circleci/run-test-batch.sh "<< outputs.junit-directory >>" << test.atoms >>
 analysis: bash .circleci/analyze-test.sh "<< outputs.lcov >>" << test.atoms >>
 file-mapper: python3 .circleci/impact-data.py map << test.atoms >> > "<< outputs.circleci-list >>"

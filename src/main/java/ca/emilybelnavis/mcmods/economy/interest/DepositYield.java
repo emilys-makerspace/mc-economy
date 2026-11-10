@@ -856,7 +856,7 @@ public final class DepositYield {
       throw new IllegalStateException("Yield day ordering");
     var s = segment(original, end, reads);
     var earned = earned(s, end);
-    var accrued = scale(s.accruedMajor().add(earned, MC));
+    var accrued = scale(scale(s.accruedMajor()).add(earned, MC));
     long recognized = minor(accrued, s.currency());
     return change(
         s,
@@ -876,7 +876,7 @@ public final class DepositYield {
 
   private Claim finishPartial(Claim original, long time, JournalEngine.ReadView reads) {
     var s = segment(original, time, reads);
-    var accrued = scale(s.accruedMajor().add(earned(s, time), MC));
+    var accrued = scale(scale(s.accruedMajor()).add(earned(s, time), MC));
     // Restart the day segment after realization; already-realized current-day yield cannot compound
     // today.
     return change(
@@ -905,7 +905,7 @@ public final class DepositYield {
     return scale(
         weightedMajorMillis
             .divide(BigDecimal.valueOf(DAY), MC)
-            .add(priorCloseMajor, MC)
+            .add(scale(priorCloseMajor), MC)
             .max(BigDecimal.ZERO)
             .multiply(apr, MC)
             .divide(BigDecimal.valueOf(364), MC));
@@ -1392,14 +1392,16 @@ public final class DepositYield {
   }
 
   private static BigDecimal scale(BigDecimal value) {
-    return value.setScale(18, RoundingMode.HALF_EVEN);
+    // Preserve canonical storage padding while truncating new accruals to eight places.
+    return value.setScale(8, RoundingMode.DOWN).setScale(18);
   }
 
   private static long minor(BigDecimal value, EconomyCurrency currency) {
     long rounded =
         value
+            .setScale(8, RoundingMode.DOWN)
             .multiply(BigDecimal.valueOf(currency.minorUnitsPerMajor()), MC)
-            .setScale(0, RoundingMode.HALF_EVEN)
+            .setScale(0, RoundingMode.HALF_UP)
             .longValueExact();
     if (rounded < 0) throw new IllegalStateException("Negative yield claim");
     return rounded;
@@ -1539,13 +1541,13 @@ public final class DepositYield {
         Long.toString(s.dayStart()),
         Long.toString(s.balanceMinor()),
         s.weightedMajorMillis().toPlainString(),
-        scale(s.accruedMajor()).toPlainString(),
-        scale(s.priorCloseMajor()).toPlainString(),
+        s.accruedMajor().setScale(18, RoundingMode.UNNECESSARY).toPlainString(),
+        s.priorCloseMajor().setScale(18, RoundingMode.UNNECESSARY).toPlainString(),
         Long.toString(s.recognizedMinor()),
         Long.toString(s.dueMillis()),
         s.distressed() ? "1" : "0",
         Long.toString(s.revision()),
-        scale(s.paidMajor()).toPlainString(),
+        s.paidMajor().setScale(18, RoundingMode.UNNECESSARY).toPlainString(),
         s.apr().toPlainString(),
         Long.toString(s.aprStartMillis()),
         Long.toString(s.dueMinor()),
@@ -1638,13 +1640,13 @@ public final class DepositYield {
             Long.toString(s.dayStart()),
             Long.toString(s.balanceMinor()),
             s.weightedMajorMillis().toPlainString(),
-            scale(s.accruedMajor()).toPlainString(),
-            scale(s.priorCloseMajor()).toPlainString(),
+            s.accruedMajor().setScale(18, RoundingMode.UNNECESSARY).toPlainString(),
+            s.priorCloseMajor().setScale(18, RoundingMode.UNNECESSARY).toPlainString(),
             Long.toString(s.recognizedMinor()),
             Long.toString(s.dueMillis()),
             s.distressed() ? "1" : "0",
             Long.toString(s.revision()),
-            scale(s.paidMajor()).toPlainString(),
+            s.paidMajor().setScale(18, RoundingMode.UNNECESSARY).toPlainString(),
             s.apr().toPlainString(),
             Long.toString(s.aprStartMillis()),
             Long.toString(s.dueMinor()),

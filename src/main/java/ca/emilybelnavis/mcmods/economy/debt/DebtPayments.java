@@ -104,7 +104,6 @@ public final class DebtPayments {
       Objects.requireNonNull(reference);
       Objects.requireNonNull(referenceResidual);
       if (denominationRevision < 0
-          || referenceResidual.signum() < 0
           || referenceResidual.precision() > 64
           || referenceResidual.scale() < -36
           || referenceResidual.scale() > 36) {
@@ -345,7 +344,7 @@ public final class DebtPayments {
                       Long.toString(fx.fee().minorUnits()),
                       Long.toString(payment.amountMinor()),
                       Long.toString(payment.amountMinor()))));
-          records.add(new Journal.Record(FACT, 1, receipt(quote)));
+          records.add(new Journal.Record(FACT, 2, receipt(quote)));
           if (records.size() > 64) return reject("DEBT_BATCH_LIMIT");
           var financial = base;
           return new JournalEngine.Commit(
@@ -381,10 +380,16 @@ public final class DebtPayments {
   }
 
   public static RecordCatalog register(RecordCatalog catalog) {
-    return catalog.with(new RecordCatalog.Key(FACT, 1), DebtPayments::validate);
+    return catalog
+        .with(new RecordCatalog.Key(FACT, 1), DebtPayments::validate)
+        .with(new RecordCatalog.Key(FACT, 2), payload -> validate(payload, true));
   }
 
   public static void validate(String payload) {
+    validate(payload, false);
+  }
+
+  private static void validate(String payload, boolean signedResidual) {
     var fields = payload.split("\\|", -1);
     if (fields.length != 14) throw new IllegalArgumentException("Debt FX fields");
     for (int index = 0; index < 6; index++) {
@@ -402,8 +407,9 @@ public final class DebtPayments {
     if (expires <= captured || expires - captured > QUOTE_WINDOW)
       throw new IllegalArgumentException("Debt FX expiry");
     EconomyCurrency.valueOf(fields[12]);
+    // Nearest-minor settlement can round either side of the exact reference value.
     var residual = new BigDecimal(fields[13]);
-    if (residual.signum() < 0
+    if ((!signedResidual && residual.signum() < 0)
         || residual.precision() > 64
         || residual.scale() < -36
         || residual.scale() > 36

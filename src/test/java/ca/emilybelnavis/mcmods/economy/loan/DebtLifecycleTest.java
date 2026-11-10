@@ -622,6 +622,27 @@ class DebtLifecycleTest {
       var registration = DebtPayments.registrationFx(f.owner, quote, fresh, () -> now);
       var result = f.submit(DebtPayments.PAY, registration, intent);
       assertEquals("COLLECTION_SETTLED", result.result().code());
+      var receipt =
+          f.store.transaction(
+              tx ->
+                  tx.query(
+                          "SELECT record_version,payload FROM journal_records WHERE record_type=?",
+                          List.of(DebtPayments.FACT),
+                          1)
+                      .getFirst());
+      assertEquals("2", receipt.get("record_version"));
+      var catalog = ca.emilybelnavis.mcmods.economy.recovery.RecordCatalog.core();
+      assertDoesNotThrow(() -> catalog.validate(DebtPayments.FACT, 2, receipt.get("payload")));
+      var fields = receipt.get("payload").split("\\|", -1);
+      assertEquals(quote.referenceResidual(), new java.math.BigDecimal(fields[13]));
+      // Scheduled publications vary with the world seed; both residual signs are valid in v2.
+      fields[13] = "-0.001";
+      var negativeResidual = String.join("|", fields);
+      assertDoesNotThrow(() -> catalog.validate(DebtPayments.FACT, 2, negativeResidual));
+      assertThrows(
+          ca.emilybelnavis.mcmods.economy.storage.StorageException.class,
+          () -> catalog.validate(DebtPayments.FACT, 1, negativeResidual));
+
       assertEquals(result, f.submit(DebtPayments.PAY, registration, intent));
       long balance =
           f.store.transaction(

@@ -11,17 +11,13 @@ if [[ ! "${CIRCLE_NODE_INDEX:-}" =~ ^[0-3]$ ]]; then
   exit 2
 fi
 mkdir -p build/circleci/junit build/circleci/batches
-python3 - <<'PY' > build/circleci/all-tests.txt
-from pathlib import Path
-root = Path('src/test/java')
-for path in sorted(root.rglob('*Test.java')):
-    print('.'.join(path.relative_to(root).with_suffix('').parts))
-PY
+python3 .circleci/ci_inventory.py junit > build/circleci/all-tests.txt
 if [[ ! -s build/circleci/all-tests.txt ]]; then
   echo 'No JUnit test classes were discovered.' >&2
   exit 2
 fi
-# Round-robin the sorted class list without CircleCI timing data or Smarter Testing.
+# Discover every JUnit class, including new precision tests and nonstandard annotated names.
+# Round-robin the sorted class list without impact selection or timing data.
 awk -v node="$CIRCLE_NODE_INDEX" '(NR - 1) % 4 == node' \
   build/circleci/all-tests.txt > build/circleci/node-tests.txt
 filters=()

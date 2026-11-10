@@ -21,16 +21,16 @@ class CurrencyConversionTest {
 
     assertEquals(new Money(CAD, 2792), deposit(List.of(new Money(USD, 2000)), CAD, rates).credit());
     assertEquals(new Money(CAD, 887), deposit(List.of(new Money(JPY, 1000)), CAD, rates).credit());
-    assertEquals(new Money(USD, 2000), deposit(List.of(new Money(CAD, 2792)), USD, rates).credit());
+    assertEquals(new Money(USD, 1999), deposit(List.of(new Money(CAD, 2792)), USD, rates).credit());
     assertEquals(new Money(USD, 635), deposit(List.of(new Money(JPY, 1000)), USD, rates).credit());
-    assertEquals(new Money(JPY, 3147), deposit(List.of(new Money(USD, 2000)), JPY, rates).credit());
+    assertEquals(new Money(JPY, 3148), deposit(List.of(new Money(USD, 2000)), JPY, rates).credit());
   }
 
   @Test
   void depositRoundsPerGroupAndReportsCashToRetain() {
     Rates rates =
         new Rates(
-            JPY, Map.of(JPY, BigDecimal.ONE, CAD, new BigDecimal("75"), USD, new BigDecimal("80")));
+            JPY, Map.of(JPY, BigDecimal.ONE, CAD, new BigDecimal("40"), USD, new BigDecimal("30")));
     Money cent = new Money(CAD, 1);
     Money skipped = new Money(USD, 1);
     Deposit result = deposit(List.of(cent, skipped, cent), JPY, rates);
@@ -42,10 +42,69 @@ class CurrencyConversionTest {
   }
 
   @Test
-  void withdrawalRoundsUpAfterConvertingRequestedCash() {
+  void withdrawalRoundsNearestAfterEightPlaceCalculation() {
     Rates rates = new Rates(JPY, Map.of(JPY, BigDecimal.ONE, CAD, new BigDecimal("150")));
-    assertEquals(new Money(CAD, 2), withdrawalDebit(new Money(JPY, 2), CAD, rates));
+    assertEquals(new Money(CAD, 1), withdrawalDebit(new Money(JPY, 2), CAD, rates));
     assertEquals(new Money(CAD, 2), withdrawalDebit(new Money(JPY, 3), CAD, rates));
+  }
+
+  @Test
+  void requestedExamplesUseEightPlacePairRatesAndCurrencySettlement() {
+    Rates yen = new Rates(JPY, Map.of(JPY, BigDecimal.ONE, CAD, new BigDecimal("111.92518216")));
+    assertEquals(new BigDecimal("111.92518216"), pairRate(CAD, JPY, yen));
+    assertEquals(new Money(JPY, 13817), deposit(List.of(new Money(CAD, 12345)), JPY, yen).credit());
+    Rates euro = new Rates(EUR, Map.of(EUR, BigDecimal.ONE, GBP, new BigDecimal("1.19813056")));
+    assertEquals(
+        new Money(EUR, 14790), deposit(List.of(new Money(GBP, 12345)), EUR, euro).credit());
+    Rates ties =
+        new Rates(
+            CAD,
+            Map.of(
+                CAD, BigDecimal.ONE, USD, new BigDecimal("1.39605"), JPY, new BigDecimal("1.5")));
+    assertEquals(new Money(CAD, 13961), withdrawalDebit(new Money(USD, 10000), CAD, ties));
+    assertEquals(new Money(JPY, 2), deposit(List.of(new Money(CAD, 300)), JPY, ties).credit());
+    Rates belowTie =
+        new Rates(CAD, Map.of(CAD, BigDecimal.ONE, USD, new BigDecimal("1.396049999")));
+    assertEquals(new Money(CAD, 13960), withdrawalDebit(new Money(USD, 10000), CAD, belowTie));
+  }
+
+  @Test
+  void accountQuotesUseSameEightPlaceArithmeticAndNearestRequestedDebit() {
+    var world = new Identifiers.WorldId(java.util.UUID.randomUUID());
+    var actor = new Identifiers.PlayerId(java.util.UUID.randomUUID());
+    var rates =
+        new java.util.EnumMap<EconomyCurrency, BigDecimal>(
+            ca.emilybelnavis.mcmods.economy.fx.FxMath.opening(CAD));
+    rates.put(USD, new BigDecimal("1.396049990000"));
+    rates.put(JPY, new BigDecimal("1.500000000000"));
+    var publication =
+        new ca.emilybelnavis.mcmods.economy.fx.FxFacts.Publication(
+            java.time.LocalDate.of(2026, 11, 9),
+            CAD,
+            java.util.UUID.randomUUID(),
+            java.util.UUID.randomUUID(),
+            rates);
+    var book = new ca.emilybelnavis.mcmods.economy.fx.FxQuotes(world);
+    var exactCredit =
+        book.issue(
+            actor,
+            new ca.emilybelnavis.mcmods.economy.fx.FxQuotes.Pair(CAD, USD),
+            ca.emilybelnavis.mcmods.economy.fx.FxQuotes.Side.EXACT_CREDIT,
+            new Money(USD, 10000),
+            publication,
+            java.time.Instant.EPOCH,
+            java.time.Duration.ofSeconds(30));
+    assertEquals(new Money(CAD, 13960), exactCredit.debit());
+    var exactDebit =
+        book.issue(
+            actor,
+            new ca.emilybelnavis.mcmods.economy.fx.FxQuotes.Pair(CAD, JPY),
+            ca.emilybelnavis.mcmods.economy.fx.FxQuotes.Side.EXACT_DEBIT,
+            new Money(CAD, 400),
+            publication,
+            java.time.Instant.EPOCH,
+            java.time.Duration.ofSeconds(30));
+    assertEquals(new Money(JPY, 3), exactDebit.credit());
   }
 
   @Test

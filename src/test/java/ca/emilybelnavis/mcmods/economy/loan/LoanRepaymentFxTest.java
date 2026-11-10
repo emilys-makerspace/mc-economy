@@ -10,6 +10,7 @@ import ca.emilybelnavis.mcmods.economy.fx.*;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.pricing.*;
+import ca.emilybelnavis.mcmods.economy.recovery.RecordCatalog;
 import ca.emilybelnavis.mcmods.economy.storage.*;
 import java.math.*;
 import java.nio.charset.StandardCharsets;
@@ -263,6 +264,38 @@ class LoanRepaymentFxTest {
                         .withoutPadding()
                         .encodeToString(s.getBytes(StandardCharsets.UTF_8)))
             .toList());
+  }
+
+  @Test
+  void nearestMinorFundingRetainsSignedResidualWithVersionedHistory() throws Exception {
+    try (var f = new Fixture()) {
+      var quote = f.quote(102, false);
+      assertEquals(142, quote.fx().debit().minorUnits());
+      assertTrue(quote.referenceResidual().signum() < 0);
+      var intent = f.intent(quote);
+      var outcome = f.submit(quote, intent);
+      assertEquals(Journal.Status.COMMITTED, outcome.status());
+      assertEquals(outcome, f.submit(quote, intent));
+      var fact =
+          f.store.transaction(
+              tx ->
+                  tx.query(
+                          "SELECT record_version,payload FROM journal_records WHERE record_type=?",
+                          List.of(LoanRepaymentFx.FACT),
+                          1)
+                      .getFirst());
+      assertEquals("2", fact.get("record_version"));
+      var payload = fact.get("payload");
+      var fields = payload.split("\\|", -1);
+      assertEquals(quote.referenceResidual(), new BigDecimal(fields[13]));
+      var catalog = RecordCatalog.core();
+      assertDoesNotThrow(() -> catalog.validate(LoanRepaymentFx.FACT, 2, payload));
+      assertThrows(
+          StorageException.class, () -> catalog.validate(LoanRepaymentFx.FACT, 1, payload));
+      fields[13] = quote.referenceResidual().abs().toPlainString();
+      String legacy = String.join("|", fields);
+      assertDoesNotThrow(() -> catalog.validate(LoanRepaymentFx.FACT, 1, legacy));
+    }
   }
 
   @Test

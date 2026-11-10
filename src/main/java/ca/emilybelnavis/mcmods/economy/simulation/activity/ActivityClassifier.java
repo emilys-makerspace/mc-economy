@@ -682,7 +682,7 @@ public final class ActivityClassifier {
     }
 
     private void loanFx(Journal.Record fact) {
-      version(fact, 1);
+      version(fact, 1, 2);
       var fields = fields(fact.payload(), 15);
       for (int index : new int[] {0, 1, 2, 3, 4, 14}) uuid(fields[index]);
       number(fields[9]);

@@ -82,7 +82,8 @@ public final class CurrencyConversion {
     long credit = 0;
     for (var subtotal : subtotals.entrySet()) {
       Money source = new Money(subtotal.getKey(), subtotal.getValue());
-      long converted = ratio(source, accountCurrency, rates).round(RoundingMode.FLOOR);
+      long converted =
+          convert(source, accountCurrency, rates, receivedRounding(accountCurrency)).minorUnits();
       if (converted == 0) {
         skipped.add(source);
       } else {
@@ -98,8 +99,41 @@ public final class CurrencyConversion {
 
   public static Money withdrawalDebit(Money cash, EconomyCurrency accountCurrency, Rates rates) {
     requirePositive(cash);
-    long debit = ratio(cash, accountCurrency, rates).round(RoundingMode.CEILING);
+    long debit = convert(cash, accountCurrency, rates, RoundingMode.HALF_UP).minorUnits();
     return new Money(accountCurrency, debit);
+  }
+
+  /** Eight-place major-unit pair rate, truncated toward zero. */
+  public static BigDecimal pairRate(EconomyCurrency source, EconomyCurrency target, Rates rates) {
+    require(source != null && target != null && rates != null, "Currencies and rates are required");
+    return rates.rate(source).divide(rates.rate(target), 8, RoundingMode.DOWN);
+  }
+
+  public static RoundingMode receivedRounding(EconomyCurrency currency) {
+    return currency == EconomyCurrency.JPY ? RoundingMode.HALF_UP : RoundingMode.DOWN;
+  }
+
+  /** Truncate the major-unit result to eight places before rounding to settlement units. */
+  public static Money convert(
+      Money source, EconomyCurrency target, Rates rates, RoundingMode settlementRounding) {
+    require(
+        source != null && target != null && rates != null,
+        "An amount, target and rates are required");
+    try {
+      BigDecimal major =
+          source
+              .majorUnits()
+              .multiply(pairRate(source.currency(), target, rates))
+              .setScale(8, RoundingMode.DOWN);
+      long units =
+          major
+              .multiply(BigDecimal.valueOf(target.minorUnitsPerMajor()))
+              .setScale(0, settlementRounding)
+              .longValueExact();
+      return new Money(target, units);
+    } catch (ArithmeticException ex) {
+      throw new Rejected(Failure.OUT_OF_RANGE, "Converted amount exceeds the supported range");
+    }
   }
 
   /** Historical display rounds half up after identifying signed sub-minor amounts. */

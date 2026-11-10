@@ -21,10 +21,10 @@ class CardServicingTest {
   }
 
   @Test
-  void firstDayAndTwentyEightDaysRetainExactCompoundingAndSignedCarry() {
+  void firstDayAndTwentyEightDaysTruncateAccrualsAndRetainSignedCarry() {
     var b = purchase(12300);
     var first = day(CAD, b);
-    assertEquals(new BigDecimal("0.067548626373626374"), first.earnedMajor());
+    assertEquals(new BigDecimal("0.067548620000000000"), first.earnedMajor());
     assertEquals(7, first.postedMinor());
     assertTrue(first.bucket().residualMajor().signum() < 0);
     for (int n = 0; n < 28; n++) b = day(CAD, b).bucket();
@@ -37,8 +37,75 @@ class CardServicingTest {
                     .pow(28, MC)
                     .subtract(BigDecimal.ONE),
                 MC);
-    assertTrue(actual.subtract(expected).abs().compareTo(new BigDecimal("0.0000000000000001")) < 0);
+    assertTrue(actual.subtract(expected).abs().compareTo(new BigDecimal("0.00000028")) < 0);
     assertEquals(0, actual.compareTo(b.periodEarnedMajor()));
+  }
+
+  @Test
+  void eightPlaceAccrualRoundsToCentsAndHalfCentTiesRoundUp() {
+    var example = day(CAD, purchase(123456));
+    assertEquals(new BigDecimal("0.677990500000000000"), example.earnedMajor());
+    assertEquals(68, example.postedMinor());
+    assertEquals(new BigDecimal("-0.002009500000000000"), example.bucket().residualMajor());
+
+    var halfCent = day(CAD, new Bucket(Kind.PURCHASE, 364, 0, ZERO, ZERO, new BigDecimal("0.5")));
+    assertEquals(1, halfCent.postedMinor());
+    assertEquals(new BigDecimal("-0.005000000000000000"), halfCent.bucket().residualMajor());
+
+    var legacy = new BigDecimal("0.000000009999999999");
+    var bucket = new Bucket(Kind.PURCHASE, 123456, 0, legacy, ZERO, new BigDecimal("0.1999"));
+    assertEquals(legacy, bucket.residualMajor());
+    assertEquals(example.earnedMajor(), day(CAD, bucket).earnedMajor());
+    assertEquals(example.bucket().residualMajor(), day(CAD, bucket).bucket().residualMajor());
+  }
+
+  @Test
+  void historicalDailyWitnessesRetainTheirOriginalArithmetic() {
+    var before = purchase(12300);
+    var legacy = dayLegacy(CAD, before);
+    assertEquals(new BigDecimal("0.067548626373626374"), legacy.earnedMajor());
+    var oldPayload = dailyPayload(1, before, legacy);
+    var old = CreditAuditFacts.decodeDaily(oldPayload);
+    assertEquals(1, old.policyVersion());
+    assertEquals(legacy, old.purchase());
+
+    var current = day(CAD, before);
+    var next = CreditAuditFacts.decodeDaily(dailyPayload(2, before, current));
+    assertEquals(2, next.policyVersion());
+    assertEquals(current, next.purchase());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> CreditAuditFacts.decodeDaily(dailyPayload(2, before, legacy)));
+  }
+
+  private static String dailyPayload(int policy, Bucket before, Accrual after) {
+    var empty = advance(0);
+    return String.join(
+        "|",
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002",
+        "1200000",
+        "CAD",
+        Integer.toString(policy),
+        bucketText(before),
+        bucketText(empty),
+        bucketText(after.bucket()),
+        bucketText(empty),
+        after.earnedMajor().toPlainString(),
+        ZERO.toPlainString(),
+        Long.toString(after.postedMinor()),
+        "0");
+  }
+
+  private static String bucketText(Bucket value) {
+    return String.join(
+        ",",
+        value.kind().name(),
+        Long.toString(value.principalMinor()),
+        Long.toString(value.interestMinor()),
+        value.residualMajor().toPlainString(),
+        value.periodEarnedMajor().toPlainString(),
+        value.apr().toPlainString());
   }
 
   @Test

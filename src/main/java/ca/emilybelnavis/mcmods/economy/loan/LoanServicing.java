@@ -176,7 +176,10 @@ public final class LoanServicing {
       payment =
           p.multiply(r, MC).multiply(growth, MC).divide(growth.subtract(BigDecimal.ONE, MC), MC);
     }
-    return minor(currency, payment, RoundingMode.CEILING);
+    return payment
+        .multiply(BigDecimal.valueOf(currency.minorUnitsPerMajor()), MC)
+        .setScale(0, RoundingMode.CEILING)
+        .longValueExact();
   }
 
   private static int periods(int years, boolean subprime) {
@@ -211,16 +214,32 @@ public final class LoanServicing {
 
   public static Schedule schedule(
       EconomyCurrency currency, long principal, BigDecimal apr, int years, boolean subprime) {
+    return schedule(currency, principal, apr, years, subprime, false);
+  }
+
+  /** Frozen arithmetic used only to validate existing schedule hashes. */
+  static Schedule scheduleLegacy(
+      EconomyCurrency currency, long principal, BigDecimal apr, int years, boolean subprime) {
+    return schedule(currency, principal, apr, years, subprime, true);
+  }
+
+  private static Schedule schedule(
+      EconomyCurrency currency,
+      long principal,
+      BigDecimal apr,
+      int years,
+      boolean subprime,
+      boolean legacy) {
     var state = initial(currency, principal, apr, years, subprime, 0);
     var result = new ArrayList<Installment>();
     long fixed = state.installmentMinor();
     int n = state.totalPeriods();
     for (int ordinal = 1; ordinal <= n && !state.closed(); ordinal++) {
-      var close = monthClose(state, "schedule-" + ordinal, state.nextDue());
+      var close = monthClose(state, "schedule-" + ordinal, state.nextDue(), legacy);
       state = close.state();
       long amount = ordinal == n ? state.debtMinor() : Math.min(fixed, state.debtMinor());
       if (amount == 0) break;
-      var payment = repay(state, amount, state.lastAccrued());
+      var payment = repay(state, amount, state.lastAccrued(), legacy);
       state = payment.state();
       result.add(
           new Installment(
@@ -240,6 +259,10 @@ public final class LoanServicing {
    * base.
    */
   public static State accrue(State s, long now) {
+    return accrue(s, now, false);
+  }
+
+  private static State accrue(State s, long now, boolean legacy) {
     Objects.requireNonNull(s);
     if (now < s.lastAccrued()) throw new IllegalArgumentException("Loan time moved backward");
     if (s.closed()) return s;
@@ -248,7 +271,7 @@ public final class LoanServicing {
     if (now == s.lastAccrued()) return s;
     var basis =
         major(s.currency(), s.principalMinor())
-            .add(s.capitalizedInterestMajor(), MC)
+            .add(legacy ? s.capitalizedInterestMajor() : scale(s.capitalizedInterestMajor()), MC)
             .max(BigDecimal.ZERO);
     var earned =
         basis
@@ -261,7 +284,9 @@ public final class LoanServicing {
         s.principalMinor(),
         s.interestMinor(),
         s.residualMajor(),
-        scale(s.accruedMajor().add(earned, MC)),
+        legacy
+            ? scale(s.accruedMajor().add(earned, MC), true)
+            : scale(scale(s.accruedMajor()).add(scale(earned), MC)),
         s.capitalizedInterestMajor(),
         s.periodStart(),
         now,
@@ -273,9 +298,17 @@ public final class LoanServicing {
   private record Realized(State state, long posted) {}
 
   private static Realized realize(State s) {
-    var amount = s.residualMajor().add(s.accruedMajor(), MC);
-    long posted = minor(s.currency(), amount, RoundingMode.HALF_EVEN);
-    var residual = scale(amount.subtract(major(s.currency(), posted), MC));
+    return realize(s, false);
+  }
+
+  private static Realized realize(State s, boolean legacy) {
+    var amount =
+        legacy
+            ? s.residualMajor().add(s.accruedMajor(), MC)
+            : scale(scale(s.residualMajor()).add(scale(s.accruedMajor()), MC));
+    long posted =
+        minor(s.currency(), amount, legacy ? RoundingMode.HALF_EVEN : RoundingMode.HALF_UP, legacy);
+    var residual = scale(amount.subtract(major(s.currency(), posted), MC), legacy);
     return new Realized(
         state(
             s,
@@ -297,11 +330,15 @@ public final class LoanServicing {
   }
 
   public static Close monthClose(State original, String id, long effective) {
+    return monthClose(original, id, effective, false);
+  }
+
+  private static Close monthClose(State original, String id, long effective, boolean legacy) {
     if (original.closed() || effective != original.nextDue())
       throw new IllegalArgumentException("Loan month boundary");
-    var accrued = accrue(original, effective);
+    var accrued = accrue(original, effective, legacy);
     BigDecimal earned = accrued.accruedMajor();
-    var realized = realize(accrued);
+    var realized = realize(accrued, legacy);
     var s = realized.state();
     int ordinal = Math.addExact(s.completedPeriods(), 1);
     long available = Math.subtractExact(s.debtMinor(), s.requiredMinor());
@@ -336,9 +373,13 @@ public final class LoanServicing {
   }
 
   public static Payment repay(State original, long amount, long now) {
+    return repay(original, amount, now, false);
+  }
+
+  private static Payment repay(State original, long amount, long now, boolean legacy) {
     if (original.closed() || amount <= 0 || now >= original.nextDue())
       throw new IllegalArgumentException("Loan payment requires current open state");
-    var realized = realize(accrue(original, now));
+    var realized = realize(accrue(original, now, legacy), legacy);
     var s = realized.state();
     if (amount > s.debtMinor())
       throw new IllegalArgumentException("Loan overpayment; fresh payoff required");
@@ -378,12 +419,19 @@ public final class LoanServicing {
     long interestPaid = Math.subtractExact(s.interestMinor(), i),
         principalPaid = Math.subtractExact(s.principalMinor(), p);
     long capitalPosted =
-        Math.max(0, minor(s.currency(), s.capitalizedInterestMajor(), RoundingMode.HALF_EVEN));
+        Math.max(
+            0,
+            minor(
+                s.currency(),
+                s.capitalizedInterestMajor(),
+                legacy ? RoundingMode.HALF_EVEN : RoundingMode.HALF_UP,
+                legacy));
     var capital =
         scale(
             s.capitalizedInterestMajor()
                 .subtract(major(s.currency(), Math.min(interestPaid, capitalPosted)))
-                .min(major(s.currency(), i).add(s.residualMajor()).max(BigDecimal.ZERO)));
+                .min(major(s.currency(), i).add(s.residualMajor()).max(BigDecimal.ZERO)),
+            legacy);
     boolean closed = p == 0 && i == 0;
     var residual = closed ? ZERO : s.residualMajor();
     var disposition = closed ? s.residualMajor() : ZERO;
@@ -482,7 +530,12 @@ public final class LoanServicing {
   }
 
   private static long minor(EconomyCurrency c, BigDecimal major, RoundingMode mode) {
-    return major
+    return minor(c, major, mode, false);
+  }
+
+  private static long minor(
+      EconomyCurrency c, BigDecimal major, RoundingMode mode, boolean legacy) {
+    return (legacy ? major : major.setScale(8, RoundingMode.DOWN))
         .multiply(BigDecimal.valueOf(c.minorUnitsPerMajor()), MC)
         .setScale(0, mode)
         .longValueExact();
@@ -500,7 +553,14 @@ public final class LoanServicing {
   }
 
   private static BigDecimal scale(BigDecimal value) {
-    return value.setScale(18, RoundingMode.HALF_EVEN);
+    return scale(value, false);
+  }
+
+  private static BigDecimal scale(BigDecimal value, boolean legacy) {
+    // Keep legacy canonical padding; new calculations retain only eight fractional places.
+    return legacy
+        ? value.setScale(18, RoundingMode.HALF_EVEN)
+        : value.setScale(8, RoundingMode.DOWN).setScale(18);
   }
 
   private static BigDecimal rate(BigDecimal rate) {

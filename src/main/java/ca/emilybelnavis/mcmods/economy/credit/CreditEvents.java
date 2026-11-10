@@ -123,7 +123,8 @@ public final class CreditEvents {
 
   private static Event event(Map<String, String> row) {
     int version = Integer.parseInt(row.get("record_version"));
-    if (version != 1) throw new IllegalArgumentException("Unsupported credit event version");
+    if (version != 1 && !(version == 2 && row.get("record_type").equals(CreditAuditFacts.DAILY)))
+      throw new IllegalArgumentException("Unsupported credit event version");
     var world = new WorldId(UUID.fromString(row.get("world_id")));
     String payload = row.get("payload");
     Payload value;
@@ -141,6 +142,8 @@ public final class CreditEvents {
       }
       case CreditAuditFacts.DAILY -> {
         var witness = CreditAuditFacts.decodeDaily(payload);
+        if (witness.policyVersion() != version)
+          throw new IllegalArgumentException("Credit daily witness version");
         value = new InterestPosted(witness);
         sourceWorld = witness.world();
       }

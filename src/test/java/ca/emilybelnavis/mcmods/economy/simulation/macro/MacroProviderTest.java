@@ -46,6 +46,19 @@ class MacroProviderTest {
       var selected = f.store.transaction(tx -> MacroPlans.read(tx::query, window));
       assertNotNull(selected);
       assertTrue(
+          selected.fx().values().stream().allMatch(rate -> rate.stripTrailingZeros().scale() <= 8));
+      assertEquals(
+          "2",
+          f.store
+              .transaction(
+                  tx ->
+                      tx.query(
+                          "SELECT record_version FROM journal_records WHERE record_type=?",
+                          List.of(MacroPlans.FACT),
+                          1))
+              .getFirst()
+              .get("record_version"));
+      assertTrue(
           selected.primes().get(CAD).compareTo(selected.primes().get(USD)) > 0,
           "Real CAD money creation affects the frozen model");
       assertEquals(
@@ -152,7 +165,13 @@ class MacroProviderTest {
           0,
           first.primes().get(CAD).add(new BigDecimal("0.0005")).compareTo(once.primes().get(CAD)));
       assertEquals(
-          0, first.fx().get(USD).multiply(new BigDecimal("1.002")).compareTo(once.fx().get(USD)));
+          0,
+          first
+              .fx()
+              .get(USD)
+              .multiply(new BigDecimal("1.002"))
+              .setScale(8, java.math.RoundingMode.DOWN)
+              .compareTo(once.fx().get(USD)));
       f.finish(f.f + 2 * CurrencyPrimes.DAY_MILLIS);
       var held = f.outcome(f.f + 2 * CurrencyPrimes.DAY_MILLIS);
       assertEquals(MacroControls.Mode.PAUSED, held.mode());
@@ -168,6 +187,59 @@ class MacroProviderTest {
       assertEquals(automatic, f.outcome(resume.effectiveMillis()));
       assertTrue(f.dispatcher.progress().ready());
     }
+  }
+
+  @Test
+  void legacyOpeningSurvivesEightDecimalPublicationAndRestart() throws Exception {
+    try (var f = new Fixture(path, MacroControls.Mode.AUTO, true)) {
+      var original = f.store.transaction(tx -> FxService.latestDaily(tx::query));
+      assertTrue(original.rates().get(DKK).stripTrailingZeros().scale() > 8);
+      String legacyPayload = original.encode();
+      f.finish(f.f);
+      var selected = f.outcome(f.f);
+      assertTrue(
+          selected.fx().values().stream().allMatch(rate -> rate.stripTrailingZeros().scale() <= 8));
+      f.reopen();
+      assertEquals(
+          legacyPayload, f.store.transaction(tx -> FxService.latestDaily(tx::query)).encode());
+      assertEquals(selected, f.outcome(f.f));
+      var history =
+          ca.emilybelnavis.mcmods.economy.simulation.SimulationHistory.page(
+              f.store, Long.MAX_VALUE, 8);
+      assertEquals(2, history.entries().getFirst().recordVersion());
+      assertTrue(f.dispatcher.progress().ready());
+    }
+  }
+
+  /** Fixture for a pre-upgrade immutable daily opening, without changing production writers. */
+  private static JournalEngine.Registration legacyOpening(Clock wall) {
+    return new JournalEngine.Registration(
+        1,
+        (intent, reads) -> {
+          var day = LocalDate.ofInstant(wall.instant(), ZoneOffset.UTC);
+          var id = intent.operationId().value();
+          var settings = FxMath.defaults(CAD);
+          var policy = new StringBuilder(day.toString()).append('|').append(id).append("|CAD");
+          for (var c : EconomyCurrency.all()) {
+            var value = settings.get(c);
+            policy
+                .append('|')
+                .append(value.baseline().toPlainString())
+                .append(',')
+                .append(value.variationPpm())
+                .append(',')
+                .append(value.pullPpm())
+                .append(',')
+                .append(value.boundsPpm());
+          }
+          var publication = new FxFacts.Publication(day, CAD, id, id, FxMath.opening(CAD));
+          return new JournalEngine.Commit(
+              List.of(
+                  new Journal.Record(FxFacts.POLICY, 2, policy.toString()),
+                  new Journal.Record(FxFacts.PUBLICATION, 2, publication.encode())),
+              new Journal.Result(1, "FX_OPENED", publication.encode()),
+              tx -> {});
+        });
   }
 
   private static EnumMap<EconomyCurrency, BigDecimal> vector(String value) {
@@ -213,6 +285,10 @@ class MacroProviderTest {
     MacroActivation.Receipt activation;
 
     Fixture(Path path, MacroControls.Mode mode) throws Exception {
+      this(path, mode, false);
+    }
+
+    Fixture(Path path, MacroControls.Mode mode, boolean legacy) throws Exception {
       this.path = path;
       store = new SqliteStorage();
       store.initialize(path.toRealPath());
@@ -220,7 +296,7 @@ class MacroProviderTest {
       dispatcher.prepare();
       submit(
           FxService.OPEN,
-          FxService.opening(wall),
+          legacy ? legacyOpening(wall) : FxService.opening(wall),
           new Journal.CanonicalRequest(1, Map.of("currency", "CAD")));
       clock.prepare();
       store.transaction(

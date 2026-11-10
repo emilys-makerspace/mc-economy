@@ -543,10 +543,11 @@ public final class CreditDiagnostics {
             .map(
                 r -> {
                   int version = Integer.parseInt(r.get("record_version"));
-                  if (version != 1)
+                  if (version != 1 && version != 2)
                     throw new IllegalArgumentException("Unsupported credit daily witness");
                   var witness = CreditAuditFacts.decodeDaily(r.get("payload"));
-                  if (!witness.facility().equals(f.id())
+                  if (witness.policyVersion() != version
+                      || !witness.facility().equals(f.id())
                       || !witness.world().equals(f.world())
                       || witness.currency() != f.currency())
                     throw new IllegalArgumentException("Daily witness binding");
@@ -580,7 +581,8 @@ public final class CreditDiagnostics {
                   if (version != 1)
                     throw new IllegalArgumentException("Unsupported credit payment witness");
                   var witness = CreditAuditFacts.decodePayment(r.get("payload"));
-                  if (!witness.facility().equals(f.id())
+                  if (witness.policyVersion() != version
+                      || !witness.facility().equals(f.id())
                       || !witness.world().equals(f.world())
                       || witness.currency() != f.currency())
                     throw new IllegalArgumentException("Payment witness binding");

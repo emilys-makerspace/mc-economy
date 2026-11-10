@@ -54,8 +54,10 @@ public interface EconomicSimulationHistory {
       List<String> explanations,
       String hash) {
     public Entry {
-      if (recordVersion != 1 || financialDay < 0 || effectiveMillis < 0 || policyRevision < 1)
-        throw new IllegalArgumentException("Saved selection metadata");
+      if ((recordVersion != 1 && recordVersion != 2)
+          || financialDay < 0
+          || effectiveMillis < 0
+          || policyRevision < 1) throw new IllegalArgumentException("Saved selection metadata");
       Objects.requireNonNull(window);
       Objects.requireNonNull(world);
       Objects.requireNonNull(policyId);

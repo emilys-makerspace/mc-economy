@@ -622,7 +622,7 @@ public final class BankingHistory {
               + Instant.ofEpochMilli(f.effectiveAt()));
       lines.add(
           f.availability() == HistoryDetails.Availability.KNOWN
-              ? f.numerator() + " / " + f.denominator() + UiText.t("ui.bank.v.0286fb") + f.version()
+              ? fxRate(f.numerator(), f.denominator()) + UiText.t("ui.bank.v.0286fb") + f.version()
               : UiText.t("ui.bank.captured_publication_unavailable.6cff1e"));
     }
     if (!d.provenance().isEmpty())
@@ -630,6 +630,12 @@ public final class BankingHistory {
     if (d.additionalDetail())
       lines.add(UiText.t("ui.bank.some_original_detail_is_unavailable_or_exceeds.3542e2"));
     return lines;
+  }
+
+  private static String fxRate(String numerator, String denominator) {
+    return new java.math.BigDecimal(numerator)
+        .divide(new java.math.BigDecimal(denominator), 8, java.math.RoundingMode.DOWN)
+        .toPlainString();
   }
 
   private static void rates(
@@ -664,9 +670,7 @@ public final class BankingHistory {
                 lines.add("UTC " + Instant.ofEpochMilli(r.effectiveAt()));
                 lines.add(
                     r.status().equals("AVAILABLE")
-                        ? r.numerator()
-                            + " / "
-                            + r.denominator()
+                        ? fxRate(r.numerator(), r.denominator())
                             + UiText.t("ui.bank.v.0286fb")
                             + r.version()
                         : display(r.status()));

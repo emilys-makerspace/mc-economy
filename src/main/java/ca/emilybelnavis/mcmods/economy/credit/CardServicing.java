@@ -127,6 +127,29 @@ public final class CardServicing {
   /** One completed anchor day; current-day earned interest does not enter its own basis. */
   public static Accrual day(EconomyCurrency currency, Bucket bucket) {
     validate(currency, bucket);
+    BigDecimal basis = major(currency, bucket.debtMinor()).add(scale(bucket.residualMajor()), MC);
+    if (basis.signum() < 0) throw new IllegalArgumentException("Negative exact card debt");
+    BigDecimal earned = scale(basis.multiply(bucket.apr(), MC).divide(BigDecimal.valueOf(364), MC));
+    BigDecimal unsettled = scale(scale(bucket.residualMajor()).add(earned, MC));
+    long posted = minor(currency, unsettled, RoundingMode.HALF_UP);
+    long interest = Math.addExact(bucket.interestMinor(), posted);
+    if (interest < 0) throw new IllegalArgumentException("Negative posted interest");
+    BigDecimal residual = scale(unsettled.subtract(major(currency, posted), MC));
+    Bucket result =
+        new Bucket(
+            bucket.kind(),
+            bucket.principalMinor(),
+            interest,
+            residual,
+            scale(scale(bucket.periodEarnedMajor()).add(earned, MC)),
+            bucket.apr());
+    validate(currency, result);
+    return new Accrual(result, earned, posted);
+  }
+
+  /** Frozen version-one calculation, only for validating immutable historical audit facts. */
+  static Accrual dayLegacy(EconomyCurrency currency, Bucket bucket) {
+    validate(currency, bucket);
     BigDecimal basis = major(currency, bucket.debtMinor()).add(bucket.residualMajor(), MC);
     if (basis.signum() < 0) throw new IllegalArgumentException("Negative exact card debt");
     BigDecimal earned =
@@ -344,7 +367,7 @@ public final class CardServicing {
         updated,
         working,
         allocations,
-        waived.setScale(18, RoundingMode.HALF_EVEN));
+        scale(waived));
   }
 
   private static Bucket subtract(Bucket b, boolean interest, long paid) {
@@ -399,6 +422,11 @@ public final class CardServicing {
     Objects.requireNonNull(id);
     if (id.isBlank() || id.length() > 128) throw new IllegalArgumentException("Statement identity");
     return id;
+  }
+
+  private static BigDecimal scale(BigDecimal value) {
+    // Legacy facts retain eighteen-place padding; new calculations use eight decimal places.
+    return value.setScale(8, RoundingMode.DOWN).setScale(18);
   }
 
   private static BigDecimal exact(BigDecimal n) {

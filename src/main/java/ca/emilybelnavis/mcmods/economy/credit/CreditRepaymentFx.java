@@ -34,7 +34,6 @@ public final class CreditRepaymentFx {
       Objects.requireNonNull(referenceResidual);
       if (capturedAt < 0
           || denominationRevision < 0
-          || referenceResidual.signum() < 0
           || referenceResidual.precision() > 64
           || referenceResidual.scale() < -36
           || referenceResidual.scale() > 36)
@@ -275,7 +274,7 @@ public final class CreditRepaymentFx {
           records.add(
               new Journal.Record(
                   FACT,
-                  1,
+                  2,
                   String.join(
                       "|",
                       q.quote().toString(),
@@ -306,10 +305,16 @@ public final class CreditRepaymentFx {
   }
 
   public static RecordCatalog register(RecordCatalog catalog) {
-    return catalog.with(new RecordCatalog.Key(FACT, 1), CreditRepaymentFx::validate);
+    return catalog
+        .with(new RecordCatalog.Key(FACT, 1), CreditRepaymentFx::validate)
+        .with(new RecordCatalog.Key(FACT, 2), payload -> validate(payload, true));
   }
 
   private static void validate(String payload) {
+    validate(payload, false);
+  }
+
+  private static void validate(String payload, boolean signedResidual) {
     var p = payload.split("\\|", -1);
     if (p.length != 14) throw new IllegalArgumentException("Credit repayment FX fields");
     for (int i = 0; i < 6; i++)
@@ -323,7 +328,7 @@ public final class CreditRepaymentFx {
       throw new IllegalArgumentException("Credit repayment FX expiry");
     EconomyCurrency.valueOf(p[12]);
     var residual = new BigDecimal(p[13]);
-    if (residual.signum() < 0
+    if ((!signedResidual && residual.signum() < 0)
         || residual.precision() > 64
         || residual.scale() < -36
         || residual.scale() > 36)

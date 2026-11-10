@@ -55,16 +55,14 @@ public final class VariantClient {
     try {
       if (!opened && client.getOverlay() == null && client.screen != null && client.level == null) {
         opened = true;
-        Path root = client.gameDirectory.toPath().toAbsolutePath().normalize();
-        require(
-            root.startsWith(Path.of("/private/tmp"))
-                && root.getParent().getFileName().toString().startsWith("economy-a9-03-03-"),
-            "disposable run root");
+        Path root =
+            DisposableProbeWorld.requireClientDirectory(
+                client.gameDirectory.toPath(), "economy-a9-03-03-");
         Path config = FMLPaths.CONFIGDIR.get().resolve("economy-valuation.json");
         require(!Files.exists(config), "existing config refused");
         Files.writeString(config, BASE + "}");
         String name = "economy-variants-" + UUID.randomUUID();
-        require(!Files.exists(root.resolve("saves").resolve(name)), "fresh world");
+        DisposableProbeWorld.requireFreshWorld(root, name);
         client
             .createWorldOpenFlows()
             .createFreshLevel(

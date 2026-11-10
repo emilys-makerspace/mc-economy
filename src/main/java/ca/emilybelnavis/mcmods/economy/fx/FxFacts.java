@@ -55,7 +55,15 @@ public final class FxFacts {
         .with(new RecordCatalog.Key(PUBLICATION, 1), payload -> Publication.decode(payload, 1))
         .with(new RecordCatalog.Key(POLICY, 1), payload -> Policy.decode(payload, 1))
         .with(new RecordCatalog.Key(PUBLICATION, 2), payload -> Publication.decode(payload, 2))
-        .with(new RecordCatalog.Key(POLICY, 2), payload -> Policy.decode(payload, 2));
+        .with(new RecordCatalog.Key(POLICY, 2), payload -> Policy.decode(payload, 2))
+        .with(
+            new RecordCatalog.Key(PUBLICATION, 3),
+            payload -> {
+              var publication = Publication.decode(payload, 2);
+              if (publication.rates().values().stream()
+                  .anyMatch(rate -> rate.stripTrailingZeros().scale() > 8))
+                throw new IllegalArgumentException("Eight-decimal FX publication precision");
+            });
   }
 
   public record Publication(
@@ -111,7 +119,7 @@ public final class FxFacts {
 
     public static Publication decode(String payload, int version) {
       String[] parts = payload.split("\\|", -1);
-      var currencies = currencies(version);
+      var currencies = currencies(version == 3 ? 2 : version);
       if (parts.length != 4 + currencies.size())
         throw new IllegalArgumentException("FX publication fields");
       var rates = new EnumMap<EconomyCurrency, BigDecimal>(EconomyCurrency.class);
@@ -124,6 +132,10 @@ public final class FxFacts {
               UUID.fromString(parts[2]),
               UUID.fromString(parts[3]),
               rates);
+      if (version == 3
+          && publication.rates().values().stream()
+              .anyMatch(rate -> rate.stripTrailingZeros().scale() > 8))
+        throw new IllegalArgumentException("Eight-decimal FX publication precision");
       if (!publication.encode().equals(payload))
         throw new IllegalArgumentException("Noncanonical FX publication");
       return publication;

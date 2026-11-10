@@ -422,7 +422,7 @@ public final class HistoryDetails {
                 "economy:valuation-manifest", ref.revision(), ref.valuationManifest().toString());
             addProvenance("economy:source-epoch", ref.revision(), ref.epoch().toString());
           }
-        } else if (type.equals(LoanDisbursementFx.FACT) && version == 1) {
+        } else if (type.equals(LoanDisbursementFx.FACT) && (version == 1 || version == 2)) {
           Decoders.CATALOG.validate(type, version, payload);
           var p = payload.split("\\|", -1);
           if (p[1].equals(owner.world().value().toString())
