@@ -1,8 +1,8 @@
 # Bank and credit menus and integration
 
-Current A10-02-02 [owner history](owner-history.md) installs banking wire10/schema53 with original detail and separate FX-family views. It supersedes the wire9/current-schema statements in earlier package chronology below; [evidence](../verification/A10-02-02.md) records bounds and native/restore checks.
+Current A10-02-02 [owner history](owner-history.md) installs banking wire10/schema53 with original detail and separate FX-family views. It supersedes the wire9/current-schema statements in earlier package chronology below; [evidence](../A10/verification/A10-02-02.md) records bounds and native/restore checks.
 
-Current A10-02-01 [dashboard/state contract](banking-dashboard.md) installs banking wire9 and lookup-only UI recovery with [focused/native evidence](../verification/A10-02-01.md). The A6 delivery chronology below remains historical; financial APIs2/1/1 and schema52 retain their current meaning.
+Current A10-02-01 [dashboard/state contract](banking-dashboard.md) installs banking wire9 and lookup-only UI recovery with [focused/native evidence](../A10/verification/A10-02-01.md). The A6 delivery chronology below remains historical; financial APIs2/1/1 and schema52 retain their current meaning.
 
 A6-12 extends the authenticated A5 banking menu with protocol 7. `FinanceActions` is a finite allowlist with physical-surface restrictions. Existing menu ID, session, revision, player-instance, dimension, reach and terminal generation checks remain on every packet. New application, increase and replacement actions require a kiosk. The existing sealed issuer-specific proof rechecks bank, binding, base currency and captured economic revisions at settlement. A broken or rebranded terminal invalidates the proof.
 
@@ -28,13 +28,13 @@ Never-attempted COMMITTED issued-card deliveries now appear in the owner collect
 
 The A6-12 package added no persisted entities, schema versions, journal fact families or record decoders. Its existing v1 credit/loan/debt facts and A5 sale/custody facts were composed under V34. Later A8-05 adds currency-prime/scoped-plan sources and loan/application v2 provenance under V46, preserving those historical v1 meanings. Protocol 7 and optional exact v1 reserve/commit request variants are the new transport/service contracts. Existing canonical requests and persisted reservations retain their previous meaning. The first-account branch read captures authorization on the server thread before dispatching detached worker reads.
 
-[Verification](../verification/A6-12.md) records exercised paths and remaining acceptance coverage. [Prior banking rules](banking.md), [credit facilities](credit-facilities.md), [loans](loans.md), [debt lifecycle](debt-lifecycle.md) and [Collection Agent](collection-agent.md) retain their financial policies and storage ownership.
+[Verification](../A6/verification/A6-12.md) records exercised paths and remaining acceptance coverage. [Prior banking rules](banking.md), [credit facilities](credit-facilities.md), [loans](loans.md), [debt lifecycle](debt-lifecycle.md) and [Collection Agent](collection-agent.md) retain their financial policies and storage ownership.
 
 ## A6-13 acceptance corrections
 
-Debit issuance, lost-card revocation and branch closure now remove the already validated canonical owner before the shared service binds it once. Their final request bytes, handlers and original lookup identity are preserved. Client amount labels use the actual field description, issued credit cards have localized names, longer terms show scroll guidance and text batches flush at clipping transitions. The [qualified phase acceptance](../A6-13.md) and [downstream contracts](a6-downstream.md) record scope and the outstanding D15 automatic-payment runtime.
+Debit issuance, lost-card revocation and branch closure now remove the already validated canonical owner before the shared service binds it once. Their final request bytes, handlers and original lookup identity are preserved. Client amount labels use the actual field description, issued credit cards have localized names, longer terms show scroll guidance and text batches flush at clipping transitions. The [qualified phase acceptance](../A6/A6-13.md) and [downstream contracts](../A6/architecture/a6-downstream.md) record scope and the outstanding D15 automatic-payment runtime.
 
 
 ## D15 automatic-payment extension
 
-Banking protocol8 adds the finite `auto_*` configuration actions and `finance_autopay` page. The Bank and credit hub exposes reviewed named-source consent on owner-authorized banking surfaces. Public owner configuration uses `LedgerService.autopay` and `configureAutopay`. Integration API1 remains unchanged. Existing accounting and original-outcome lookup are reused. See [automatic-payment contracts](autopay.md) and [final acceptance](../verification/A6-13.md).
+Banking protocol8 adds the finite `auto_*` configuration actions and `finance_autopay` page. The Bank and credit hub exposes reviewed named-source consent on owner-authorized banking surfaces. Public owner configuration uses `LedgerService.autopay` and `configureAutopay`. Integration API1 remains unchanged. Existing accounting and original-outcome lookup are reused. See [automatic-payment contracts](autopay.md) and [final acceptance](../A6/verification/A6-13.md).

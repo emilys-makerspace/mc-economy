@@ -2,7 +2,7 @@
 
 Minecraft1.21.1, NeoForge21.1.252, Java21. These are trusted server-mod contracts. Client packets, UUIDs and copied DTOs grant no financial authority. See the [integration guide](INTEGRATION_API.md) for product and provider rules.
 
-The [qualified core acceptance matrix](../.codex/architecture/a10-acceptance.md) records reused checks and runtime limits. [Downstream handoff](../.codex/architecture/a10-downstream.md) keeps B-series products and optional third-party modules separate; core acceptance changes no signature, capability or financial authority.
+The [qualified core acceptance matrix](../.codex/A10/architecture/a10-acceptance.md) records reused checks and runtime limits. [Downstream handoff](../.codex/A10/architecture/a10-downstream.md) keeps B-series products and optional third-party modules separate; core acceptance changes no signature, capability or financial authority.
 
 ## Acquisition and compatibility
 

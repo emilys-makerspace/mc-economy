@@ -4,6 +4,12 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-09
 
+### Stage A core integration
+
+- Completed Stage A implementation across banking, village branches, economic simulation, item valuation and core integration. Local multiplayer checks covered two authenticated clients, including account isolation and recovery after reconnect. External-client verification remains pending.
+- Checked the linked debt lifecycle in an accelerated scenario from borrowing through default, debt sale and partial or full repayment through a Collection Agent.
+- Verified restoration of a complete schema 54 world backup to a separate destination.
+
 ### Village bank generation
 
 - New banks and their access paths reserve deeper bounded foundations to tolerate differences between predicted and generated ground, fixing the reproduced sliced-bank failure on snowy terrain.

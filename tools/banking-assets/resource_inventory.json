@@ -397,33 +397,25 @@
       "key": "keystone",
       "name": "Keystone",
       "primary": "#4C5771",
-      "accent": "#E0C99B",
-      "sprite": "economy:banking/networks/keystone",
-      "texture": "economy:gui/sprites/banking/networks/keystone"
+      "accent": "#E0C99B"
     },
     {
       "key": "orbit",
       "name": "Orbit",
       "primary": "#406D76",
-      "accent": "#D4DCBE",
-      "sprite": "economy:banking/networks/orbit",
-      "texture": "economy:gui/sprites/banking/networks/orbit"
+      "accent": "#D4DCBE"
     },
     {
       "key": "wayline",
       "name": "Wayline",
       "primary": "#606C50",
-      "accent": "#E2D5AE",
-      "sprite": "economy:banking/networks/wayline",
-      "texture": "economy:gui/sprites/banking/networks/wayline"
+      "accent": "#E2D5AE"
     },
     {
       "key": "ember",
       "name": "Ember",
       "primary": "#7F4B49",
-      "accent": "#F1BC78",
-      "sprite": "economy:banking/networks/ember",
-      "texture": "economy:gui/sprites/banking/networks/ember"
+      "accent": "#F1BC78"
     }
   ],
   "cards": [
@@ -1075,68 +1067,6 @@
       "translation": "item.economy.mariner_crest_credit_keystone",
       "registered": false,
       "financial_authority": false
-    }
-  ],
-  "icons": [
-    {
-      "key": "accounts",
-      "sprite": "economy:banking/accounts",
-      "texture": "economy:gui/sprites/banking/accounts"
-    },
-    {
-      "key": "debit",
-      "sprite": "economy:banking/debit",
-      "texture": "economy:gui/sprites/banking/debit"
-    },
-    {
-      "key": "credit",
-      "sprite": "economy:banking/credit",
-      "texture": "economy:gui/sprites/banking/credit"
-    },
-    {
-      "key": "loan",
-      "sprite": "economy:banking/loan",
-      "texture": "economy:gui/sprites/banking/loan"
-    },
-    {
-      "key": "replace",
-      "sprite": "economy:banking/replace",
-      "texture": "economy:gui/sprites/banking/replace"
-    },
-    {
-      "key": "deposit",
-      "sprite": "economy:banking/deposit",
-      "texture": "economy:gui/sprites/banking/deposit"
-    },
-    {
-      "key": "withdraw",
-      "sprite": "economy:banking/withdraw",
-      "texture": "economy:gui/sprites/banking/withdraw"
-    },
-    {
-      "key": "fx",
-      "sprite": "economy:banking/fx",
-      "texture": "economy:gui/sprites/banking/fx"
-    },
-    {
-      "key": "history",
-      "sprite": "economy:banking/history",
-      "texture": "economy:gui/sprites/banking/history"
-    },
-    {
-      "key": "tier2",
-      "sprite": "economy:banking/tier2",
-      "texture": "economy:gui/sprites/banking/tier2"
-    },
-    {
-      "key": "collections",
-      "sprite": "economy:banking/collections",
-      "texture": "economy:gui/sprites/banking/collections"
-    },
-    {
-      "key": "branch",
-      "sprite": "economy:banking/branch",
-      "texture": "economy:gui/sprites/banking/branch"
     }
   ],
   "hardware": {
@@ -3742,8 +3672,7 @@
   "agent": {
     "texture": "economy:entity/banking/collection_agent",
     "textureFile": "src/main/resources/assets/economy/textures/entity/banking/collection_agent.png",
-    "blueprint": "economy:banking/collection_agent_model.json",
-    "blueprintFile": "src/main/resources/assets/economy/banking/collection_agent_model.json",
+    "blueprintFile": "tools/banking-assets/sources/agent/collection_agent_model.json",
     "geometryJava": "src/main/java/ca/emilybelnavis/mcmods/economy/client/CollectionAgentGeometry.java",
     "source": "tools/banking-assets/sources/agent/collection_agent_uv.svg",
     "preview": "tools/banking-assets/previews/agent_views.png",
@@ -3856,18 +3785,6 @@
     "entity.economy.collection_agent": "Collection Agent",
     "art.economy.tier1": "Tier 1",
     "art.economy.tier2": "Tier 2",
-    "art.economy.action.accounts": "Accounts",
-    "art.economy.action.debit": "Debit",
-    "art.economy.action.credit": "Credit",
-    "art.economy.action.loan": "Loan",
-    "art.economy.action.replace": "Replace",
-    "art.economy.action.deposit": "Deposit",
-    "art.economy.action.withdraw": "Withdraw",
-    "art.economy.action.fx": "Fx",
-    "art.economy.action.history": "History",
-    "art.economy.action.tier2": "Tier2",
-    "art.economy.action.collections": "Collections",
-    "art.economy.action.branch": "Branch",
     "item.economy.crownstone_debit": "Crownstone Bank Debit Card",
     "item.economy.crownstone_credit_wayline": "Crownstone Bank Wayline Credit Card",
     "item.economy.crownstone_credit_orbit": "Crownstone Bank Orbit Credit Card",

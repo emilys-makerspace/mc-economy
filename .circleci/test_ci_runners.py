@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -24,7 +23,6 @@ def load(name, filename):
     return module
 
 
-live = load('live_runner', 'run-live-probe.py')
 coverage = load('coverage_verifier', 'verify-coverage-inputs.py')
 
 
@@ -46,36 +44,16 @@ import json, os, pathlib, sys
 args = sys.argv[1:]
 with open(os.environ['FAKE_ARGS'], 'a') as out:
     out.write(json.dumps(args) + '\\n')
-if 'runClient' in args:
-    root = pathlib.Path(next(a.split('=', 1)[1] for a in args if a.startswith('-PeconomyRunRoot=')))
-    client = root / 'client'
-    client.mkdir(exist_ok=True)
-    if '-Pbad' in args:
-        sys.exit(1)
-    marker = 'second' if '-Prestart' in args else 'first'
-    if '-Prestart' in args and not (client / 'first-passed.txt').exists():
-        sys.exit(2)
-    (client / (marker + '-passed.txt')).write_text('passed')
 ''')
     binary.chmod(0o755)
-    xvfb = root / 'xvfb-run'
-    xvfb.write_text('#!/usr/bin/env bash\nshift 3\nexec "$@"\n')
-    xvfb.chmod(0o755)
-    return {'FAKE_ARGS': str(root / 'calls.jsonl'), 'PATH': str(root) + os.pathsep + os.environ['PATH']}
+    return {'FAKE_ARGS': str(root / 'calls.jsonl')}
 
 
 class RunnerContracts(unittest.TestCase):
-    def test_inventory_covers_current_tests_and_every_probe_once(self):
-        inventory.validate_probes()
+    def test_inventory_covers_current_junit_tests(self):
         classes = inventory.junit_classes()
         self.assertIn('ca.emilybelnavis.mcmods.economy.api.CurrencyConversionTest', classes)
         self.assertIn('ca.emilybelnavis.mcmods.economy.credit.CardServicingTest', classes)
-        for items in (classes, inventory.PROBES):
-            shards = [inventory.assigned(items, n) for n in range(inventory.NODES)]
-            flattened = [item for shard in shards for item in shard]
-            self.assertEqual(len(items), len(flattened))
-            self.assertEqual(set(items), set(flattened))
-        self.assertEqual(3, sum(p.name.startswith('layout-') for p in inventory.PROBES))
 
     def test_nonstandard_annotated_test_names_are_discovered(self):
         with tempfile.TemporaryDirectory() as root:
@@ -83,14 +61,6 @@ class RunnerContracts(unittest.TestCase):
             source.write_text('package fixture;\nclass Unusual {\n @Test void checks() {}\n}')
             (Path(root) / 'Helper.java').write_text('class Helper {}')
             self.assertEqual(('fixture.Unusual',), inventory.junit_classes(Path(root)))
-
-    def test_new_autonomous_probe_requires_explicit_assignment(self):
-        with tempfile.TemporaryDirectory() as root:
-            build = Path(root) / 'build.gradle'
-            build.write_text("if (providers.gradleProperty('newProbe').isPresent()) {\n"
-                             "tasks.named('runClient') { systemProperty 'economy.newProbe', 'true' }\n}")
-            with self.assertRaisesRegex(ValueError, 'newProbe'):
-                inventory.validate_probes(build)
 
     def test_batch_never_runs_an_unfiltered_suite_and_forces_assigned_tests(self):
         with workspace() as root:
@@ -104,37 +74,6 @@ class RunnerContracts(unittest.TestCase):
                 self.assertEqual(['fixture.One', 'fixture.Two'],
                                  [args[n + 1] for n, arg in enumerate(args) if arg == '--tests'])
 
-    def test_live_runner_continues_other_scenarios_after_failure(self):
-        with workspace() as root:
-            (root / 'build.gradle').write_text('')
-            bad = inventory.single('bad', 'economy-ci-bad-', 'first', name='bad')
-            good = inventory.single('good', 'economy-ci-good-', 'first', name='good')
-            probes = (bad, good, good, good, good)
-            with patch.dict(os.environ, fake_gradle(root)), patch.object(live, 'PROBES', probes), \
-                    patch.object(sys, 'argv', ['runner', '--node', '0']), \
-                    contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(1, live.main())
-            calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
-            self.assertEqual(2, len(calls))
-            for args in calls:
-                temporary = Path(next(a.split('=', 1)[1] for a in args if a.startswith('-PeconomyRunRoot=')))
-                self.assertFalse(temporary.exists())
-            report = ET.parse(root / 'build/circleci/junit/TEST-minecraft-live-good-1.xml').getroot()
-            self.assertEqual('0', report.get('failures'))
-
-    def test_restart_phases_keep_the_same_disposable_world(self):
-        with workspace() as root:
-            run_root = root / 'run'
-            run_root.mkdir()
-            phases = (inventory.Phase('first', ('good',)), inventory.Phase('second', ('good', 'restart')))
-            probe = inventory.Probe('restart', 'economy-ci-', phases)
-            with patch.dict(os.environ, fake_gradle(root)), contextlib.redirect_stdout(io.StringIO()):
-                for n, phase in enumerate(phases, 1):
-                    self.assertEqual(0, live.run_phase(probe, phase, n, run_root, 10))
-            self.assertTrue((run_root / 'client/first-passed.txt').exists())
-            self.assertTrue((run_root / 'client/second-passed.txt').exists())
-            self.assertTrue((root / 'build/circleci/live/restart/phase-2/second-passed.txt').exists())
-
     def test_coverage_gate_rejects_missing_junit_execution_data(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -143,7 +82,7 @@ class RunnerContracts(unittest.TestCase):
                 node = root / f'node-{n}'
                 (node / 'junit').mkdir(parents=True)
                 (node / 'all-tests.txt').write_text('\n'.join(classes))
-                selected = inventory.assigned(classes, n)
+                selected = classes[n::inventory.NODES]
                 (node / 'selected-tests.txt').write_text('\n'.join(selected))
                 (node / 'junit.status').write_text('0')
                 for name in selected:

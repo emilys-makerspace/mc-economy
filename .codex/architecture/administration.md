@@ -1,6 +1,6 @@
 # Existing administration and reviewed settings
 
-A10-07, 2026-11-09. [Handoff](../A10-07.md), [evidence](../verification/A10-07.md), [operator paths and permissions](../../docs/SERVER_GUIDE.md).
+A10-07, 2026-11-09. [Handoff](../A10/A10-07.md), [evidence](../A10/verification/A10-07.md), [operator paths and permissions](../../docs/SERVER_GUIDE.md).
 
 Physical terminal administration retains the existing terminal-owner/operator admission, geometry, reach and session checks. Account ownership remains a separate authority; owning an account does not grant operator commands or another player's terminal. No global administration GUI or new permission model is introduced.
 

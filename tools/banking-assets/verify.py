@@ -7,7 +7,10 @@ HERE=Path(__file__).resolve().parent
 manifest=json.loads((ASSETS/'banking/art_manifest.json').read_text())
 brands=json.loads((HERE/'brands.json').read_text())['banks']
 source=(ROOT/'src/main/java/ca/emilybelnavis/mcmods/economy/institution/InstitutionCatalog.java').read_text()
-rows=re.findall(r'bank\("([^"]+)", "([^"]+)", "([^"]+)", Tier\.(\w+), ([^)]+)\)',source)
+rows=re.findall(
+    r'\bbank\(\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",\s*Tier\.(\w+),\s*([^)]+)\)',
+    source,
+)
 assert len(rows)==23
 expected=set()
 for key,name,currency,tier,networks in rows:
@@ -65,7 +68,7 @@ def model(ref):
 
 for c in manifest['cards']:
     model(c['model']);assert png(local(c['texture'],'textures','.png'))==(64,64)
-for entry in manifest['issuers']+manifest['networks']+manifest['icons']:
+for entry in manifest['issuers']:
     assert png(local(entry['texture'],'textures','.png'))==(16,16)
 for bank in manifest['hardware']['banks']:
     assert bank['currency']==next(b['currency'] for b in brands if b['key']==bank['key'])

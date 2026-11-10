@@ -12,7 +12,7 @@ V41 delivers internal worker interfaces only. No production provider, rate publi
 
 V41 adds macro_window_opens, macro_window_closes and activity_model_plans plus indexed/immutable projections. Explicit v1 codecs are registered. Startup/recovery and offline clean-backup validation check declarations, fact/projection linkage, coverage, chronology/global seals, source counters and historical capacity; plan validation reconstructs frozen input and v1 output. Clean restore admits V41, retaining the stopped complete-world upgrade-backup requirement and frozen old migrations. Each call commits one open/close/plan; existing 16KiB facts, 64-record and 128KiB transaction limits remain authoritative and oversized compositions fail atomically.
 
-[Handoff](../A8-02-02.md) and [verification](../verification/A8-02-02.md) record actual checks. Next selectable package is A8-03-01. Production scheduling/publication remains later A8 scope.
+[Handoff](../A8/A8-02-02.md) and [verification](../A8/verification/A8-02-02.md) record actual checks. Next selectable package is A8-03-01. Production scheduling/publication remains later A8 scope.
 
 
 ## A8-05 activation horizon

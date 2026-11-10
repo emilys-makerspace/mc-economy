@@ -2,7 +2,7 @@
 
 A10-02-02 now extends this delivered baseline with [wire10/schema53 owner history](owner-history.md). Dashboard recent activity uses the new projection; the original A10-02-01 record below retains its delivery-time wire9/schema52 context.
 
-A10-02-01,2026-11-08. [Evidence](../verification/A10-02-01.md), [handoff](../A10-02-01.md). Banking wire9 is installed; other menu families remain1, storage52 and public APIs2/1/1 are unchanged. [A10-01](a10-source-contracts.md) retains the design baseline for later packages, including the separate unimplemented filtered-history projection.
+A10-02-01,2026-11-08. [Evidence](../A10/verification/A10-02-01.md), [handoff](../A10/A10-02-01.md). Banking wire9 is installed; other menu families remain1, storage52 and public APIs2/1/1 are unchanged. [A10-01](../A10/architecture/a10-source-contracts.md) retains the design baseline for later packages, including the separate unimplemented filtered-history projection.
 
 ## Owner read and navigation
 

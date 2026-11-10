@@ -1,6 +1,6 @@
 # Core screen layout — A10-03
 
-The supported minimum is a320×240 logical Minecraft GUI viewport. This is a bounded layout contract, not arbitrary-size support. Physical window coordinates and framebuffer pixels may differ on high-density displays; actual scale and logical dimensions are recorded in [native evidence](../verification/A10-03.md).
+The supported minimum is a320×240 logical Minecraft GUI viewport. This is a bounded layout contract, not arbitrary-size support. Physical window coordinates and framebuffer pixels may differ on high-density displays; actual scale and logical dimensions are recorded in [native evidence](../A10/verification/A10-03.md).
 
 BankingScreen retains its316×236 terminal and physical deposit-slot coordinates. Persistent header arrows and PageUp/PageDown reach body text and choice pages without a wheel. The footer status is focusable with complete tooltip/narration text. Financial service actions remain server-offered; multi-action credit pages use the existing Actions chooser instead of extending buttons beyond the terminal. Body text no longer has a floating scroll hint over its final rows or form controls. Draft, currency/destination and scroll state survive resize; an incoming revision clears the reviewed capability under the existing review identity/revision rules. Each button also captures its offered revision, refusing obsolete callbacks.
 

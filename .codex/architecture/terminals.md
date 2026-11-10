@@ -60,7 +60,7 @@ TerminalRemovals is an overworld SavedData removal outbox covering all dimension
 
 The shop price command now requires a ready physical register and rechecks its current generation against the journal snapshot. Every final menu/controller must also require current actor/dimension/reach/session, complete geometry, physical generation and authoritative policy revision. TerminalLifecycle.matches is the physical guard; TerminalPolicy.matches remains the storage guard. No external protection mod is included.
 
-[Acceptance evidence](../verification/A5-08.md).
+[Acceptance evidence](../A5/verification/A5-08.md).
 
 
 Current player-facing integration is delivered in [A5-09 banking menus](banking.md); that contract supersedes earlier statements here that menus are pending. Existing subsystem safety and save-evidence requirements still apply.

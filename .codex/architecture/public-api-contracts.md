@@ -12,4 +12,4 @@ Admission and worker callbacks retain the existing owner-thread/session/world gr
 
 No unmet concrete event consumer was identified. History and provider publication consumers use existing completion stages; financial consumers use existing atomic journal/register composition and original-outcome recovery. Internal commit observers, lifecycle/reload hooks and storage callbacks remain internal. No event bus, compatibility adapter or new monetary authority is added.
 
-[Handoff](../A10-06.md) and [verification](../verification/A10-06.md) record actual checks and limitations. The [qualified A10 acceptance](a10-acceptance.md) and [downstream handoff](a10-downstream.md) retain these API meanings and unsupported B-series capabilities; no new API/event authority is implied.
+[Handoff](../A10/A10-06.md) and [verification](../A10/verification/A10-06.md) record actual checks and limitations. The [qualified A10 acceptance](../A10/architecture/a10-acceptance.md) and [downstream handoff](../A10/architecture/a10-downstream.md) retain these API meanings and unsupported B-series capabilities; no new API/event authority is implied.

@@ -20,6 +20,6 @@ One owner runs Gradle and game checks sequentially. Reuse still-applicable evide
 
 This guide controls verification scope across the project. Older prompt instructions to run targeted tests followed by an unfiltered build, or automatically run the full suite at completion, are superseded. Historical verification records remain factual records of what ran, not instructions to repeat those runs.
 
-Historical evidence: [A1-01](verification/A1-01.md) · [A1-02](verification/A1-02.md) · [A1-03](verification/A1-03.md) · [A1-04](verification/A1-04.md).
+Historical evidence: [A1-01](A1/verification/A1-01.md) · [A1-02](A1/verification/A1-02.md) · [A1-03](A1/verification/A1-03.md) · [A1-04](A1/verification/A1-04.md).
 
-Current integrated foundation gate: [A1-05-03](verification/A1-05-03.md).
+Current integrated foundation gate: [A1-05-03](A1/verification/A1-05-03.md).

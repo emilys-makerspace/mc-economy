@@ -32,8 +32,7 @@ def card(bank,product,network):
         p.rect(48,45,60,48,fg);p.line(48,44,54,40,fg);p.line(54,40,59,44,fg)
     return p
 
-def icons():
-    result=[]
+def write_icon_sources():
     for name in ['accounts','debit','credit','loan','replace','deposit','withdraw','fx','history','tier2','collections','branch']:
         p=Canvas(16,16);c=PAPER
         if name=='accounts':
@@ -62,12 +61,10 @@ def icons():
             p.line(2,14,14,14,c)
         else:
             p.rect(4,1,12,15,c);p.rect(5,3,11,8,INK);p.rect(6,10,10,12,INK);p.rect(2,14,14,16,c)
-        path='gui/sprites/banking/'+name;p.save(key_path('textures',path));p.svg(HERE/'sources/icons'/f'{name}.svg')
-        result.append({'key':name,'sprite':'economy:banking/'+name,'texture':'economy:'+path})
-    return result
+        p.svg(HERE/'sources/icons'/f'{name}.svg')
 
 def cards_and_marks():
-    cards=[];issuers=[];networks=[];lang={};sheet=Canvas(864, len(BANKS)*84, '#192631')
+    cards=[];issuers=[];lang={};sheet=Canvas(864, len(BANKS)*84, '#192631')
     for idx,bank in enumerate(BANKS):
         key=bank['key'];primary=color(bank['primary']);accent=color(bank['accent'])
         logo=mark(key,accent);logo.save(key_path('textures','gui/sprites/banking/issuers/'+key));logo.svg(HERE/'sources/issuers'/f'{key}.svg')
@@ -90,8 +87,7 @@ def cards_and_marks():
                           'registered':False,'financial_authority':False})
             sheet.blit(art,x,idx*84+18,64,64);sheet.blit(art,x+43,idx*84+2,16,16);x+=78
     for network in NETWORKS:
-        key=network['key'];logo=mark(key,network['accent']);logo.save(key_path('textures','gui/sprites/banking/networks/'+key));logo.svg(HERE/'sources/networks'/f'{key}.svg')
-        networks.append({**network,'sprite':'economy:banking/networks/'+key,'texture':'economy:gui/sprites/banking/networks/'+key})
+        key=network['key'];logo=mark(key,network['accent']);logo.svg(HERE/'sources/networks'/f'{key}.svg')
         lang['network.economy.'+key]=network['name']
     sheet.save(HERE/'previews/cards.png')
     for page in range(3):
@@ -104,21 +100,21 @@ def cards_and_marks():
         marks.blit(mark(bank['key'],PAPER),x+4,y+2,32,32);marks.text(str(i+1),x+12,y+36,PAPER)
     for i,network in enumerate(NETWORKS):marks.blit(mark(network['key'],PAPER),10+i*66,92,32,32)
     marks.save(HERE/'previews/marks.png')
-    return issuers,networks,cards,lang
+    return issuers,cards,lang
 
 def generate():
     import hardware,agent
-    issuers,networks,cards,lang=cards_and_marks()
-    ui=icons();hardware_data=hardware.generate();agent_data=agent.generate()
+    issuers,cards,lang=cards_and_marks()
+    write_icon_sources()
+    hardware_data=hardware.generate();agent_data=agent.generate()
     for bank in BANKS:
         for kind,title in [('atm','ATM'),('teller','Teller Station'),('kiosk','Branch Kiosk')]:
             lang['block.economy.'+bank['key']+'_'+kind]=bank['name']+' '+title+' ('+bank['currency']+')'
     lang.update({'art.economy.preview_only':'Art preview only; usable cards require server issuance.',
                  'entity.economy.collection_agent':'Collection Agent','art.economy.tier1':'Tier 1','art.economy.tier2':'Tier 2'})
-    for icon in ui:lang['art.economy.action.'+icon['key']]=icon['key'].replace('_',' ').title()
     manifest={'version':1,'license':'CC0-1.0','source':'tools/banking-assets/generate.py','sources':['art.py','brands.json','hardware.py','agent.py'],
               'scope':'Artwork and model resources only. No issuer, facility, entity, hardware registration or world migration.',
-              'issuers':issuers,'networks':networks,'cards':cards,'icons':ui,'hardware':hardware_data,'agent':agent_data,
+              'issuers':issuers,'networks':NETWORKS,'cards':cards,'hardware':hardware_data,'agent':agent_data,
               'localization':lang}
     output(ASSETS/'banking/art_manifest.json',manifest)
     existing=json.loads((ASSETS/'lang/en_us.json').read_text())
@@ -127,6 +123,6 @@ def generate():
         existing[key]=value
     output(ASSETS/'lang/en_us.json',existing)
     output(HERE/'resource_inventory.json',manifest)
-    print(f'{len(issuers)} issuers, {len(networks)} networks, {len(cards)} card variants, {len(ui)} menu icons')
+    print(f'{len(issuers)} issuers, {len(NETWORKS)} networks, {len(cards)} card variants')
 
 if __name__=='__main__':generate()

@@ -14,7 +14,7 @@ Explicit operator terrain retry uses only loaded supported AIR, fresh collision/
 
 The [original GenMC collection and converter](../../tools/village-banks/README.md) supplies 230 templates:23 institutions×2 sizes×5 styles. All contain real registered wide kiosks, institution signs, local wood, lighting, furniture and beds. Compact 11×8×9 has one kiosk and one reserved desk; larger 17×9×11 has two each. `bank_templates.json` records source/export hashes and exact local anchors. [A7-05](banker-staffing.md) replaces only the four reserved furniture cells in newly exported templates with actual job desks, consuming captured desk slots/generations and existing staffing pause state. The resource revision gains `:banker-desks-v2`. Existing serialized `a7_cells`, saved hashes and receipt manifests remain literal and are never converted on load; older furniture remains UNBOUND.
 
-[Persistent branches](village-branches.md) · [wide geometry](kiosk-upgrades.md) · [A7-04 evidence](../verification/A7-04.md).
+[Persistent branches](village-branches.md) · [wide geometry](kiosk-upgrades.md) · [A7-04 evidence](../A7/verification/A7-04.md).
 
 ## Native bank POI discovery
 

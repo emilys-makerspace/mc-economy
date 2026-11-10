@@ -54,7 +54,7 @@ For an ordinary runnable delivery, run `./gradlew build -x test`, `./gradlew hel
 
 ## Preparation — 2026-11-08
 
-The user requested “prep PhaseA10”. [Phase specification and decisions](../../.codex/architecture/a10-planning.md), [approved shared contract](CONTRACT.md), [eleven-package queue](EXECUTION.md) and [handoff](../../.codex/A10-planning.md) are approved 2026-11-08, subject to prerequisites. No implementation package is selected or executed. A10-01 is the proposed source/interface checkpoint. Original design requirements above remain in scope; technical revision1 and package/runtime contracts are approved design targets, not verified behavior.
+The user requested “prep PhaseA10”. [Phase specification and decisions](../../.codex/A10/architecture/a10-planning.md), [approved shared contract](CONTRACT.md), [eleven-package queue](EXECUTION.md) and [handoff](../../.codex/A10/A10-planning.md) are approved 2026-11-08, subject to prerequisites. No implementation package is selected or executed. A10-01 is the proposed source/interface checkpoint. Original design requirements above remain in scope; technical revision1 and package/runtime contracts are approved design targets, not verified behavior.
 
 ## Scope boundary — standalone integrations
 

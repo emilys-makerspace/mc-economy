@@ -52,8 +52,8 @@ Organization registration, roles and delegated access are tracked as a [deferred
 
 Read the [shared contract](CONTRACT.md). Invoke each package separately after its prerequisites are verified.
 
-1. [A3-01 Parties and authorization](A3-01.md) · Verified. See the [handoff](../../.codex/A3-01.md).
-2. [A3-02 Account catalog and product constraints](A3-02.md) · Verified. See the [handoff](../../.codex/A3-02.md).
-3. [A3-03 Lifecycle and limits](A3-03.md) · Verified. See the [handoff](../../.codex/A3-03.md).
-4. [A3-04 Funds vocabulary and account queries](A3-04.md) · Verified. See the [handoff](../../.codex/A3-04.md).
-5. [A3-05 Rebase mapping and integration handoff](A3-05.md) · Verified. See the [handoff](../../.codex/A3-05.md).
+1. [A3-01 Parties and authorization](A3-01.md) · Verified. See the [handoff](../../.codex/A3/A3-01.md).
+2. [A3-02 Account catalog and product constraints](A3-02.md) · Verified. See the [handoff](../../.codex/A3/A3-02.md).
+3. [A3-03 Lifecycle and limits](A3-03.md) · Verified. See the [handoff](../../.codex/A3/A3-03.md).
+4. [A3-04 Funds vocabulary and account queries](A3-04.md) · Verified. See the [handoff](../../.codex/A3/A3-04.md).
+5. [A3-05 Rebase mapping and integration handoff](A3-05.md) · Verified. See the [handoff](../../.codex/A3/A3-05.md).

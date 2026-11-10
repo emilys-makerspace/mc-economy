@@ -7,7 +7,7 @@
 [![Codacy grade](https://img.shields.io/codacy/grade/ccf84f4c7752479aae00fa4013374edb?style=flat-square&logo=codacy)](https://app.codacy.com/gh/emilys-makerspace/mc-economy/dashboard)
 
 
-Banking, physical cash and player shops for Minecraft, with credit, loans and a persistent world economy. Currently in alpha.
+Banking, physical cash and player shops for Minecraft, with credit, loans and a persistent world economy. Stage A implementation is complete and Economy is in alpha.
 
 **Requires Minecraft 1.21.1 · NeoForge 21.1.252 · Java 21.** No additional mods are required.
 
@@ -19,6 +19,7 @@ Banking, physical cash and player shops for Minecraft, with credit, loans and a 
 - Cash deposits and withdrawals, account transfers, player shops and monetary villager/wandering-trader commerce.
 - Credit cards, fixed unsecured loans, credit reports and Collection Agents.
 - Optional automatic payments, transaction history and recovery of interrupted payments and item deliveries.
+- Reference item values derived from supported recipes, with operator-controlled activation for villager and wandering-trader pricing.
 
 New kiosks are two blocks wide and two blocks high. Existing narrow kiosks remain usable and offer a free **Upgrade kiosk** action in owner/operator settings when space and support are clear.
 
@@ -77,7 +78,7 @@ Placed agents stay where you put them and persist with the world. Right-click wi
 - [Server guide](docs/SERVER_GUIDE.md): configuration, diagnostics, upgrades, backups and restore.
 - [Server integration API](docs/INTEGRATION_API.md): versioned banking entry points and downstream contracts.
 - [Changelog](CHANGELOG.md): completed features and notable fixes.
-- [Roadmap](ROADMAP.md): planned features and future direction.
+- [Roadmap](ROADMAP.md) covers delivered milestones and planned features.
 
 **Upgrading an existing world?** Stop Minecraft and [prepare a complete-world upgrade backup](docs/SERVER_GUIDE.md#schema-upgrades) before opening it with a newer economy schema. Keep world and economy data together.
 

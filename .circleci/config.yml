@@ -1,7 +1,5 @@
 version: 2.1
 
-# Minecraft client probes run manually.
-
 orbs:
   codecov: codecov/codecov@6.1.0
 

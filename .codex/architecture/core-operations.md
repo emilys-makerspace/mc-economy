@@ -1,6 +1,6 @@
 # Core operations and bounded reference workload
 
-A10-08. [Operator runbook](../../docs/SERVER_GUIDE.md), [evidence](../verification/A10-08.md).
+A10-08. [Operator runbook](../../docs/SERVER_GUIDE.md), [evidence](../A10/verification/A10-08.md).
 
 Production scheduling, queue capacities, SQLite ownership and the30-second shutdown drain are unchanged. New opt-in `-PoperationsProbe` registers only the release-excluded inventoryProbe source set on runServer, pins its fixture heap to2–4GiB and requires a dedicated server whose world is inside a fresh `/private/tmp/economy-a10-08-*` root. It never accepts a EULA, opens a player world or installs compatibility modules. The caller supplies an existing permitted server setup. Normal artifacts and CircleCI do not enable the workload.
 

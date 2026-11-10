@@ -10,4 +10,4 @@ Deferred tokens use JSON between source-only control delimiters; recursive rende
 
 Banking wire10, banker/collection wire1, schema53 and public API versions2/1/1 are unchanged. Required dependencies and source registration remain unchanged. Numeric input explicitly uses ASCII digits, dot decimal separator and no grouping; French comma input is rejected. UTC filters retain ISO syntax.
 
-See [verification](../verification/A10-02-03.md). A10-03 owns the representative long French financial review and viewport/GUI-scale matrix. Resource completeness does not establish layout or multiplayer acceptance.
+See [verification](../A10/verification/A10-02-03.md). A10-03 owns the representative long French financial review and viewport/GUI-scale matrix. Resource completeness does not establish layout or multiplayer acceptance.

@@ -1,6 +1,6 @@
 # Reference-price trader activation
 
-A9-06 is complete in its documented scope; [handoff](../A9-06.md) and [evidence](../verification/A9-06.md) record accepted native checkout/presentation and read-only history validation. Extends [V51 transition foundation](trade-source-transition.md) and [item API](item-valuation-api.md). Minecraft1.21.1 / NeoForge21.1.252 / Java21 remain pinned.
+A9-06 is complete in its documented scope; [handoff](../A9/A9-06.md) and [evidence](../A9/verification/A9-06.md) record accepted native checkout/presentation and read-only history validation. Extends [V51 transition foundation](trade-source-transition.md) and [item API](item-valuation-api.md). Minecraft1.21.1 / NeoForge21.1.252 / Java21 remain pinned.
 
 ## Explicit review and prospective publication
 

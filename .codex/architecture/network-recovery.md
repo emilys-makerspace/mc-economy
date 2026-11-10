@@ -1,6 +1,6 @@
 # Dedicated network recovery — A10-04
 
-Existing production banking transport/recovery passed the recorded two-authenticated-client loopback witness. No production financial, storage, protocol or API change was needed. Schema53, banking wire10, other menu wires1 and API versions2/1/1 remain. See [evidence](../verification/A10-04.md) and [handoff](../A10-04.md).
+Existing production banking transport/recovery passed the recorded two-authenticated-client loopback witness. No production financial, storage, protocol or API change was needed. Schema53, banking wire10, other menu wires1 and API versions2/1/1 remain. See [evidence](../A10/verification/A10-04.md) and [handoff](../A10/A10-04.md).
 
 The wire handler checks current player/menu/session/revision before dispatch. Client controls retain their offered revision; translated status never grants authority. Owner grants and current PlayerList object checks protect reads, original-operation lookup and saved physical evidence. Pending identity is persisted before submission. A reconnect resolves that original identity before any fresh reviewed intent; confirmed absence does not automatically resubmit. Detached player objects cannot save over a newer login. Physical uncertainty keeps existing custody/quarantine semantics.
 

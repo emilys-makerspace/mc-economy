@@ -167,7 +167,7 @@ Storage requires filesystem support for exclusive file locks, atomic file public
 
 ## Operational reference measurements
 
-A local dedicated test on the Apple M5 Pro/24GB reference Mac, with a2–4GiB Java21 heap and sparse flat world, passed the fixed20-synthetic-owner workload:2 top-level actions/s, a300-second sample and one20-request burst. Owner history p95 was100.081ms; confirmation-to-financial-outcome p95 was at most50.106ms. The sample reconciled balances, original receipts, trader stock and protected custody, then stopped cleanly. [Measurement scope and results](../.codex/verification/A10-08.md) retain the exact workload, quantiles and restore evidence.
+A local dedicated test on the Apple M5 Pro/24GB reference Mac, with a2–4GiB Java21 heap and sparse flat world, passed the fixed20-synthetic-owner workload:2 top-level actions/s, a300-second sample and one20-request burst. Owner history p95 was100.081ms; confirmation-to-financial-outcome p95 was at most50.106ms. The sample reconciled balances, original receipts, trader stock and protected custody, then stopped cleanly. [Measurement scope and results](../.codex/A10/verification/A10-08.md) retain the exact workload, quantiles and restore evidence.
 
 This is service capacity evidence, not20 connected players, physical-delivery throughput or a minimum-hardware specification. No natural background publication occurred during the sample. Populated worlds, rendering, network clients and storage conditions can change observed performance. Use authorized diagnostics to observe queue depth/age and readiness on the actual server; retain controlled overload refusals rather than enlarging queues to hide them.
 
@@ -230,7 +230,7 @@ Acceptance combines a real merchant-to-rate SQLite witness with the earlier real
 
 Clear output capacity before quoting. If exact cash change or a rounded positive payout cannot be represented, choose a supported larger quantity or another explicit rail/currency; no rounding shortcut or account fallback is used. Keep saved worlds and economy data together. Ambiguous interrupted item/progression attempts remain for reconciliation instead of obtaining another execution capability. Source replacement/recipe valuation belongs to a separately selected A9 adapter; the current temporary emerald source is retained.
 
-[Acceptance evidence](../.codex/verification/A8-08.md) and [A9 downstream boundary](../.codex/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.
+[Acceptance evidence](../.codex/A8/verification/A8-08.md) and [A9 downstream boundary](../.codex/A8/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.
 
 
 ## Item reference configuration

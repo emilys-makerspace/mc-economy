@@ -116,7 +116,7 @@ the other account's history.
 
 ## Version-two minor postings
 
-Legacy v1 posting amounts remain whole-major and rejectCHF. V2 has the same five payload fields with exact nonzero minor units. CHF legs or explicit trusted precision=minor-v2 composition select v2 without relaxing role, funds/hold, sign, overflow or per-currency balance checks. CHF holds/FX use strict v2 facts; legacy nonCHF transfer/hold/exchange rules remain. Newly fractional legacy-currency balances may fully drain at account closure or world rebase via v2; rebase target-payout rounding remains the existing whole-major policy. Projection rebuild/history fold both versions through the V19 history index. See [the current CHF contract](chf.md) and [verification](../verification/A6-03-01.md).
+Legacy v1 posting amounts remain whole-major and rejectCHF. V2 has the same five payload fields with exact nonzero minor units. CHF legs or explicit trusted precision=minor-v2 composition select v2 without relaxing role, funds/hold, sign, overflow or per-currency balance checks. CHF holds/FX use strict v2 facts; legacy nonCHF transfer/hold/exchange rules remain. Newly fractional legacy-currency balances may fully drain at account closure or world rebase via v2; rebase target-payout rounding remains the existing whole-major policy. Projection rebuild/history fold both versions through the V19 history index. See [the current CHF contract](chf.md) and [verification](../A6/verification/A6-03-01.md).
 
 
 ## A6-03 current contract (2026-11-05)

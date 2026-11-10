@@ -12,4 +12,4 @@ The fixture advances a monotonic clock only after normal economic readiness and 
 
 The native default boundary exposed an existing activity observer incompatibility: debt sales register a version2 `ALLOWANCE` institution account, whereas the observer required version1 for every institution account fact. The observer now validates that supported version2 allowance through `DebtFinance.validateAllowanceAccount` and retains its nonspendable treatment. Other unsupported versions and role/version combinations still fail. Finite cash, claims, sale pricing, deadlines and attribution formulas are unchanged.
 
-See [package handoff](../A10-05.md) and [actual evidence](../verification/A10-05.md) for the linked facility, native milestones and limits. External-client testing remains a separate pending manual A10-04 witness and is excluded from CircleCI.
+See [package handoff](../A10/A10-05.md) and [actual evidence](../A10/verification/A10-05.md) for the linked facility, native milestones and limits. External-client testing remains a separate pending manual A10-04 witness and is excluded from CircleCI.

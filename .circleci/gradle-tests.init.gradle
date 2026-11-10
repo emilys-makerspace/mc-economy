@@ -10,37 +10,12 @@ gradle.projectsEvaluated {
             extensions.getByName('jacoco').destinationFile = project.file("${batchDir}/jacoco.exec")
         }
     }
-    def liveDir = project.findProperty('circleciLiveDir')
-    if (liveDir != null) {
-        project.tasks.named('runClient') {
-            project.extensions.getByName('jacoco').applyTo(it)
-            extensions.getByName('jacoco').with {
-                destinationFile = project.file("${liveDir}/jacoco.exec")
-                includes = [
-                    'ca.emilybelnavis.mcmods.economy.*'
-                ]
-            }
-            // Keep Gradle + client + software rendering within one CI node's memory budget.
-            maxHeapSize = '2G'
-        }
-    }
     project.tasks.named('jacocoTestReport') {
         def aggregateDir = project.findProperty('circleciAggregateDir')
         executionData.setFrom(project.fileTree(aggregateDir == null ? 'build/circleci' : aggregateDir) {
-            include '**/jacoco.exec'
-            // Per-atom impact analysis is deliberately separate from suite coverage.
-            exclude 'analysis/**'
+            include '**/batches/**/jacoco.exec'
         })
         reports.xml.required = true
         reports.html.required = true
-    }
-    // Impact analysis must measure one atom, never the accumulated node coverage.
-    if (project.hasProperty('circleciImpactDir')) {
-        def impactDir = project.property('circleciImpactDir')
-        project.tasks.named('jacocoTestReport') {
-            executionData.setFrom(project.file("${impactDir}/jacoco.exec"))
-            reports.xml.outputLocation.set(project.file("${impactDir}/jacoco.xml"))
-            reports.html.required = false
-        }
     }
 }

@@ -12,7 +12,7 @@ RegisterInventory delivers one complete batch with source and player replay mark
 
 Limits: source containers at most 54 slots, observed quantity at most 4096, fingerprint NBT at most 64 KiB, normalized template at most 2048 encoded bytes with an 8192-byte NBT decoding budget, and 16 physical reservations/receipts. After independently verified source/player saves and current terminal journal completion, clearRestocked/clearDelivered prune completed markers. Missing originals continue to reject physical replay after cleanup. Do not prune pending/uncertain markers. Cleanup is an adapter contract, not a substitute for save verification.
 
-Physical terminal blocks and purchase menus remain A5-08/A5-09. No external claim-protection integration is included. See [verification](../verification/A5-07.md).
+Physical terminal blocks and purchase menus remain A5-08/A5-09. No external claim-protection integration is included. See [verification](../A5/verification/A5-07.md).
 
 
 Current player-facing integration is delivered in [A5-09 banking menus](banking.md); that contract supersedes earlier statements here that menus are pending. Existing subsystem safety and save-evidence requirements still apply.

@@ -89,7 +89,7 @@ transaction. This planner has no apply operation.
 
 ## CHF availability
 
-The registry now declares eleven currencies. Published-rate membership filters opening choices, and authoritative AccountLifecycle opening rejects CHF before its effective publication. A fresh CHF world initializes a protected CHF primary; legacy activation never changes world denomination/primary. Explicit rebase/secondary collision logic remains, including controlled missing-rate rejection. The account cap remains3 here; A6-03 owns the later four-account/provider lifecycle. See [the current CHF contract](chf.md) and [verification](../verification/A6-03-01.md).
+The registry now declares eleven currencies. Published-rate membership filters opening choices, and authoritative AccountLifecycle opening rejects CHF before its effective publication. A fresh CHF world initializes a protected CHF primary; legacy activation never changes world denomination/primary. Explicit rebase/secondary collision logic remains, including controlled missing-rate rejection. The account cap remains3 here; A6-03 owns the later four-account/provider lifecycle. See [the current CHF contract](chf.md) and [verification](../A6/verification/A6-03-01.md).
 
 
 ## A6-03 current contract (2026-11-05)

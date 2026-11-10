@@ -65,9 +65,9 @@ A8 delivers the activity observer, immutable windows, future shared prime/FX act
 
 A9-02 installs internal base/override evaluation and immutable snapshots; A9-03-01 adds detached ordinary recipes, canonical sticks and calibrated processing under a new manifest version while retaining base-only history. A9-03-02 adds version-three vanilla brewing snapshots with exact typed potion identity and shared material costs, preserving earlier encodings. A9-04 exposes the grant-authenticated item-reference API/SPI. A9-03-03 adds version-four supported component/container evaluation with retained typed identities and bounded recursive publication. A9-06 delivers prospective reference-source activation and native checkout in its recorded scope. A reference cost is distinct from an accepted financial valuation source. Financial qualification continues to use the current authoritative valuation contracts.
 
-A10 delivers the covered player experience and authenticated local multiplayer/recovery using the existing offered-action, authorization, quote and original-outcome rules. Its [qualified acceptance matrix](../.codex/architecture/a10-acceptance.md) distinguishes actual socket clients, synthetic service owners and accelerated fixtures. External-machine evidence remains pending/manual; no20-client or universal performance claim follows. Securities, market trading and expanded lending retain their [separate B-series handoff](../.codex/architecture/a10-downstream.md); monetary NPC commerce is the delivered core feature. No B-series or third-party module is enabled by this handoff.
+A10 delivers the covered player experience and authenticated local multiplayer/recovery using the existing offered-action, authorization, quote and original-outcome rules. Its [qualified acceptance matrix](../.codex/A10/architecture/a10-acceptance.md) distinguishes actual socket clients, synthetic service owners and accelerated fixtures. External-machine evidence remains pending/manual; no20-client or universal performance claim follows. Securities, market trading and expanded lending retain their [separate B-series handoff](../.codex/A10/architecture/a10-downstream.md); monetary NPC commerce is the delivered core feature. No B-series or third-party module is enabled by this handoff.
 
-[Server guide](SERVER_GUIDE.md), [A7 downstream handoff](../.codex/architecture/a7-downstream.md).
+[Server guide](SERVER_GUIDE.md), [A7 downstream handoff](../.codex/A7/architecture/a7-downstream.md).
 
 ## Economic simulation reads (version1)
 
@@ -93,7 +93,7 @@ A separately selected A9 adapter must add source-neutral, versioned durable quot
 
 A source transition must journal its boundary and fractional-carry/residual treatment. Existing carry epochs cannot be silently reset or reused with different content. Preserve recorded trades, balances, stock/restock progress, exact components/ingredients and historical activity principals; a new reference price does not revalue old observations or rate windows. Demand/recovery anchors change only under their explicit transition contract. Missing A9 inputs must report unavailable rather than silently falling back to the old price. A9 reference prices do not automatically become accepted bank qualification/wealth sources.
 
-[Detailed downstream contract](../.codex/architecture/a8-downstream.md) lists the required migration and acceptance boundaries. A9 reference reads and the A9-05 durable source-transition foundation are implemented. A9-06 delivers explicit production activation and controller/native admission as described below. The preceding A8 contract describes the historical migration boundary.
+[Detailed downstream contract](../.codex/A8/architecture/a8-downstream.md) lists the required migration and acceptance boundaries. A9 reference reads and the A9-05 durable source-transition foundation are implemented. A9-06 delivers explicit production activation and controller/native admission as described below. The preceding A8 contract describes the historical migration boundary.
 
 ## Item reference reads (version1)
 

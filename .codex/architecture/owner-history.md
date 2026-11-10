@@ -1,6 +1,6 @@
 # Owner history and captured transaction detail
 
-A10-02-02,2026-11-08. [Handoff](../A10-02-02.md), [evidence](../verification/A10-02-02.md). Schema53 and banking wire10; public BankingIntegration2, simulation1 and valuation1 unchanged. The [A10-01 history design](a10-source-contracts.md) is installed with the atomic-maintenance refinement below. Preserve legacy `LedgerHistory.page` ascending exclusive world/account v1 cursors.
+A10-02-02,2026-11-08. [Handoff](../A10/A10-02-02.md), [evidence](../A10/verification/A10-02-02.md). Schema53 and banking wire10; public BankingIntegration2, simulation1 and valuation1 unchanged. The [A10-01 history design](../A10/architecture/a10-source-contracts.md) is installed with the atomic-maintenance refinement below. Preserve legacy `LedgerHistory.page` ascending exclusive world/account v1 cursors.
 
 ## Authority, query and publication
 

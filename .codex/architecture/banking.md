@@ -36,11 +36,11 @@ Action text is at most 2048 UTF-8 bytes, action/page names are fixed/bounded, sn
 
 Startup keeps existing quarantine rules for restored cash/custody. Confirmed original outcomes do not authorize replay of physical delivery. Restored or uncertain originals may retain staging capacity until evidence resolution; there is no automatic compensation or speculative item creation. Production has no online world-backup feature. Verified offline backup/restore and deliberately skewed disposable fixture snapshots are distinct. Hardware power loss, arbitrary third-party inventory mutation and proof-based operator compensation through a new GUI are not claimed.
 
-[Acceptance evidence](../verification/A5-09.md).
+[Acceptance evidence](../A5/verification/A5-09.md).
 
 ## CHF integration
 
-Account choices now filter published currency availability; settings place eleven currency toggles in six columns to avoid overlap. CHF-pair exchange inputs accept exact cents and previews match v2 settlement; legacy pairs retain whole-unit input. CHF deposit zero-credit messages use minor thresholds. New resources/catalog entries are additive and all existing session/menu/server authority and save/custody constraints remain. See [the current CHF contract](chf.md) and [verification](../verification/A6-03-01.md).
+Account choices now filter published currency availability; settings place eleven currency toggles in six columns to avoid overlap. CHF-pair exchange inputs accept exact cents and previews match v2 settlement; legacy pairs retain whole-unit input. CHF deposit zero-credit messages use minor thresholds. New resources/catalog entries are additive and all existing session/menu/server authority and save/custody constraints remain. See [the current CHF contract](chf.md) and [verification](../A6/verification/A6-03-01.md).
 
 
 ## A6-03 current contract (2026-11-05)
@@ -79,4 +79,4 @@ Protocol 7 adds issuer-kiosk applications and replacement, remote payments and o
 
 ## D15 automatic-payment extension
 
-Banking protocol8 adds the finite `auto_*` configuration actions and `finance_autopay` page. The Bank and credit hub exposes reviewed named-source consent on owner-authorized banking surfaces. Public owner configuration uses `LedgerService.autopay` and `configureAutopay`. Integration API1 remains unchanged. Existing accounting and original-outcome lookup are reused. See [automatic-payment contracts](autopay.md) and [final acceptance](../verification/A6-13.md).
+Banking protocol8 adds the finite `auto_*` configuration actions and `finance_autopay` page. The Bank and credit hub exposes reviewed named-source consent on owner-authorized banking surfaces. Public owner configuration uses `LedgerService.autopay` and `configureAutopay`. Integration API1 remains unchanged. Existing accounting and original-outcome lookup are reused. See [automatic-payment contracts](autopay.md) and [final acceptance](../A6/verification/A6-13.md).
