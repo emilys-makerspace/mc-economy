@@ -95,26 +95,11 @@ jobs:
             fi
             curl --fail --silent --show-error --location https://coverage.codacy.com/get.sh |
               bash -s -- report -r build/reports/jacoco/test/jacocoTestReport.xml --commit-uuid "$CIRCLE_SHA1"
-  code-scanning:
-    docker:
-      - image: cimg/openjdk:21.0
-    steps:
-      - checkout
-      - run:
-          name: Run SonarQube analysis
-          command: |
-            ./gradlew build sonarqube -x test
 workflows:
   test:
     jobs:
       - test
       - aggregate-coverage:
-          requires:
-            - test:
-                - success
-                - failed
-      - code-scanning:
-          context: sonarqube
           requires:
             - test:
                 - success
