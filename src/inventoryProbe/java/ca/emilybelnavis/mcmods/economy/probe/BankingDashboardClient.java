@@ -6,6 +6,7 @@ import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.banking.*;
 import ca.emilybelnavis.mcmods.economy.cash.CashCatalog;
 import ca.emilybelnavis.mcmods.economy.client.BankingScreen;
+import ca.emilybelnavis.mcmods.economy.client.UiTextClient;
 import ca.emilybelnavis.mcmods.economy.foundation.*;
 import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.terminal.*;
@@ -203,7 +204,7 @@ public final class BankingDashboardClient {
           if (menu.access() == BankingMenu.Access.KIOSK && menu.dashboard() != null) {
             require(menu.dashboard().institution().equals(BANK), "Bound institution context");
             require(offered(menu, "accounts", ""), "Home offers Accounts navigation");
-            send(menu, "accounts", "");
+            send(menu, "manage_accounts", "");
             next(5);
           }
         }
@@ -211,8 +212,7 @@ public final class BankingDashboardClient {
           if (fresh(menu) && offered(menu, "branch_open", "")) {
             send(menu, "branch_open", "");
             next(6);
-          } else if (fresh(menu) && offered(menu, "manage_accounts", ""))
-            send(menu, "manage_accounts", "");
+          }
         }
         case 6 -> {
           if (fresh(menu) && !seedRequested) {
@@ -243,11 +243,12 @@ public final class BankingDashboardClient {
             require(
                 offered(menu, "accounts", "")
                     && offered(menu, "payments", "")
-                    && offered(menu, "history", ""),
-                "Server-offered core dashboard destinations");
+                    && offered(menu, "withdraw", "")
+                    && offered(menu, "manage_accounts", ""),
+                "Server-offered current terminal destinations");
             require(
-                !menu.allows("fx") && !offered(menu, "fx", ""),
-                "Kiosk does not acquire FX authority");
+                !offered(menu, "fx", ""),
+                "FX is reached through Branch Services rather than terminal Home");
             captures.addLast("banking-dashboard-home.png");
             next(9);
           }
@@ -259,16 +260,14 @@ public final class BankingDashboardClient {
           }
         }
         case 10 -> {
-          if (fresh(menu) && menu.page().equals("accounts")) {
+          if (fresh(menu) && menu.page().equals("terminal_accounts")) {
             send(menu, "payments", "");
             next(11);
           }
         }
         case 11 -> {
           if (fresh(menu) && menu.page().equals("payments")) {
-            require(
-                !offered(menu, "withdraw", ""),
-                "Kiosk Payments preserves physical cash restrictions");
+            require(!offered(menu, "withdraw", ""), "Bill Payments does not offer cash withdrawal");
             next(12);
           }
         }
@@ -287,8 +286,14 @@ public final class BankingDashboardClient {
           }
         }
         case 13 -> {
-          if (fresh(menu) && offered(menu, "withdraw", "")) {
-            send(menu, "withdraw", "");
+          if (fresh(menu) && menu.page().equals("withdraw_sources")) {
+            var source =
+                menu.choices().stream()
+                    .filter(c -> c.action().equals("terminal_withdraw_bank"))
+                    .findFirst()
+                    .orElseThrow();
+            pressChoice(client, source);
+            sentRevision = menu.revision();
             next(14);
           }
         }
@@ -415,9 +420,9 @@ public final class BankingDashboardClient {
                 menu.dashboard().institution().equals(BANK),
                 "Teller explicitly bound before cash service");
             require(
-                offered(menu, "fx", "") && offered(menu, "payments", ""),
-                "Teller offers permitted FX and payments");
-            send(menu, "payments", "");
+                offered(menu, "withdraw", "") && offered(menu, "payments", ""),
+                "Teller offers cash withdrawal and bill payments");
+            send(menu, "withdraw", "");
             next(13);
           }
         }
@@ -440,9 +445,9 @@ public final class BankingDashboardClient {
           }
         }
         case 31 -> {
-          if (fresh(menu) && menu.dashboard() != null && offered(menu, "history", "")) {
-            send(menu, "history", "");
-            next(32);
+          if (fresh(menu) && menu.dashboard() != null) {
+            send(menu, "accounts", "");
+            next(49);
           }
         }
         case 32 -> {
@@ -650,6 +655,32 @@ public final class BankingDashboardClient {
             if (verified) finish(client, true);
           }
         }
+        case 49 -> {
+          if (fresh(menu) && menu.page().equals("terminal_accounts")) {
+            var account =
+                menu.choices().stream()
+                    .filter(
+                        c -> c.action().equals("terminal_account") && c.value().startsWith("bank/"))
+                    .findFirst()
+                    .orElseThrow();
+            pressChoice(client, account);
+            sentRevision = menu.revision();
+            next(50);
+          }
+        }
+        case 50 -> {
+          if (fresh(menu) && menu.page().equals("account_overview")) {
+            require(
+                menu.lines().size() == 6,
+                "Current account overview includes both original movements");
+            // Exercise the retained detailed-history protocol from the account view.
+            // Home deliberately offers only the current bank-scoped Accounts destination;
+            // this fixture does not claim a global History button exists there.
+            require(menu.allows("history"), "Detailed owner history remains authorized");
+            send(menu, "history", "");
+            next(32);
+          }
+        }
         default -> throw new IllegalStateException("Dashboard fixture step " + step);
       }
     } catch (Throwable invalid) {
@@ -687,7 +718,11 @@ public final class BankingDashboardClient {
 
   private static void pressChoice(Minecraft client, BankingNetwork.Choice choice) {
     var screen = (BankingScreen) client.screen;
-    String label = choice.label();
+    // Match the screen's presentation of selected rows and compact UTC timestamps.
+    String label = (choice.selected() ? "✓ " : "") + UiTextClient.render(choice.label());
+    label =
+        label.replaceAll(
+            "(\\d{4}-\\d{2}-\\d{2})T(\\d{2}:\\d{2})(?::\\d{2}(?:\\.\\d+)?)?Z", "$1 $2");
     if ((choice.action().equals("history_dates") || choice.action().equals("rate_at"))
         && client.player.containerMenu instanceof BankingMenu menu
         && Set.of("history_dates", "history_rate_date").contains(menu.page()))
@@ -1002,7 +1037,7 @@ public final class BankingDashboardClient {
           success
               ? "PASS fresh integrated client; protocol12 owner dashboard, bound Crownstone/CAD, native primary opening; explicitly seeded CAD100 funding operation "
                   + fundingOperation
-                  + "; original recent posting; kiosk restrictions and teller FX/Payments; structured withdrawal REVIEW/explicit confirm/COMPLETED operation "
+                  + "; original recent posting; current terminal Accounts/Branch Services/Bill Payments and teller withdrawal-source selection; structured withdrawal REVIEW/explicit confirm/COMPLETED operation "
                   + withdrawalOperation
                   + " receipt "
                   + withdrawalReceipt
@@ -1077,7 +1112,13 @@ public final class BankingDashboardClient {
         + step
         + " menu="
         + (client.player != null && client.player.containerMenu instanceof BankingMenu menu
-            ? menu.page() + "/" + menu.revision() + "/" + menu.operation().state()
+            ? menu.page()
+                + "/"
+                + menu.revision()
+                + "/"
+                + menu.operation().state()
+                + " choices="
+                + menu.choices().stream().map(c -> c.action() + "=" + c.value()).toList()
             : "none");
   }
 
