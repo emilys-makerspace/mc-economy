@@ -256,9 +256,13 @@ public final class VillageGenerationPiece extends StructurePiece
       if (p.x() >= branch.bounds().minX()
           && p.x() <= branch.bounds().maxX()
           && p.z() >= branch.bounds().minZ()
-          && p.z() <= branch.bounds().maxZ())
+          && p.z() <= branch.bounds().maxZ()) {
         columnFloors.put(column, branch.transform().origin().y());
-      else columnFloors.merge(column, p.y(), Math::min);
+      } else {
+        // Paths reserve three clearance cells above their walking surface. Foundations
+        // below that surface are support work, not additional terrain leveling.
+        columnFloors.merge(column, p.y() - 3, Math::max);
+      }
     }
     for (var cell : fragment) {
       var p = new BlockPos(cell.position().x(), cell.position().y(), cell.position().z());

@@ -30,6 +30,10 @@ public final class VillageGenerationClient {
     try {
       if (!opened && client.getOverlay() == null && client.screen != null && client.level == null) {
         opened = true;
+        if (Boolean.getBoolean("economy.villageGenerationRepro")) {
+          client.options.renderDistance().set(4);
+          client.options.simulationDistance().set(4);
+        }
         String name = "economy-a7-04-" + UUID.randomUUID();
         var save = client.gameDirectory.toPath().resolve("saves").resolve(name);
         if (Files.exists(save)) throw new IllegalStateException("Refusing existing fixture world");
@@ -47,7 +51,12 @@ public final class VillageGenerationClient {
             .createFreshLevel(
                 name,
                 settings,
-                new WorldOptions(704L, true, false),
+                new WorldOptions(
+                    Boolean.getBoolean("economy.villageGenerationRepro")
+                        ? -3557599905807449533L
+                        : 704L,
+                    true,
+                    false),
                 WorldPresets::createNormalWorldDimensions,
                 client.screen);
         return;
@@ -68,7 +77,7 @@ public final class VillageGenerationClient {
       captureWarmup = cameraArrived ? captureWarmup + 1 : 0;
       if (!captured
           && VillageGenerationProbe.captureReady()
-          && captureWarmup >= 40
+          && captureWarmup >= (Boolean.getBoolean("economy.villageGenerationRepro") ? 200 : 40)
           && client.getOverlay() == null
           && client.screen == null) {
         captured = true;

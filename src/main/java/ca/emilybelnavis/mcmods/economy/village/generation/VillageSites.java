@@ -358,12 +358,15 @@ public final class VillageSites {
       for (int dz = 0; dz < rd; dz++) {
         int gx = x + dx, gz = z + dz, first = t.surface(gx, gz), depth = floor - first;
         if (depth > 6 || first - floor > 3) return Optional.empty();
-        int support = floor - 1, filled = 0;
-        while (support >= floor - 7 && t.block(gx, support, gz).isAir()) {
-          filled++;
-          support--;
-        }
+        // Base columns precede surface shaping and carving. Reserve the bounded foundation
+        // explicitly instead of trusting the predicted surface as the final support block.
+        int support = floor - 1;
+        if (!t.additive()) support = floor - 7;
+        else while (support >= floor - 7 && t.block(gx, support, gz).isAir()) support--;
         if (support < floor - 7 || !sturdy(t.block(gx, support, gz))) return Optional.empty();
+        for (int y = support + 1; y < floor; y++)
+          if (t.additive() ? !t.block(gx, y, gz).isAir() : !naturalOrAir(t.block(gx, y, gz)))
+            return Optional.empty();
         supports.add(new Point(gx, support, gz));
         for (int y = support + 1; y < floor; y++)
           writes.put(
@@ -686,14 +689,14 @@ public final class VillageSites {
           if (!t.block(x, y, z).isAir()) return Optional.empty();
         if (!water) {
           int supportY = n.y - 1;
-          if (!t.additive()
-              && supportY > t.minY()
-              && sturdy(t.block(x, supportY - 1, z))
-              && naturalOrAir(t.block(x, supportY, z))) {
-            // Reserve one block below the path to bridge shallow gaps in generated terrain.
-            var foundation = new Point(x, supportY, z);
-            result.put(foundation, new Cell(foundation, "minecraft:stone_bricks", null));
-            supportY--;
+          if (!t.additive()) {
+            supportY = n.y - 7;
+            if (supportY < t.minY()) return Optional.empty();
+            for (int y = supportY + 1; y < n.y; y++) {
+              if (!naturalOrAir(t.block(x, y, z))) return Optional.empty();
+              var foundation = new Point(x, y, z);
+              result.put(foundation, new Cell(foundation, "minecraft:stone_bricks", null));
+            }
           }
           if (!sturdy(t.block(x, supportY, z))) return Optional.empty();
           supports.put(point, new Point(x, supportY, z));
@@ -777,6 +780,7 @@ public final class VillageSites {
                 Blocks.DIORITE,
                 Blocks.GRANITE,
                 Blocks.DEEPSLATE,
+                Blocks.GRAVEL,
                 Blocks.SAND,
                 Blocks.RED_SAND,
                 Blocks.SANDSTONE,

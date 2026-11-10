@@ -301,7 +301,17 @@ if (providers.gradleProperty('villageGenerationProbe').isPresent()) {
             sourceSet sourceSets.inventoryProbe
         }
     }
-    tasks.named('runClient') { systemProperty 'economy.villageGenerationProbe', 'true' }
+    tasks.named('runClient') {
+        systemProperty 'economy.villageGenerationProbe', 'true'
+        if (providers.gradleProperty('villageGenerationRepro').isPresent()) {
+            systemProperty 'economy.villageGenerationRepro', 'true'
+            doLast {
+                def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
+                if (new File(root, 'village-generation-failed.txt').exists() || !new File(root, 'village-generation-passed.txt').exists())
+                    throw new GradleException('Village foundation regression did not pass')
+            }
+        }
+    }
 }
 
 // Opt-in native bank structure-tag witness in a fresh disposable client.

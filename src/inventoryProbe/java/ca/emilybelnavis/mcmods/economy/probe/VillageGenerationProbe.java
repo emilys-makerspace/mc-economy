@@ -86,6 +86,100 @@ public final class VillageGenerationProbe {
     return captureCamera;
   }
 
+  /** Regression for a natural bank split across four chunks by unsupported predicted terrain. */
+  private static boolean tickReproduction(MinecraftServer server) throws Exception {
+    if (stage == 1) {
+      var publication = GenerationRuntime.publication(level.getChunkSource().getGenerator());
+      if (publication == null || publication.snapshot() == null) return false;
+      require(level.getSeed() == -3557599905807449533L, "reported reproduction seed");
+      var report = new StringBuilder("Seed=" + level.getSeed() + " target=-2095,109,2448\n");
+      var source = new ChunkPos(-132, 150);
+      // Generate the reported area naturally before looking at its saved structure start.
+      for (int x = -133; x <= -129; x++) for (int z = 151; z <= 155; z++) level.getChunk(x, z);
+      var start =
+          level.getChunk(source.x, source.z).getAllStarts().values().stream()
+              .filter(s -> s.isValid() && s.getStructure() instanceof BankedVillageStructure)
+              .findFirst()
+              .orElseThrow(() -> new IllegalStateException("Missing natural village"));
+      var metadata =
+          start.getPieces().stream()
+              .filter(p -> p instanceof VillageGenerationPiece g && g.branchSlot() == -1)
+              .map(p -> (VillageGenerationPiece) p)
+              .findFirst()
+              .orElseThrow();
+      int banks = 0, fragments = 0, blocks = 0;
+      for (var piece : start.getPieces()) {
+        if (!(piece instanceof VillageGenerationPiece bank) || bank.branchSlot() < 0) continue;
+        banks++;
+        var branch = bank.plan().branches().get(bank.branchSlot());
+        var branchId =
+            BranchPlans.branchId(
+                BranchPlans.id(bank.world().orElseThrow(), bank.plan().source()),
+                bank.branchSlot());
+        for (var manifest : branch.manifests()) {
+          var position = new ChunkPos(manifest.chunkX(), manifest.chunkZ());
+          var chunk = level.getChunk(position.x, position.z);
+          var receipt = VillageGeneration.receipt(chunk, branchId, position, manifest);
+          report
+              .append("slot=")
+              .append(bank.branchSlot())
+              .append(" chunk=")
+              .append(position)
+              .append(" receipt=")
+              .append(receipt)
+              .append("\n");
+          require(
+              receipt == VillageGeneration.Receipt.COMPLETE,
+              "whole bank fragment complete: "
+                  + report
+                  + chunk.getData(VillageGeneration.RECEIPTS.get()));
+          fragments++;
+        }
+        for (var cell : bank.cells()) {
+          var expected =
+              net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(
+                      level.holderLookup(Registries.BLOCK), cell.blockState(), false)
+                  .blockState();
+          if (expected.isAir()) continue;
+          var p = cell.position();
+          var actual = level.getBlockState(new BlockPos(p.x(), p.y(), p.z()));
+          require(
+              actual.is(expected.getBlock()),
+              "bank block present at " + p + " expected=" + expected + " actual=" + actual);
+          blocks++;
+        }
+      }
+      require(banks == 2, "both natural banks retained");
+      report
+          .append("banks=")
+          .append(banks)
+          .append(" completeFragments=")
+          .append(fragments)
+          .append(" checkedBlocks=")
+          .append(blocks)
+          .append("\n");
+      Files.writeString(root.resolve("reproduction.txt"), report);
+      Files.writeString(
+          root.resolve("village-start.snbt"),
+          start.createTag(StructurePieceSerializationContext.fromLevel(level), source).toString());
+      System.out.println("VILLAGE_REPRO " + report);
+      level.setDayTime(6000);
+      captureCamera = new Point(-2075, 116, 2474);
+      player.teleportTo(level, captureCamera.x(), captureCamera.y(), captureCamera.z(), 135, 10);
+      player.getAbilities().flying = true;
+      player.onUpdateAbilities();
+      captureReady = true;
+      stage = 2;
+      return false;
+    }
+    if (captured) {
+      result =
+          "Reported seed: both natural banks, all fragments and non-air template/foundation blocks verified.";
+      return true;
+    }
+    return false;
+  }
+
   public static boolean tick(MinecraftServer server) throws Exception {
     if (failure != null || result != null) return true;
     var services = Economy.serverServices(server);
@@ -109,6 +203,7 @@ public final class VillageGenerationProbe {
       System.out.println("VILLAGE_GENERATION_WAIT " + progress() + " busy=" + busy);
     if (busy) return false;
     var publication = GenerationRuntime.publication(level.getChunkSource().getGenerator());
+    if (Boolean.getBoolean("economy.villageGenerationRepro")) return tickReproduction(server);
     if (stage == 1) {
       if (publication == null || publication.snapshot() == null || publication.world() == null)
         return false;

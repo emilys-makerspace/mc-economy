@@ -18,7 +18,7 @@ import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
 public final class VillageClassifier {
   private static final JsonObject MANIFEST = load();
   public static final String REVISION =
-      MANIFEST.get("revision").getAsString() + ":standard-banks-v3";
+      MANIFEST.get("revision").getAsString() + ":standard-banks-v4-foundations";
 
   public record Result(int buildings, boolean abandoned, boolean supported) {}
 

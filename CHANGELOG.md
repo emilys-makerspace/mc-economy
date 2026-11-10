@@ -4,6 +4,11 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-09
 
+### Village bank generation
+
+- New banks and their access paths reserve deeper bounded foundations to tolerate differences between predicted and generated ground, fixing the reproduced sliced-bank failure on snowy terrain.
+- Natural gravel can be replaced during initial site preparation; existing banks and saved damaged structures are preserved.
+
 ### Monetary precision
 
 - New FX rates and conversion calculations retain eight decimal places. FX rates display exactly eight places in bank screens.

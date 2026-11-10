@@ -1,5 +1,7 @@
 # Current project state
 
+2026-11-09 — New village banks and dry access paths capture bounded six-block foundations, fixing the reproduced snowy-bank support mismatch. Existing saved structures and conflict receipts are preserved. [Contract](architecture/village-generation.md#bounded-foundation-correction--2026-11-09) and [scoped evidence](verification/village-foundations.md).
+
 2026-11-09 — New FX and interest calculations use eight fractional decimal places, with currency-specific final rounding and eight-place GUI FX rates. [Current numerical contract](architecture/monetary-precision.md) supersedes prior live precision/rounding descriptions; historical records retain their original arithmetic. [Checks](verification/monetary-precision.md).
 
 2026-11-09 — Direct ATM/kiosk changes deliver bank-branded cream screens, bank-scoped accounts/history and bills, kiosk cash services and physical-cash closure. [Current contract](architecture/terminal-ui.md) and [checks/limits](verification/terminal-ui.md) supersede earlier dense Home/footer descriptions; no phase status changes.

@@ -135,7 +135,7 @@ class RunnerContracts(unittest.TestCase):
             self.assertTrue((run_root / 'client/second-passed.txt').exists())
             self.assertTrue((root / 'build/circleci/live/restart/phase-2/second-passed.txt').exists())
 
-    def test_coverage_gate_rejects_a_missing_client_phase(self):
+    def test_coverage_gate_rejects_missing_junit_execution_data(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             classes = inventory.junit_classes()
@@ -145,28 +145,16 @@ class RunnerContracts(unittest.TestCase):
                 (node / 'all-tests.txt').write_text('\n'.join(classes))
                 selected = inventory.assigned(classes, n)
                 (node / 'selected-tests.txt').write_text('\n'.join(selected))
-                (node / 'all-probes.txt').write_text('\n'.join(p.name for p in inventory.PROBES))
-                probes = inventory.assigned(inventory.PROBES, n)
-                (node / 'selected-probes.txt').write_text('\n'.join(p.name for p in probes))
-                for phase in ('setup', 'junit', 'live'):
-                    (node / f'{phase}.status').write_text('0')
+                (node / 'junit.status').write_text('0')
                 for name in selected:
                     suite = ET.Element('testsuite', name=name, tests='1')
                     ET.ElementTree(suite).write(node / 'junit' / (name + '.xml'))
                 (node / 'batches').mkdir()
                 (node / 'batches/jacoco.exec').write_bytes(b'fixture')
-                for probe in probes:
-                    for phase in range(1, len(probe.phases) + 1):
-                        data = node / 'live' / probe.name / f'phase-{phase}' / 'jacoco.exec'
-                        data.parent.mkdir(parents=True)
-                        data.write_bytes(b'fixture')
-                        live.junit(node / 'junit' / f'{probe.name}-{phase}.xml',
-                                   f'{probe.name}/phase-{phase}', 1, '')
             with contextlib.redirect_stdout(io.StringIO()):
                 coverage.verify(root)
-            missing = next((root / 'node-0/live').glob('**/jacoco.exec'))
-            missing.unlink()
-            with self.assertRaisesRegex(ValueError, 'client execution data'):
+            (root / 'node-0/batches/jacoco.exec').unlink()
+            with self.assertRaisesRegex(ValueError, 'JUnit execution data'):
                 coverage.verify(root)
 
 
