@@ -1,6 +1,5 @@
 package ca.emilybelnavis.mcmods.economy.trade.cash;
 
-import static ca.emilybelnavis.mcmods.economy.journal.PostingBatch.Role.*;
 import static ca.emilybelnavis.mcmods.economy.trade.cash.NpcCashFacts.*;
 
 import ca.emilybelnavis.mcmods.economy.api.*;
@@ -721,54 +720,14 @@ public final class NpcCashTrades {
         tx -> Custody.find(tx::query, q.terms().actor(), returned, false).orElseThrow());
   }
 
-  private record CashValue(long total, long unmarked, List<CashIssuance.Lot> lots) {}
-
-  private static CashValue validateCash(
-      JournalEngine.ReadView reads, WorldId world, Terms t, boolean own) {
-    long total = 0, unmarked = 0;
-    var lots = new TreeMap<String, CashIssuance.Lot>();
-    for (var slot : t.cash()) {
-      var denomination = CashDenominations.require(slot.claim().item());
-      if (denomination.currency() != t.cashCurrency() || !slot.claim().world().equals(world))
-        throw new IllegalArgumentException("CASH_SINGLE_SELECTED_CURRENCY_REQUIRED");
-      long value = Math.multiplyExact(denomination.minorUnits(), slot.claim().count());
-      total = Math.addExact(total, value);
-      var lot = CashIssuance.find(reads, world, slot.claim().lot()).orElse(null);
-      if (slot.unmarked()) {
-        if (lot != null) throw new IllegalArgumentException("Unmarked cash has tracked identity");
-        unmarked = Math.addExact(unmarked, value);
-      } else {
-        if (lot == null
-            || lot.state() != CashIssuance.State.ACTIVE
-            || !lot.item().equals(slot.claim().item()))
-          throw new IllegalArgumentException("Marked original cash unavailable");
-        lots.put(lot.id().toString(), lot);
-      }
-    }
-    for (var entry : markedQuantities(t.cash()).entrySet()) {
-      var lot = lots.get(entry.getKey().toString());
-      long reserved = CashIssuance.reserved(reads, lot.id(), null);
-      if (own) {
-        var rows =
-            reads.query(
-                "SELECT count FROM custody_cash_reservations WHERE custody_id=? AND lot_id=? AND state='ACTIVE'",
-                List.of(t.inputCustody().toString(), lot.id().toString()),
-                1);
-        if (rows.size() != 1 || Long.parseLong(rows.getFirst().get("count")) != entry.getValue())
-          throw new IllegalArgumentException("Original cash reservation mismatch");
-        reserved -= entry.getValue();
-      }
-      if (lot.remaining() - reserved < entry.getValue())
-        throw new IllegalArgumentException("Cash original quantity reserved");
-    }
-    return new CashValue(total, unmarked, List.copyOf(lots.values()));
+  private static TraderCash.CashValue validateCash(
+      JournalEngine.ReadView reads, WorldId world, Terms terms, boolean own) {
+    return TraderCash.validateCash(
+        reads, world, terms.cashCurrency(), terms.cash(), terms.inputCustody(), own);
   }
 
   static Map<UUID, Integer> markedQuantities(List<Deposits.Slot> slots) {
-    var values = new LinkedHashMap<UUID, Integer>();
-    for (var slot : slots)
-      if (!slot.unmarked()) values.merge(slot.claim().lot(), slot.claim().count(), Math::addExact);
-    return values;
+    return TraderCash.markedQuantities(slots);
   }
 
   private static Custody.Case custody(
@@ -791,48 +750,12 @@ public final class NpcCashTrades {
 
   public static InstitutionCatalog.InstitutionId supplier(
       JournalEngine.ReadView reads, WorldId world, UUID marketId) {
-    var m = MarketStore.market(reads, marketId);
-    if (m == null) throw new IllegalArgumentException("Unknown cash market");
-    if (m.kind() == MarketFacts.Kind.VILLAGE) {
-      var plans =
-          reads.query(
-              "SELECT plan FROM village_plans WHERE world_id=? AND village_id=?",
-              List.of(world.value().toString(), marketId.toString()),
-              1);
-      if (!plans.isEmpty()) {
-        var plan =
-            ca.emilybelnavis.mcmods.economy.village.BranchPlans.decode(
-                plans.getFirst().get("plan"));
-        var first = plan.branches().stream().filter(b -> b.slot() == 0).findFirst();
-        if (first.isPresent() && first.get().institution() != null)
-          return new InstitutionCatalog.InstitutionId(first.get().institution());
-      }
-      var b =
-          Branches.find(
-              reads,
-              world,
-              ca.emilybelnavis.mcmods.economy.village.BranchPlans.branchId(marketId, 0));
-      if (b.isPresent() && b.get().choice().institution() != null)
-        return new InstitutionCatalog.InstitutionId(b.get().choice().institution());
-    }
-    return new InstitutionCatalog.InstitutionId("economy:bank/crownstone");
+    return TraderCash.supplier(reads, world, marketId);
   }
 
   public static List<CashIssuance.Lot> lots(
       WorldId world, UUID original, WithdrawalPlanner.Plan plan) {
-    var values = new ArrayList<CashIssuance.Lot>();
-    for (var line : plan.lines())
-      values.add(
-          new CashIssuance.Lot(
-              world,
-              stable("lot|" + world.value() + "|" + original + "|" + line.denomination().id()),
-              line.denomination().id(),
-              line.count(),
-              line.count(),
-              CashIssuance.State.ACTIVE,
-              1,
-              "npc-cash:" + original));
-    return List.copyOf(values);
+    return TraderCash.lots(world, original, plan, NpcCashFacts::stable);
   }
 
   public static Receipt receipt(Quote q, long effective) {
@@ -864,97 +787,19 @@ public final class NpcCashTrades {
         q.operatorCashMinor());
   }
 
-  public static List<NpcSettlement.Group> expectedGroups(Quote q) {
-    var t = q.terms();
-    var c = q.pricing().request().basis().currency();
-    var side = q.pricing().request().key().side();
-    long goods = q.pricing().price().minor();
-    var out = new ArrayList<NpcSettlement.Group>();
-    if (q.inputCashMinor() > 0) out.add(issue(q.world(), t.cashCurrency(), q.inputCashMinor()));
-    if (side == Pricing.Side.SELL) out.add(issue(q.world(), c, goods));
-    if (q.fx() != null) {
-      var f = q.fx();
-      var from = f.conversion().pair().source();
-      var to = f.conversion().pair().target();
-      long fee = f.pricing().fee().minorUnits();
-      if (fee > 0) {
-        var bank = f.supplier();
-        var depositor =
-            new InstitutionCatalog.InstitutionId("economy:depositor/" + t.actor().value());
-        out.add(
-            new NpcSettlement.Group(
-                PostingBatch.Authority.TRANSFER,
-                List.of(
-                    leg(NpcSettlement.bridge(q.world(), from), NPC_BRIDGE, from, -fee),
-                    leg(
-                        FinancialAccounts.id(q.world(), bank, FinancialAccounts.Role.CASH, from),
-                        INSTITUTION_CASH,
-                        from,
-                        fee))));
-        out.add(
-            new NpcSettlement.Group(
-                PostingBatch.Authority.TRANSFER,
-                List.of(
-                    leg(
-                        FinancialAccounts.id(
-                            q.world(), depositor, FinancialAccounts.Role.EXPENSE, from),
-                        INSTITUTION_CLAIM,
-                        from,
-                        fee),
-                    leg(
-                        FinancialAccounts.id(q.world(), bank, FinancialAccounts.Role.INCOME, from),
-                        INSTITUTION_CLAIM,
-                        from,
-                        -fee))));
-      }
-      out.add(
-          new NpcSettlement.Group(
-              PostingBatch.Authority.FX,
-              List.of(
-                  leg(
-                      NpcSettlement.bridge(q.world(), from),
-                      NPC_BRIDGE,
-                      from,
-                      -f.conversion().debit().minorUnits()),
-                  leg(
-                      Settlement.clearingAccount(from),
-                      CLEARING,
-                      from,
-                      f.conversion().debit().minorUnits()),
-                  leg(
-                      Settlement.clearingAccount(to),
-                      CLEARING,
-                      to,
-                      -f.conversion().credit().minorUnits()),
-                  leg(
-                      NpcSettlement.bridge(q.world(), to),
-                      NPC_BRIDGE,
-                      to,
-                      f.conversion().credit().minorUnits()))));
-    }
-    if (side == Pricing.Side.BUY) out.add(redeem(q.world(), c, goods));
-    if (q.cashOutputMinor() > 0) out.add(redeem(q.world(), t.cashCurrency(), q.cashOutputMinor()));
-    return List.copyOf(out);
-  }
-
-  private static NpcSettlement.Group issue(WorldId w, EconomyCurrency c, long n) {
-    return new NpcSettlement.Group(
-        PostingBatch.Authority.ISSUE,
-        List.of(
-            leg(Settlement.issuanceAccount(c), ISSUANCE, c, -n),
-            leg(NpcSettlement.bridge(w, c), NPC_BRIDGE, c, n)));
-  }
-
-  private static NpcSettlement.Group redeem(WorldId w, EconomyCurrency c, long n) {
-    return new NpcSettlement.Group(
-        PostingBatch.Authority.REDEEM,
-        List.of(
-            leg(NpcSettlement.bridge(w, c), NPC_BRIDGE, c, -n),
-            leg(Settlement.issuanceAccount(c), ISSUANCE, c, n)));
-  }
-
-  private static PostingBatch.Leg leg(UUID id, PostingBatch.Role role, EconomyCurrency c, long n) {
-    return new PostingBatch.Leg(id, role, c, new Money(c, n));
+  public static List<NpcSettlement.Group> expectedGroups(Quote quote) {
+    var terms = quote.terms();
+    var pricing = quote.pricing();
+    return TraderCash.expectedGroups(
+        quote.world(),
+        terms.actor(),
+        terms.cashCurrency(),
+        pricing.request().basis().currency(),
+        pricing.request().key().side(),
+        pricing.price().minor(),
+        quote.inputCashMinor(),
+        quote.cashOutputMinor(),
+        quote.fx());
   }
 
   private void preflight(JournalEngine.ReadView reads, Quote q, Instant now) {
