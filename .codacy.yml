@@ -1,0 +1,8 @@
+---
+languages:
+  python:
+    enabled: false
+
+exclude_paths:
+  - "**.py"
+  - "tools/**"
