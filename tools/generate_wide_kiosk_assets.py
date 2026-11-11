@@ -33,8 +33,8 @@ ELEMENTS = [
     ([2, 2, 12], [30, 30, 14.8], 'shell'),
     ([0, 2, 3], [2, 30, 15], 'wood'),
     ([30, 2, 3], [32, 30, 15], 'wood'),
-    ([1.6, 2, 2.8], [2, 30, 3.2], 'metal'),
-    ([30, 2, 2.8], [30.4, 30, 3.2], 'metal'),
+    ([1.6, 2, 2.8], [2, 30, 3], 'metal'),
+    ([30, 2, 2.8], [30.4, 30, 3], 'metal'),
     # Cash tray with a dark throat and a raised protective lip.
     ([4, 6.5, 5.3], [19, 10.5, 6.1], 'metal'),
     ([5, 7.4, 5.1], [18, 9.6, 5.35], 'cash'),
@@ -49,21 +49,23 @@ ELEMENTS = [
     # Card reader housing, recessed slot and small status indicator.
     ([20, 14, 4], [28, 15.5, 9], 'metal'),
     ([20.5, 14.1, 3.7], [27.5, 15.1, 4], 'reader'),
-    ([21.5, 14.4, 3.5], [26.5, 14.7, 3.75], 'dark'),
-    ([27, 14.4, 3.5], [27.5, 14.9, 3.75], 'indicator'),
-    # Deep monitor recess with separate bezel rails, leaving the screen exposed.
-    ([2, 16, 7], [30, 27, 12], 'shell'),
-    ([3, 17, 4.5], [29, 19, 7], 'bezel'),
-    ([3, 19, 4.5], [4, 26, 7], 'bezel'),
-    ([28, 19, 4.5], [29, 26, 7], 'bezel'),
-    ([3, 25, 4.5], [29, 26, 7], 'bezel'),
-    ([4, 19, 5.2], [28, 25, 5.4], 'screen'),
-    ([24, 17.7, 4.2], [26, 18.2, 4.5], 'metal'),
-    ([26.7, 17.7, 4.2], [27.2, 18.2, 4.5], 'indicator'),
+    # Align the physical throat with the printed slot, clear of the CARD label.
+    ([21.2, 14.65, 3.5], [25, 14.85, 3.75], 'dark'),
+    ([20.55, 14.4, 3.5], [21, 14.9, 3.75], 'indicator'),
+    # Recess the entire monitor behind the worktop controls (which end at Z=9).
+    # The lower bezel must clear the keypad too, not just the display surface.
+    ([2, 16, 11.8], [30, 27, 12], 'shell'),
+    ([3, 17, 10], [29, 19, 11.8], 'bezel'),
+    ([3, 19, 10], [4, 25, 11.8], 'bezel'),
+    ([28, 19, 10], [29, 25, 11.8], 'bezel'),
+    ([3, 25, 10], [29, 26, 11.8], 'bezel'),
+    ([4, 19, 10.7], [28, 25, 10.9], 'screen'),
+    ([24, 17.7, 9.7], [26, 18.2, 10], 'metal'),
+    ([26.7, 17.7, 9.7], [27.2, 18.2, 10], 'indicator'),
     # Horizontal bank nameplate and slender chrome crown.
-    ([2, 27, 4], [30, 32, 12], 'trim'),
-    ([3, 27.5, 3.8], [29, 31.5, 4], 'header'),
-    ([2, 31.5, 3.5], [30, 32, 12.5], 'metal'),
+    ([2, 27, 9.5], [30, 31.5, 12], 'trim'),
+    ([3, 27.5, 9.3], [29, 31.5, 9.5], 'header'),
+    ([2, 31.5, 9], [30, 32, 12.5], 'metal'),
     # Rear service door, frame, hinges and a separate lock escutcheon.
     ([4, 4, 14.8], [28, 27, 14.85], 'dark'),
     ([4.5, 4.5, 14.85], [27.5, 26.5, 14.9], 'service'),
@@ -75,7 +77,9 @@ ELEMENTS = [
 for row in range(4):
     for column in range(3):
         label = str(row * 3 + column + 1) if row < 3 else ('cancel', '0', 'enter')[column]
-        x, z = 4.8 + column * 3.2, 3 + row * 1.25
+        # North-facing users see +X on their left and +Z away from them.
+        # Put 1..3 at the back and cancel/0/enter along the near edge.
+        x, z = 11.2 - column * 3.2, 6.75 - row * 1.25
         ELEMENTS.append(([x, 14.3, z], [x + 2.5, 14.7, z + 0.95], 'key_' + label))
 # Physical louvers finish both the lower front and rear exhaust.
 for row in range(4):
@@ -145,6 +149,15 @@ def clipped_box(start, end, texture, cell=None):
         elif side == 'west': uv = [z[0], v[0], z[1], v[1]]
         else: uv = [u[0], z[0], u[1], z[1]]
         faces[side] = {'texture': '#' + texture, 'uv': uv}
+        if texture == 'reader' and side != 'north':
+            # The label and slot belong only on the front fascia.
+            faces[side]['texture'] = '#metal'
+        elif texture.startswith('key_'):
+            if side == 'up':
+                faces[side]['rotation'] = 180
+            else:
+                # Sample the key's plain rim rather than repeating its glyph.
+                faces[side]['uv'] = [2, 2, 3, 3]
     return {'from': [low[0] - dx, low[1] - dy, low[2]],
             'to': [high[0] - dx, high[1] - dy, high[2]], 'faces': faces}
 

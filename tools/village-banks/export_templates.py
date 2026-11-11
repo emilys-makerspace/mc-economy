@@ -1,123 +1,193 @@
 #!/usr/bin/env python3
-"""Convert exact GenMC studio exports to original 1.21.1 Economy structure templates.
-
-No building geometry is regenerated here. Exported cells are cropped/translated, native
-sign text and registered service machines replace their reserved bays, and air is explicit.
-"""
-from pathlib import Path
+"""Create the village bank variants from the Crownstone structure-block export."""
+import argparse
 import gzip
 import hashlib
+import io
 import json
-import re
+from pathlib import Path
 import struct
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / 'tools/village-banks/genmc'
-TARGET = ROOT / 'src/main/resources/data/economy/structure/banks'
-BANKS = json.loads((ROOT/'tools/banking-assets/brands.json').read_text())['banks']
-STYLES = {'plains':'oak','desert':'jungle','savanna':'acacia','snowy':'spruce','taiga':'spruce'}
+SOURCE = ROOT / "tools/village-banks/genmc/plains.json.gz"
+DATA = ROOT / "src/main/resources/data/economy"
+TARGET = DATA / "structure/banks"
+BANKS = json.loads((ROOT / "tools/banking-assets/brands.json").read_text())["banks"]
+DIMENSIONS = [17, 15, 17]
+TERMINALS = {"economy:white_atm": "economy:terminal", "economy:branch_kiosk": "economy:terminal"}
+DESK = "economy:banker_desk"
+ENTRANCE = (0, 1, 8)
+NUMBERS = dict(enumerate("bhiqfd", start=1))
+ARRAYS = {7: 1, 11: 4, 12: 8}
 
-def string(value):
-    encoded=value.encode('utf-8')
-    return struct.pack('>H',len(encoded))+encoded
 
-def payload(kind,value):
-    if kind==1:return struct.pack('>b',value)
-    if kind==3:return struct.pack('>i',value)
-    if kind==8:return string(value)
-    if kind==9:
-        child,entries=value
-        return bytes([child])+struct.pack('>i',len(entries))+b''.join(payload(child,e) for e in entries)
-    if kind==10:return b''.join(bytes([tag])+string(key)+payload(tag,data) for key,(tag,data) in value.items())+b'\0'
-    raise ValueError(kind)
+def unpack(stream, fmt):
+    return struct.unpack(">" + fmt, stream.read(struct.calcsize(">" + fmt)))[0]
 
-def compound(value):return (10,value)
-def state(value):
-    base,_,rest=value.partition('[')
-    result={'Name':(8,base if ':' in base else 'minecraft:'+base)}
-    if rest:
-        props=dict(part.split('=',1) for part in rest.removesuffix(']').split(','))
-        result['Properties']=compound({key:(8,val) for key,val in sorted(props.items())})
+
+def read_string(stream):
+    # Round-trip Java's modified UTF-8 bytes, including any non-ASCII sign text.
+    return stream.read(unpack(stream, "H")).decode("utf-8", "surrogateescape")
+
+
+def read_tag(stream, kind):
+    if kind in NUMBERS:
+        return unpack(stream, NUMBERS[kind])
+    if kind == 8:
+        return read_string(stream)
+    if kind == 9:
+        child = unpack(stream, "B")
+        return child, [read_tag(stream, child) for _ in range(unpack(stream, "i"))]
+    if kind == 10:
+        result = {}
+        while child := unpack(stream, "B"):
+            key = read_string(stream)
+            result[key] = child, read_tag(stream, child)
+        return result
+    if kind in ARRAYS:
+        length = unpack(stream, "i")
+        return length, stream.read(length * ARRAYS[kind])
+    raise ValueError(f"Unsupported NBT tag {kind}")
+
+
+def write_string(value):
+    encoded = value.encode("utf-8", "surrogateescape")
+    return struct.pack(">H", len(encoded)) + encoded
+
+
+def write_tag(kind, value):
+    if kind in NUMBERS:
+        return struct.pack(">" + NUMBERS[kind], value)
+    if kind == 8:
+        return write_string(value)
+    if kind == 9:
+        child, entries = value
+        return struct.pack(">Bi", child, len(entries)) + b"".join(write_tag(child, entry) for entry in entries)
+    if kind == 10:
+        return b"".join(bytes([tag]) + write_string(key) + write_tag(tag, data)
+                        for key, (tag, data) in value.items()) + b"\0"
+    if kind in ARRAYS:
+        length, encoded = value
+        return struct.pack(">i", length) + encoded
+    raise ValueError(f"Unsupported NBT tag {kind}")
+
+
+def read_structure(source):
+    stream = io.BytesIO(gzip.decompress(source.read_bytes()))
+    if unpack(stream, "B") != 10:
+        raise ValueError("Expected an NBT compound")
+    name = read_string(stream)
+    structure = read_tag(stream, 10)
+    if stream.read(1):
+        raise ValueError("Unexpected data after the NBT compound")
+    return name, structure
+
+
+def brand_dyes():
+    # The archived GenMC exports use the same concrete trim in all five styles.
+    # Sample the original primary and accent trim on each compact branch's facade.
+    rows = json.loads(gzip.decompress(SOURCE.read_bytes()))["build"]["blocks"]
+    blocks = {tuple(row[:3]): row[3] for row in rows}
+    colors = {}
+    for index, bank in enumerate(BANKS):
+        x, z = 2 + (index % 5) * 36, 2 + (index // 5) * 16
+        concrete = [blocks[x, 5, z], blocks[x + 3, 5, z]]
+        if not all(block.endswith("_concrete") for block in concrete):
+            raise ValueError(f"Missing archived trim for {bank['key']}")
+        colors[bank["key"]] = tuple(block.removesuffix("_concrete") for block in concrete)
+    colors["crownstone"] = ("blue", "yellow")
+    return colors
+
+
+def prepare_crownstone(structure):
+    if structure["size"][1][1] not in (DIMENSIONS, [17, 17, 17]) or structure["entities"][1][1]:
+        raise ValueError("Expected a 17×15×17 Crownstone bank or its 17-block-high export without entities")
+    palette = structure["palette"][1][1]
+    blocks = []
+    anchors = {name: [] for name in (*TERMINALS, DESK)}
+    for block in structure["blocks"][1][1]:
+        position = tuple(block["pos"][1][1])
+        state = palette[block["state"][1]]
+        name = state["Name"][1]
+        if position[1] >= DIMENSIONS[1]:
+            if name != "minecraft:air":
+                raise ValueError(f"Cannot crop non-air block at {position}")
+            continue
+        if name in anchors and state["Properties"][1]["cell"] == (8, "0"):
+            anchors[name].append(position)
+            # The existing staffing and activation paths assign fresh world-local identities.
+            block["nbt"] = (10, {"id": (8, TERMINALS.get(name, DESK))})
+        blocks.append(block)
+
+    by_position = {tuple(block["pos"][1][1]): block for block in blocks}
+    grass = {"Name": (8, "minecraft:grass_block"), "Properties": (10, {"snowy": (8, "false")})}
+    if grass not in palette:
+        palette.append(grass)
+    grass_index = palette.index(grass)
+    width, _, depth = DIMENSIONS
+    for (x, y, z), block in by_position.items():
+        if y == 0 and (x in (0, width - 1) or z in (0, depth - 1)):
+            block["state"] = (3, grass_index)
+    # Carry the west entrance floor across the outer margin to the generated path.
+    by_position[0, 0, 8]["state"] = by_position[1, 0, 8]["state"]
+    structure["blocks"] = (9, (10, blocks))
+    structure["size"] = (9, (3, DIMENSIONS))
+    expected = {
+        "economy:white_atm": [(8, 1, 11), (8, 1, 14)],
+        "economy:branch_kiosk": [(10, 1, 6)],
+        DESK: [(12, 1, 10)],
+    }
+    if {name: sorted(positions) for name, positions in anchors.items()} != expected:
+        raise ValueError("Crownstone hardware anchors differ from the generation layout")
+    return anchors
+
+
+def variant_palette(palette, index, primary, accent):
+    dyes = {f"minecraft:{old}_{material}": f"minecraft:{new}_{material}"
+            for old, new in (("blue", primary), ("yellow", accent))
+            for material in ("wool", "carpet")}
+    result = []
+    for state in palette:
+        name = state["Name"][1]
+        variant = dict(state)
+        if name in dyes:
+            variant["Name"] = (8, dyes[name])
+        if name in TERMINALS:
+            properties = dict(state["Properties"][1])
+            properties["bank"] = (8, str(index))
+            variant["Properties"] = (10, properties)
+        result.append(variant)
     return result
 
-def sign(bank,size):
-    lines=['']
-    for word in bank['name'].split():
-        if len(lines[-1])+len(word)+1>15:lines.append(word)
-        else:lines[-1]=(lines[-1]+' '+word).strip()
-    lines=(lines+['Compact branch' if size=='compact' else 'Larger branch',bank['currency']])[:4]
-    lines+=['']*(4-len(lines))
-    text={'messages':(9,(8,[json.dumps({'text':s},separators=(',',':')) for s in lines])),
-          'color':(8,'black'),'has_glowing_text':(1,0)}
-    return {'id':(8,'minecraft:sign'),'front_text':compound(text),'back_text':compound(text),'is_waxed':(1,1)}
-
-def export_style(style):
-    plain=SOURCE/(style+'.json')
-    archived=SOURCE/(style+'.json.gz')
-    raw=plain.read_bytes() if plain.exists() else gzip.decompress(archived.read_bytes())
-    data=json.loads(raw)
-    assert data['format']=='genmcp-build' and len(data['build']['blocks'])>20000
-    sparse={tuple(row[:3]):row[3] for row in data['build']['blocks']}
-    results=[]
-    for index,bank in enumerate(BANKS):
-        for size in ['compact','larger']:
-            large=size=='larger';w,h,d=(17,9,11) if large else (11,8,9)
-            ox=2+(index%5)*36+(14 if large else 0);oz=2+(index//5)*16
-            cells={(x,y,z):sparse.get((ox+x,1+y,oz+z),'minecraft:air') for y in range(h) for z in range(d) for x in range(w)}
-            # Bay geometry is not a fake decorative terminal. Final output uses the real mod block.
-            # South-facing terminals anchor the west column of each existing bay.
-            services=[(2,1,2),(14,1,2)] if large else [(2,1,2)]
-            for ax,ay,az in services:
-                for cell in range(4):
-                    position=(ax-(cell&1),ay+(cell>>1),az)
-                    rotated_cell = (1, 0, 3, 2)[cell]
-                    assert cells[position] in ('air','minecraft:air'),(style,bank['key'],position,cells[position])
-                    cells[position]=f'economy:branch_kiosk[bank={index+1},cell={rotated_cell},facing=south,wide=true]'
-            # New captures receive the registered desk at the frozen four-cell furniture bay.
-            # Existing serialized piece cells and their receipts are deliberately never converted.
-            desks=[(2,1,7),(12,1,7)] if large else [(7,1,5)]
-            expected=[f'{STYLES[style]}_slab[type=top]',f'{STYLES[style]}_slab[type=top]','black_stained_glass','lectern[facing=north]']
-            # Rotate each complete two-column desk, including its anchor cell.
-            for ax,ay,az in desks:
-                for cell in range(4):
-                    position=(ax+(cell&1),ay+(cell>>1),az)
-                    rotated_cell = (1, 0, 3, 2)[cell]
-                    assert cells[position].removeprefix('minecraft:')==expected[cell],(style,bank['key'],position,cells[position])
-                    cells[position]=f'economy:banker_desk[cell={rotated_cell},facing=south,wood={STYLES[style]}]'
-            palette=[];lookup={};blocks=[]
-            for position,block in cells.items():
-                if block not in lookup:lookup[block]=len(palette);palette.append(state(block))
-                entry={'pos':(9,(3,list(position))),'state':(3,lookup[block])}
-                if '_wall_sign' in block:entry['nbt']=compound(sign(bank,size))
-                if block.startswith('economy:branch_kiosk') and ',cell=0,' in block:
-                    entry['nbt']=compound({'id':(8,'economy:terminal')})
-                if block.startswith('economy:banker_desk[cell=0,'):
-                    entry['nbt']=compound({'id':(8,'economy:banker_desk')})
-                blocks.append(entry)
-            names=[s['Name'][1] for s in palette]
-            assert not any(x in names for x in ['minecraft:magenta_concrete','minecraft:purple_concrete','minecraft:purple_glazed_terracotta'])
-            assert all(not re.search(r'(oak|spruce|jungle|acacia|birch|dark_oak)_(planks|log|slab|door|wall_sign)',n) or STYLES[style] in n for n in names)
-            root={'DataVersion':(3,3955),'author':(8,'Economy A7-04 / original GenMC mid-century collection'),
-                  'size':(9,(3,[w,h,d])),'palette':(9,(10,palette)),'blocks':(9,(10,blocks)),'entities':(9,(10,[]))}
-            encoded=b'\x0a'+string('')+payload(10,root)
-            output=TARGET/style/bank['key']/(size+'.nbt');output.parent.mkdir(parents=True,exist_ok=True)
-            packed=gzip.compress(encoded,mtime=0);output.write_bytes(packed)
-            results.append({'style':style,'bank':bank['key'],'currency':bank['currency'],'size':size,
-                            'resource':f'economy:banks/{style}/{bank["key"]}/{size}',
-                            'dimensions':[w,h,d],'services':[[x-1,y,z] for x,y,z in services],
-                            'desk_slots':[[3,1,7],[13,1,7]] if large else [[8,1,5]],
-                            'sha256':hashlib.sha256(packed).hexdigest(),'genmc_source_sha256':hashlib.sha256(raw).hexdigest()})
-    # Preserve exact studio output in a compact deterministic source archive.
-    archived.write_bytes(gzip.compress(raw,mtime=0))
-    if plain.exists():plain.unlink()
-    return results
 
 def main():
-    templates=[t for style in STYLES for t in export_style(style)]
-    manifest={'version':1,'design':'mid-century modern','license':'CC0-1.0','source':'GenMC exact exported geometry; export_templates.py inserts real service machines, reserved banker desks and sign NBT',
-              'wood_by_style':STYLES,'projects':json.loads((SOURCE/'projects.json').read_text()),'templates':templates}
-    path=ROOT/'src/main/resources/data/economy/worldgen/bank_templates.json'
-    path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(manifest,indent=2)+'\n')
-    print(f'Converted {len(templates)} exact GenMC templates: all 23 banks, both sizes, all five styles; no colored placeholders.')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("source", type=Path, nargs="?", default=TARGET / "crownstone.nbt",
+                        help="structure-block NBT export (defaults to the packaged Crownstone template)")
+    args = parser.parse_args()
+    root_name, structure = read_structure(args.source)
+    anchors = prepare_crownstone(structure)
+    colors = brand_dyes()
+    palette = structure["palette"][1][1]
+    templates = []
+    for index, bank in enumerate(BANKS, start=1):
+        key = bank["key"]
+        primary, accent = colors[key]
+        variant = dict(structure, palette=(9, (10, variant_palette(palette, index, primary, accent))))
+        encoded = b"\x0a" + write_string(root_name) + write_tag(10, variant)
+        packed = gzip.compress(encoded, mtime=0)
+        (TARGET / f"{key}.nbt").write_bytes(packed)
+        templates.append({
+            "bank": key, "currency": bank["currency"], "resource": f"economy:banks/{key}",
+            "dimensions": DIMENSIONS, "entrance": ENTRANCE, "entrance_facing": "west",
+            "services": anchors["economy:branch_kiosk"] + sorted(anchors["economy:white_atm"]),
+            "desk_slots": anchors[DESK], "primary_dye": primary, "accent_dye": accent,
+            "sha256": hashlib.sha256(packed).hexdigest(),
+        })
+    manifest = {"version": 2, "source": "Crownstone structure block export", "templates": templates}
+    (DATA / "worldgen/bank_templates.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    print(f"Exported {len(templates)} branded 17×15×17 bank templates")
 
-if __name__=='__main__':main()
+
+if __name__ == "__main__":
+    main()

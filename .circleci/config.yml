@@ -4,64 +4,103 @@ orbs:
   codecov: codecov/codecov@6.1.0
 
 jobs:
-  list-tests:
-    docker:
-      - image: cimg/openjdk:21.0
-    steps:
-      - checkout
-      - run:
-          name: Select tests for dynamic parallelism
-          command: circleci testsuite list-tests "economy tests" --key=economy-tests
   test:
+    # The complete JUnit suite is split across four fixed workers.
     parallelism: 4
+    resource_class: large
     docker:
       - image: cimg/openjdk:21.0
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - gradle-v1-{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}-{{ checksum "build.gradle" }}
-            - gradle-v1-
       - run:
-          name: Compile tests before requesting dynamic batches
-          command: ./gradlew testClasses
+          name: Prepare test and coverage directories
+          command: mkdir -p build/circleci/junit build/circleci/batches coverage
       - run:
-          name: Run dynamically distributed test batches
-          command: circleci testsuite run "economy tests"
-      - run:
-          name: Combine coverage from this node's batches
+          name: Run the complete JUnit suite with static four-way splitting
           when: always
-          command: ./gradlew jacocoTestReport -x test -I .circleci/gradle-tests.init.gradle
-      - save_cache:
+          command: |
+            if bash .circleci/run-full-tests.sh; then result=0; else result=$?; fi
+            printf '%s\n' "$result" > build/circleci/junit.status
+      - run:
+          name: Preserve this node's JUnit execution data
+          when: always
+          command: |
+            node_dir="coverage/node-${CIRCLE_NODE_INDEX}"
+            mkdir -p "$node_dir"
+            find build/circleci/batches -name '*.exec' -type f -print0 |
+              while IFS= read -r -d '' source; do
+                destination="$node_dir/${source#build/circleci/}"
+                mkdir -p "$(dirname "$destination")"
+                cp "$source" "$destination"
+              done
+            if [[ -f build/circleci/all-tests.txt ]]; then cp build/circleci/all-tests.txt "$node_dir/all-tests.txt"; fi
+            if [[ -f build/circleci/node-tests.txt ]]; then cp build/circleci/node-tests.txt "$node_dir/selected-tests.txt"; fi
+            mkdir -p "$node_dir/junit"
+            find build/circleci/junit -name '*.xml' -type f -exec cp {} "$node_dir/junit/" \;
+            cp build/circleci/junit.status "$node_dir/"
+            printf '%s\n' "$CIRCLE_NODE_INDEX" > "$node_dir/node.txt"
+      - persist_to_workspace:
+          root: .
           paths:
-            - ~/.gradle/caches
-            - ~/.gradle/wrapper
-          key: gradle-v1-{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}-{{ checksum "build.gradle" }}
+            - coverage
       - store_test_results:
           path: build/circleci/junit
       - store_artifacts:
           path: build/circleci/junit
       - store_artifacts:
+          path: build/circleci/all-tests.txt
+      - store_artifacts:
+          path: build/circleci/node-tests.txt
+      - store_artifacts:
           path: build/circleci/batches
+      - run:
+          name: Fail the node if JUnit failed
+          when: always
+          command: |
+            if [[ ! -f build/circleci/junit.status ]] || [[ "$(cat build/circleci/junit.status)" != 0 ]]; then
+              echo "JUnit failed or did not complete; see the saved reports and logs." >&2
+              exit 1
+            fi
+  aggregate-coverage:
+    docker:
+      - image: cimg/openjdk:21.0
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Aggregate coverage from all JUnit shards
+          command: |
+            # Still produce diagnostic HTML when inputs are incomplete, but never publish it as full coverage.
+            set +e
+            python3 .circleci/verify-coverage-inputs.py coverage
+            inputs_status=$?
+            ./gradlew jacocoTestReport -x test -I .circleci/gradle-tests.init.gradle -PcircleciAggregateDir=coverage
+            report_status=$?
+            if (( inputs_status != 0 || report_status != 0 )); then exit 1; fi
       - store_artifacts:
           path: build/reports/jacoco/test/html
+      - store_artifacts:
+          path: build/reports/jacoco/test/jacocoTestReport.xml
       - codecov/upload:
           files: build/reports/jacoco/test/jacocoTestReport.xml
-
+      - run:
+          name: Upload JaCoCo coverage to Codacy
+          command: |
+            if [[ -z "${CODACY_PROJECT_TOKEN:-}" ]]; then
+              echo "Skipping Codacy coverage upload because CODACY_PROJECT_TOKEN is unavailable."
+              exit 0
+            fi
+            curl --fail --silent --show-error --location https://coverage.codacy.com/get.sh |
+              bash -s -- report -r build/reports/jacoco/test/jacocoTestReport.xml --commit-uuid "$CIRCLE_SHA1"
 workflows:
   test:
-    # Main builds refresh impact data; PR builds select impacted tests.
-    when: pipeline.git.branch == "main" or pipeline.event.name == "api" or (pipeline.event.name == "pull_request" and (pipeline.event.action == "opened" or pipeline.event.action == "synchronize" or pipeline.event.action == "reopened"))
     jobs:
-      - list-tests
-      - test:
+      - test
+      - aggregate-coverage:
           requires:
-            - list-tests
-
-# Experimental CircleCI syntax: keep the existing two-node ceiling/fallback.
-experimental:
-  dynamic-parallelism:
-    test:
-      key: economy-tests
-      min: 1
-      max: 4
+            - test:
+                - success
+                - failed

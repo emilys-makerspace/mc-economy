@@ -2,7 +2,110 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-09
+
+### Stage A core integration
+
+- Completed Stage A implementation across banking, village branches, economic simulation, item valuation and core integration. Local multiplayer checks covered two authenticated clients, including account isolation and recovery after reconnect. External-client verification remains pending.
+- Checked the linked debt lifecycle in an accelerated scenario from borrowing through default, debt sale and partial or full repayment through a Collection Agent.
+- Verified restoration of a complete schema 54 world backup to a separate destination.
+
+### Village bank generation
+
+- New banks and their access paths reserve deeper bounded foundations to tolerate differences between predicted and generated ground, fixing the reproduced sliced-bank failure on snowy terrain.
+- Natural gravel can be replaced during initial site preparation; existing banks and saved damaged structures are preserved.
+
+### Monetary precision
+
+- New FX rates and conversion calculations retain eight decimal places. FX rates display exactly eight places in bank screens.
+- Converted proceeds truncate to cents, or round to the nearest whole yen. Exact requested payouts charge the nearest account minor unit, with halfway values rounding up.
+- Interest accruals and residuals truncate to eight decimal places before settlement to cents or whole yen, with halfway values rounding up. Existing balances and historical records are preserved.
+
+### Terminal navigation localization
+
+- Added English and French text for current bank-scoped account, service and activity pages, including balances, holds, primary-bank instructions and paging.
+- Account activity now renders localized typed amounts and footers correctly. Available funds/credit display no longer depends on English status prefixes.
+- Updated player guidance for current terminal services, captured fees, original-outcome recovery and the qualified local testing limits.
+
+### Administration
+
+- Terminal cash settings now show an explicit review before saving and refuse drafts based on an older revision, with a direct refresh action.
+- Added English and French terminal setup and legacy FX command guidance; queued FX edits lose authority when the operator session is revoked while committed original operations remain recoverable.
+- Banking clients and servers now use wire12 and must be updated together.
+
+### Integration API
+
+- Added authenticated simulation history pages with explicit financial-day cursors and immutable API-owned captured values.
+
+### ATM and branch menus
+
+- Replaced the terminal overview with direct Home services, bank-scoped account pages and bill selection, plus grouped branch services at kiosks.
+- Added bank-colored headers, issuer logos, cream pages and outlined controls, a Home shortcut, compact dates and five-row account history pages. Removed the bottom status bar and duplicate status tooltips.
+- Removed text shadows from banking headings, page counters, buttons and amount fields; added padding between menu and cash-selection buttons.
+- Cash selection shows banknote artwork, preferring horizontal notes, and loan applications have separate Loan Amount and Term fields.
+- Closing an eligible account now pays its balance in physical cash through protected inventory delivery instead of transferring it to the primary account.
+
+### Banking fees
+
+- Added a CAD 3.00 base fee to every credit cash advance, financed on the card and included in its advance and credit limits.
+- Added a CAD 2.50 base ATM surcharge for other-bank and unassigned accounts/cards, with same-bank ATMs and tellers exempt. Both fees convert at the current CAD exchange rate and round to the nearest 0.25, or 25 JPY, before confirmation.
+
+### Debt collection
+
+- Fixed debt sales stopping the economy service when activity tracking encountered the collector's nonspendable allowance account.
+- Collection Agent reviews now name Waystone Recovery correctly after a debt sale.
+
 ## 2026-11-08
+
+### Village banks
+
+- Replaced biome-specific bank buildings with the shared 17×15×17 Crownstone design, recolored and equipped for all 23 banks.
+- Added a grass-block border around all four sides of the base, with a cobblestone entrance threshold.
+- New branches have two native-currency ATMs, one branded kiosk and one banker. Small villages plan one branch, while medium and large villages plan two with a chance of a third.
+
+### Banker creative items
+
+- Centered the Banker Desk inventory icon and reduced its display scale to fit within its slot.
+
+- Added a Banker Spawn Egg to the Economy and Spawn Eggs creative tabs.
+- Added the Banker Desk to the Economy tab alongside its existing Functional Blocks entry.
+
+### Card cleanup
+
+- Removed tier-specific debit and credit items and artwork. Each bank now has one debit appearance and one credit appearance per supported network.
+- Existing saved cards and pending deliveries resolve to the current cards without changing their tokens or account eligibility.
+
+### Terminal model fixes
+
+- Fixed flickering overlapping header surfaces on wide banking consoles.
+- Recessed the wide console monitor, lower bezel and header behind the worktop controls to keep the PIN pad visible.
+- Corrected card-reader fascia mapping and turned the raised PIN pad layout and labels toward the user across all bank appearances.
+
+### A10-03 — Small-window and GUI-scale usability
+
+- Added responsive banker, trader and collection folios with complete text/status scrolling, paged choices and reserved payment-input space.
+- Added visible banking scroll controls, keyboard scrolling and focusable status help; credit actions stay within the terminal.
+- Preserved harmless drafts and navigation across resize while refusing controls retained from an older server revision. Layouts support a minimum 320×240 logical viewport.
+
+### A10-02-03 — Core localization and explanations
+
+- Added UK English, Canadian French and French translations for core banking, dashboard, history, financial reviews, automatic-payment consent and optional banker/collection explanations.
+- Displayed money retains exact minor units and explicit currency codes with locale number formatting. Numeric input remains ASCII with a decimal point and no grouping.
+- Rendered reviews are checked against existing display budgets; incomplete reviews cannot offer financial confirmation.
+
+### A10-02-02 — Filtered history and original transaction details
+
+- Added newest-first owner History with account, currency, recorded UTC range and transaction-type filters, frozen pages and original details.
+- Added explicit captured fee/counterparty/FX availability and separate legacy-daily/effective-time FX history.
+- Added additive schema53 history indexing with bounded resumable startup validation, atomic live updates and complete-world backup/restore checks; original facts and legacy cursors remain unchanged.
+- Banking protocol10 carries bounded history data. Dashboard recent activity now uses the new indexed reader.
+
+### A10-02-01 — Banking overview and operation status
+
+- Added a bank-aware Home overview with separate account balances, sampled upcoming payments and newest-first selected-account activity.
+- Added server-offered service navigation and a Payments page that preserves terminal and card restrictions.
+- Replaced text-based review/retry controls with structured server state and original operation/receipt references under banking protocol9.
+- Outcome checks now look up the original operation only. Confirmed absence requires a fresh review; item delivery remains separate from financial completion.
 
 ### A9-06 — Opt-in reference-price trading
 

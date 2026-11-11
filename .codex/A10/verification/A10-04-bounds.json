@@ -1,0 +1,97 @@
+{
+  "result": "PASS",
+  "scope": "Concurrent raw TCP aggregate bounds/release only; no game/auth/finance or 60-second delay claim",
+  "overflow_transport": {
+    "kind": "opaque_loopback_tcp_proxy",
+    "topology": "127.0.0.1 listener -> 127.0.0.1 upstream",
+    "listen_port": 58376,
+    "upstream_port": 58375,
+    "configured_delay_ms": 150,
+    "deterministic_jitter_ms": 25,
+    "configured_delay_window_seconds": 60,
+    "observed_delay_window_seconds": 0.5713165829656646,
+    "delay_start_monotonic": 434583.622834208,
+    "run_elapsed_seconds": 0.5716030829935335,
+    "chunk_bytes": 16384,
+    "max_pending_chunks_per_direction": 64,
+    "max_pending_bytes_per_direction": 1048576,
+    "max_simultaneous_connections": 8,
+    "accepted_connections": 3,
+    "refused_connections": 0,
+    "connection_outcomes": {
+      "bounded_overflow": 1,
+      "socket_close_or_connect_failure": 1,
+      "eof": 1
+    },
+    "directions": {
+      "client_to_server": {
+        "received_chunks": 65,
+        "forwarded_chunks": 39,
+        "received_bytes": 1039933,
+        "forwarded_bytes": 614417,
+        "max_pending_chunks": 64,
+        "max_pending_bytes": 1039916,
+        "final_pending_chunks": 0,
+        "final_pending_bytes": 0,
+        "overflow_connections": 1,
+        "receive_to_send_complete_ms": {
+          "count": 39,
+          "min_ms": 125.70187501842156,
+          "mean_ms": 171.12943907686247,
+          "p50_ms": 175,
+          "p95_ms": 176,
+          "p99_ms": 176,
+          "max_ms": 176.54462502105162,
+          "quantile_resolution_ms": 1
+        },
+        "delayed_receive_to_send_complete_ms": {
+          "count": 39,
+          "min_ms": 125.70187501842156,
+          "mean_ms": 171.12943907686247,
+          "p50_ms": 175,
+          "p95_ms": 176,
+          "p99_ms": 176,
+          "max_ms": 176.54462502105162,
+          "quantile_resolution_ms": 1
+        }
+      },
+      "server_to_client": {
+        "received_chunks": 40,
+        "forwarded_chunks": 2,
+        "received_bytes": 614417,
+        "forwarded_bytes": 16401,
+        "max_pending_chunks": 39,
+        "max_pending_bytes": 614400,
+        "final_pending_chunks": 0,
+        "final_pending_bytes": 0,
+        "overflow_connections": 0,
+        "receive_to_send_complete_ms": {
+          "count": 2,
+          "min_ms": 136.11233403207734,
+          "mean_ms": 136.65239603142254,
+          "p50_ms": 136,
+          "p95_ms": 137,
+          "p99_ms": 137,
+          "max_ms": 137.19245803076774,
+          "quantile_resolution_ms": 1
+        },
+        "delayed_receive_to_send_complete_ms": {
+          "count": 2,
+          "min_ms": 136.11233403207734,
+          "mean_ms": 136.65239603142254,
+          "p50_ms": 136,
+          "p95_ms": 137,
+          "p99_ms": 137,
+          "max_ms": 137.19245803076774,
+          "quantile_resolution_ms": 1
+        }
+      }
+    },
+    "bounds_scope": "Aggregate per proxy direction across all connections: application queue plus active sock_sendall; OS TCP buffers are separate. No StreamReader/StreamWriter buffers.",
+    "timing_scope": "receive completion to sock_sendall completion; not peer receive time",
+    "protocol_scope": "Opaque ordered TCP bytes; no Minecraft authentication or financial assertion",
+    "concurrent_clients": 2,
+    "input_bytes_per_client": 614400,
+    "reconnect_after_release": true
+  }
+}

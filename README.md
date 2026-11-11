@@ -2,7 +2,12 @@
 
 ![Economy — Banking. Cash. Commerce.](docs/branding/economy-banner.png)
 
-Banking, physical cash and player shops for Minecraft, with credit, loans and a persistent world economy. Currently in alpha.
+![CircleCI](https://img.shields.io/circleci/build/github/emilys-makerspace/mc-economy?style=flat-square&logo=circleci)
+[![Codecov](https://img.shields.io/codecov/c/github/emilys-makerspace/mc-economy?style=flat-square&logo=codecov)](https://codecov.io/gh/emilys-makerspace/mc-economy)
+[![Codacy grade](https://img.shields.io/codacy/grade/ccf84f4c7752479aae00fa4013374edb?style=flat-square&logo=codacy)](https://app.codacy.com/gh/emilys-makerspace/mc-economy/dashboard)
+
+
+Banking, physical cash and player shops for Minecraft, with credit, loans and a persistent world economy. Stage A implementation is complete and Economy is in alpha.
 
 **Requires Minecraft 1.21.1 · NeoForge 21.1.252 · Java 21.** No additional mods are required.
 
@@ -14,10 +19,11 @@ Banking, physical cash and player shops for Minecraft, with credit, loans and a 
 - Cash deposits and withdrawals, account transfers, player shops and monetary villager/wandering-trader commerce.
 - Credit cards, fixed unsecured loans, credit reports and Collection Agents.
 - Optional automatic payments, transaction history and recovery of interrupted payments and item deliveries.
+- Reference item values derived from supported recipes, with operator-controlled activation for villager and wandering-trader pricing.
 
 New kiosks are two blocks wide and two blocks high. Existing narrow kiosks remain usable and offer a free **Upgrade kiosk** action in owner/operator settings when space and support are clear.
 
-New eligible vanilla villages can generate mid-century modern bank branches, with compact and larger designs for all 23 banks across plains, desert, savanna, snowy and taiga styles. Buildings use local wood, working branch kiosks and banker desks. Right-click an active kiosk to see that bank’s account options. Choose **Open primary account** or **Open \<native currency\> account** when offered. Selecting the button submits the account-opening request. A banker is optional. Their private dialogue starts with questions to choose from, and answers appear when you select one.
+New eligible vanilla villages use the same 17×15×17 bank design across plains, desert, savanna, snowy and taiga. Each branch has its bank’s colors, two ATMs for its native currency, one branded kiosk and a desk for one banker. Right-click an active kiosk and open **Branch Services** to see that bank’s account options. Choose **Open primary account** or **Open \<native currency\> account** when offered to submit the request. You can also ask the banker questions through private dialogue.
 
 Choose the world's currency before exploring for new banks. Operators can use `/locate structure #economy:banks` to find bank locations in unexplored areas. The coordinates lead to the source village, with its bank nearby. Existing explored villages are preserved, and difficult terrain can leave a selected branch pending. Superflat village/bank generation has an unresolved limitation tracked in [issue #3](https://github.com/emilybelnavis/economy/issues/3). See the [server guide](docs/SERVER_GUIDE.md#village-branch-diagnostics) for supported generation, status and safe terrain retry.
 
@@ -31,10 +37,22 @@ Securities trading, variable-rate loans and collateral-backed loans are future w
 
 1. Install the Economy jar in your NeoForge instance's `mods` folder.
 2. Start a world and choose its currency when prompted; `/economy choose CAD` also supports selection.
-3. Right-click an active branch kiosk and review its bank and native currency. Select **Open primary account** or **Open \<native currency\> account** when offered to submit the request. You can do this directly without speaking to a banker. Machine owners bind their own terminals to a bank through **sneak + empty-hand right-click** and enable cash services separately.
+3. Right-click an active branch kiosk and review its bank and native currency on Home. Open **Branch Services**. Select **Open primary account** or **Open \<native currency\> account** when offered to submit the request. You can do this directly without speaking to a banker. Machine owners bind their own terminals to a bank through **sneak + empty-hand right-click** and enable cash services separately.
 4. Use an ATM or teller to deposit, withdraw or exchange funds. An active issued card provides remote banking access.
 
+Credit cash advances have a base fee of **3.00 CAD**. ATMs also charge a base fee of **2.50 CAD** when the card/account belongs to another bank or has no bank provider; tellers have no ATM surcharge. Both fees convert from CAD using the current published exchange rate into the card or funding-account currency, then round to the nearest **0.25** (**25 JPY** for yen); exact halfway values round up. Review shows the converted fees before confirmation. Advance fees are added to the card balance and count toward the 20% advance cap; withdrawing physical cash is a separate transaction.
+
+FX rates display eight decimal places. New conversions use an eight-place pair rate and truncate the calculated amount to eight places before settlement: received amounts truncate to cents, while yen rounds to the nearest whole unit. A requested exact payout charges the nearest account cent or yen. Interest accruals retain eight decimal places and settle to the nearest cent or yen; exact halfway settlements round up.
+
+Terminal Home provides **My Accounts**, **Deposit**, **Withdrawal** and **Bill Payments**. Kiosks also provide **Branch Services** for accounts, credit, loans, cards and currency exchange. Credit cards and cards from another bank restrict ATM Home to withdrawals. **My Accounts** shows accounts at that bank, with balances and paged activity. In **Account Settings**, change your primary bank by authorizing the switch at the current bank and confirming it at the new bank; your main account keeps its currency. Eligible account closures pay an exact batch of physical cash into your inventory; make room before confirming. Review current terms before confirming a payment. If the outcome needs checking, use **Check original outcome** first. A confirmed absent operation requires a fresh review and is never automatically resubmitted. Item delivery and retained claims are separate from financial completion.
+
 Accounts are limited to four per player, with one per currency. Creative cards are collectibles and do not grant banking access. Financial time continues while the server is offline: one financial day lasts 20 real minutes, and a month lasts 28 financial days.
+
+Covered terminal navigation, account activity, financial reviews, filtered history and banker/collection explanations support English (UK), French (Canada) and French (France), selected through Minecraft's language setting. Some asset names and operator diagnostics remain English. Displayed amounts use the selected language's number formatting and retain their currency code. Enter amounts with ASCII digits, a decimal point and no grouping separators (for example `12.50`); commas and grouped numbers are rejected. UTC date filters and command syntax keep their documented format.
+
+Banking, banker, trader and collection menus support a minimum 320×240 logical GUI viewport. Use the visible arrows or Page Up/Page Down to read long terms, and Tab to reach controls. Dialogue choices have separate pages and full-label tooltips. Resizing preserves drafts; changed server terms require a fresh review.
+
+Local multiplayer has been checked with two authenticated sessions. External-client testing remains pending. The [server guide](docs/SERVER_GUIDE.md#operational-reference-measurements) records the separate 20-synthetic-owner workload and its limits; those measurements do not establish 20 connected players or a minimum hardware specification.
 
 ## Villager trading and economic rates
 
@@ -60,7 +78,7 @@ Placed agents stay where you put them and persist with the world. Right-click wi
 - [Server guide](docs/SERVER_GUIDE.md): configuration, diagnostics, upgrades, backups and restore.
 - [Server integration API](docs/INTEGRATION_API.md): versioned banking entry points and downstream contracts.
 - [Changelog](CHANGELOG.md): completed features and notable fixes.
-- [Roadmap](ROADMAP.md): planned features and future direction.
+- [Roadmap](ROADMAP.md) covers delivered milestones and planned features.
 
 **Upgrading an existing world?** Stop Minecraft and [prepare a complete-world upgrade backup](docs/SERVER_GUIDE.md#schema-upgrades) before opening it with a newer economy schema. Keep world and economy data together.
 

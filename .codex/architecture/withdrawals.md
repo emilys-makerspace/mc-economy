@@ -72,10 +72,14 @@ Current player-facing integration is delivered in [A5-09 banking menus](banking.
 
 ## CHF exact cash settlement
 
-CHF cash/account previews bind CHF_MINOR_V2 and emit withdrawal factv2, preserving account cents while requiring exact physical representability. Teller uses notes/coins; ATM notes only;1.02CHF rejects. Old nonCHF quantum/serialization remain. Deterministic lots, full-batch capacity, saved delivery, custody and original-ID recovery are unchanged. Catalog bound becomes131; all solver/item/work budgets remain. See [the current CHF contract](chf.md) and [verification](../verification/A6-03-01.md).
+CHF cash/account previews bind CHF_MINOR_V2 and emit withdrawal factv2, preserving account cents while requiring exact physical representability. Teller uses notes/coins; ATM notes only;1.02CHF rejects. Old nonCHF quantum/serialization remain. Deterministic lots, full-batch capacity, saved delivery, custody and original-ID recovery are unchanged. Catalog bound becomes131; all solver/item/work budgets remain. See [the current CHF contract](chf.md) and [verification](../A6/verification/A6-03-01.md).
 
 ## Cash selection and artwork
 
 The withdrawal review offers Cash select with bounded +/- bill counts per enabled denomination, a selected/remaining total, Review mix and Default mix. ATM edits must equal the requested amount; tellers derive the remainder in coins. Each successful review refreshes the frozen preview before confirmation. No quantity change debits an account.
 
 When both vertical and horizontal note appearances are terminal-enabled, preview draws one ticket per bill: ticket zero of twenty selects vertical; the other nineteen select horizontal. Sampled changes are frozen as exact bill edits in the existing preview format. Reserve, commit and recovery revalidate those counts without drawing again. Artwork selection preserves amount, denomination counts, coins and item count; final capacity includes any extra stacks from distinct artwork.
+
+## ATM surcharge (2026-11-09)
+
+Bank-bound ATMs charge a CAD2.50 base fee converted to funding account currency when its provider differs from the ATM bank or is unassigned/missing. Same-bank accounts and tellers are exempt; payment-network compatibility does not decide this fee. The converted fee rounds once to the nearest 0.25 target major unit, or 25 JPY; HALF_UP resolves ties. Review includes the surcharge and total debit. Withdrawal fact V5 freezes the ATM bank, provider identity/revision, exact converted fee and original CAD/target rate values; reserve and commit recalculate and reject stale changes. Fees transfer from the funding account to the ATM bank's cash/income atomically with cash issuance and custody intent, with insufficient-funds retry and original-ID replay. V1–V4 retained facts remain readable, including original fixed local-currency V4 fees; old uncommitted reviews require a fresh CAD-based review. Owner history reports the surcharge together with any existing FX fee; FX activity excludes it from exchanged principal.

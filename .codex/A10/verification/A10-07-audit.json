@@ -1,0 +1,25 @@
+{
+  "world": "economy-admin-settings-9d89955d-6ad9-4bf6-bffc-b3ff05c156e5",
+  "schema": 54,
+  "configuration_operations": [
+    {
+      "operation_id": "81292a97-9874-41dd-bf17-ff9b75fe887c",
+      "transaction_id": "3fc72ae8-b4a6-47d4-967b-2efd1e559555",
+      "status": "COMMITTED",
+      "result_code": "TERMINAL_CONFIGURE",
+      "sequence": 74,
+      "audit_utc": "2026-11-09T08:54:16.173064Z"
+    },
+    {
+      "operation_id": "03322488-3b05-4811-b70a-56a82c172323",
+      "transaction_id": "dc88846d-e757-41c0-b283-acac32bc636b",
+      "status": "COMMITTED",
+      "result_code": "TERMINAL_CONFIGURE",
+      "sequence": 75,
+      "audit_utc": "2026-11-09T08:54:17.152042Z"
+    }
+  ],
+  "configuration_facts": 3,
+  "stale_or_refresh_added_configuration": false,
+  "scope": "Native review/confirm; separate legitimate concurrent fixture write; stale draft and refresh leave current state unchanged"
+}

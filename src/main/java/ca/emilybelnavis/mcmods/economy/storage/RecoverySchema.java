@@ -1,19 +1,31 @@
 package ca.emilybelnavis.mcmods.economy.storage;
+
 import java.util.List;
 
 final class RecoverySchema {
-    static void validate(java.sql.Connection connection) throws java.sql.SQLException {
-        for(String expected:statements()) {
-            if(!expected.startsWith("CREATE TRIGGER"))continue;
-            String name=expected.split("\\s+")[2];
-            try(var query=connection.prepareStatement("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?")) {
-                query.setString(1,name);try(var row=query.executeQuery()) {
-                    if(!row.next()||!expected.replaceAll("\\s+"," ").strip().equals(row.getString(1).replaceAll("\\s+"," ").strip()))throw new StorageException(StorageException.Kind.SCHEMA,"Economic protection missing/changed: "+name);
-                }
-            }
+  static void validate(java.sql.Connection connection) throws java.sql.SQLException {
+    for (String expected : statements()) {
+      if (!expected.startsWith("CREATE TRIGGER")) continue;
+      String name = expected.split("\\s+")[2];
+      try (var query =
+          connection.prepareStatement(
+              "SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?")) {
+        query.setString(1, name);
+        try (var row = query.executeQuery()) {
+          if (!row.next()
+              || !expected
+                  .replaceAll("\\s+", " ")
+                  .strip()
+                  .equals(row.getString(1).replaceAll("\\s+", " ").strip()))
+            throw new StorageException(
+                StorageException.Kind.SCHEMA, "Economic protection missing/changed: " + name);
         }
+      }
     }
-    static List<String> statements() { return List.of(
+  }
+
+  static List<String> statements() {
+    return List.of(
         "CREATE TABLE projection_heads(name TEXT PRIMARY KEY, active_generation TEXT)",
         "CREATE TABLE projection_generations(name TEXT NOT NULL REFERENCES projection_heads(name), generation TEXT NOT NULL, version INTEGER NOT NULL CHECK(version>0), state TEXT NOT NULL CHECK(state IN ('BUILDING','ACTIVE','RETIRED','FAILED')), last_sequence INTEGER NOT NULL CHECK(last_sequence>=0), last_transaction TEXT REFERENCES journal_transactions(transaction_id), target_sequence INTEGER NOT NULL CHECK(target_sequence>=0), checksum TEXT NOT NULL, PRIMARY KEY(name,generation))",
         "CREATE TABLE projection_cells(name TEXT NOT NULL,generation TEXT NOT NULL,key TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(name,generation,key),FOREIGN KEY(name,generation) REFERENCES projection_generations(name,generation))",
@@ -35,6 +47,6 @@ final class RecoverySchema {
         "CREATE TRIGGER immutable_economic_updates_replace BEFORE INSERT ON economic_updates WHEN EXISTS(SELECT 1 FROM economic_updates WHERE update_id=NEW.update_id OR economic_sequence=NEW.economic_sequence OR (system_id=NEW.system_id AND interval_end_ms=NEW.interval_end_ms)) BEGIN SELECT RAISE(ABORT,'existing economic completion'); END",
         "CREATE TRIGGER immutable_economic_versions_update BEFORE UPDATE ON economic_versions BEGIN SELECT RAISE(ABORT,'immutable simulation version schedule'); END",
         "CREATE TRIGGER immutable_economic_versions_delete BEFORE DELETE ON economic_versions BEGIN SELECT RAISE(ABORT,'immutable simulation version schedule'); END",
-        "CREATE TRIGGER immutable_economic_versions_replace BEFORE INSERT ON economic_versions WHEN EXISTS(SELECT 1 FROM economic_versions WHERE system_id=NEW.system_id AND effective_end_ms=NEW.effective_end_ms) BEGIN SELECT RAISE(ABORT,'existing version boundary'); END"
-    ); }
+        "CREATE TRIGGER immutable_economic_versions_replace BEFORE INSERT ON economic_versions WHEN EXISTS(SELECT 1 FROM economic_versions WHERE system_id=NEW.system_id AND effective_end_ms=NEW.effective_end_ms) BEGIN SELECT RAISE(ABORT,'existing version boundary'); END");
+  }
 }

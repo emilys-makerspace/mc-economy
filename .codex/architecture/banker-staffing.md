@@ -39,4 +39,4 @@ Operator branch status exposes staffing observations; `/economy branch staffing 
 
 ## Presentation and integrated acceptance
 
-The banker uses a 64×64 original skin with separate eyebrows, inward pupils and a compact 1.5×1.5×0.75 model-unit nose. Suit details are painted onto the standard humanoid body. Desks use original veneer and hardware textures. [A7-06 evidence](../verification/A7-06.md) records direct banking before dialogue, same-save process recovery and account independence from staffing or hardware loss.
+The banker uses a 64×64 original skin with separate eyebrows, inward pupils and a compact 1.5×1.5×0.75 model-unit nose. Suit details are painted onto the standard humanoid body. Desks use original veneer and hardware textures. [A7-06 evidence](../A7/verification/A7-06.md) records direct banking before dialogue, same-save process recovery and account independence from staffing or hardware loss.

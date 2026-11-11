@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "economy:item/banking/slate_harbor_credit_wayline_t1"
-  }
-}

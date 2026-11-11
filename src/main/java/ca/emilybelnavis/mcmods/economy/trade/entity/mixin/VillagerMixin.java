@@ -9,10 +9,21 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 
 @Mixin(Villager.class)
 public abstract class VillagerMixin {
-    @Inject(method={"restock","catchUpDemand","updateDemand","resetNumberOfRestocks"},at=@At("HEAD"),cancellable=true)
-    private void economy$ownedRestock(CallbackInfo ci){if(TradeHooks.owned(this))ci.cancel();}
-    @Inject(method="shouldRestock",at=@At("HEAD"),cancellable=true)
-    private void economy$ownedRestockClock(CallbackInfoReturnable<Boolean> cir){if(TradeHooks.owned(this))cir.setReturnValue(false);}
-    @Inject(method="startTrading",at=@At("HEAD"),cancellable=true)
-    private void economy$noNativeSession(Player player,CallbackInfo ci){if(TradeHooks.owned(this))ci.cancel();}
+  @Inject(
+      method = {"restock", "catchUpDemand", "updateDemand", "resetNumberOfRestocks"},
+      at = @At("HEAD"),
+      cancellable = true)
+  private void economy$ownedRestock(CallbackInfo ci) {
+    if (TradeHooks.owned(this)) ci.cancel();
+  }
+
+  @Inject(method = "shouldRestock", at = @At("HEAD"), cancellable = true)
+  private void economy$ownedRestockClock(CallbackInfoReturnable<Boolean> cir) {
+    if (TradeHooks.owned(this)) cir.setReturnValue(false);
+  }
+
+  @Inject(method = "startTrading", at = @At("HEAD"), cancellable = true)
+  private void economy$noNativeSession(Player player, CallbackInfo ci) {
+    if (TradeHooks.owned(this)) ci.cancel();
+  }
 }

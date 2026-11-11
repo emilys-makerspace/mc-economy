@@ -150,7 +150,7 @@ def generate():
     texture.save(texture_path)
     source_path=HERE/'sources/agent/collection_agent_uv.svg'
     texture.svg(source_path)
-    blueprint_path=ASSETS/'banking/collection_agent_model.json'
+    blueprint_path=HERE/'sources/agent/collection_agent_model.json'
     blueprint={'schema':'economy:humanoid-art-v1','version':1,'license':'CC0-1.0',
         'name':'Waystone Recovery Collection Agent','texture':'economy:entity/banking/collection_agent',
         'texture_width':64,'texture_height':64,'parts':PARTS,
@@ -176,7 +176,6 @@ def generate():
     preview.svg(HERE/'sources/agent/collection_agent_views.svg')
     return {'texture':'economy:entity/banking/collection_agent',
         'textureFile':str(texture_path.relative_to(ROOT)),
-        'blueprint':'economy:banking/collection_agent_model.json',
         'blueprintFile':str(blueprint_path.relative_to(ROOT)),
         'geometryJava':str(java_path.relative_to(ROOT)),
         'source':str(source_path.relative_to(ROOT)),

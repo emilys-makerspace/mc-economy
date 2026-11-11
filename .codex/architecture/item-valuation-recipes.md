@@ -1,6 +1,6 @@
 # Ordinary reference recipes and processing — A9-03-01
 
-Delivered 2026-11-08. [Handoff](../A9-03-01.md), [evidence](../verification/A9-03-01.md), [shared policy](a9-shared-contracts.md), [source freeze](a9-source-contracts.md). Uses the existing [V50 snapshot store](item-valuation-snapshots.md); no schema/dependency change, new database or scheduler.
+Delivered 2026-11-08. [Handoff](../A9/A9-03-01.md), [evidence](../A9/verification/A9-03-01.md), [shared policy](../A9/architecture/a9-shared-contracts.md), [source freeze](../A9/architecture/a9-source-contracts.md). Uses the existing [V50 snapshot store](item-valuation-snapshots.md); no schema/dependency change, new database or scheduler.
 
 Current extension: [A9-03-02](item-valuation-brewing.md) adds v3 brewing capture/reads and a shared exact-material budget. The v2 ordinary rules/encoding below remain frozen.
 

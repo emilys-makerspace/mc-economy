@@ -13,7 +13,7 @@ import struct
 import zipfile
 
 JAR = Path('build/moddev/artifacts/neoforge-21.1.252-client-extra-aka-minecraft-resources.jar')
-INVENTORY = Path('.codex/architecture/a7-template-inventory.md')
+INVENTORY = Path('.codex/A7/architecture/a7-template-inventory.md')
 STYLES = ('plains', 'desert', 'savanna', 'snowy', 'taiga')
 WORKSTATIONS = {'blast_furnace', 'smoker', 'cartography_table', 'barrel', 'fletching_table',
                 'lectern', 'stonecutter', 'loom', 'cauldron', 'water_cauldron', 'brewing_stand', 'smithing_table', 'grindstone'}

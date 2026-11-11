@@ -23,4 +23,4 @@ History exposes original amounts and denomination revisions, paired transaction 
 
 ## Upstream contracts and implementation detail
 
-Use the [A1 journal contract](../../.codex/architecture/journal.md), [A2 quote handoff](../../.codex/A2-04.md), [A2 denomination handoff](../../.codex/A2-05.md), and [A3 account contract](../../.codex/architecture/accounts.md). The owning packages specify the posting account catalog, projection schemas, and query limits. Measure the supported rebase write size in A4-05. Package order and acceptance gates are in the [phase index](README.md) and [execution contract](EXECUTION.md).
+Use the [A1 journal contract](../../.codex/architecture/journal.md), [A2 quote handoff](../../.codex/A2/A2-04.md), [A2 denomination handoff](../../.codex/A2/A2-05.md), and [A3 account contract](../../.codex/architecture/accounts.md). The owning packages specify the posting account catalog, projection schemas, and query limits. Measure the supported rebase write size in A4-05. Package order and acceptance gates are in the [phase index](README.md) and [execution contract](EXECUTION.md).

@@ -2,7 +2,7 @@
 
 Current extension: [A9-04 public API/SPI](item-valuation-api.md) delivers v5 provider data and authenticated reads; prior package descriptions below remain historical in their recorded scope.
 
-Delivered by [A9-03-03](../A9-03-03.md); [evidence](../verification/A9-03-03.md). This extends [ordinary recipes](item-valuation-recipes.md) and [brewing](item-valuation-brewing.md), without changing their retained historical versions.
+Delivered by [A9-03-03](../A9/A9-03-03.md); [evidence](../A9/verification/A9-03-03.md). This extends [ordinary recipes](item-valuation-recipes.md) and [brewing](item-valuation-brewing.md), without changing their retained historical versions.
 
 ## Snapshot and identity
 

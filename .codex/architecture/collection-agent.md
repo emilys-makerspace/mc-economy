@@ -40,6 +40,6 @@ At most one unresolved original payment per debtor and256 per server is retained
 
 ## Verification and next package
 
-[Acceptance evidence](../verification/A6-11.md) records unit, production-runtime and disposable Minecraft menu/entity checks. The opted-in fixture uses explicit test funding and frozen claims, follows normal server menu/quote/settlement paths and is excluded from release jars. It verifies partial/full payment once, unload replacement, death/reconnect, no loot/XP, receipt recovery without an agent and a second-process cooldown check. It uses fixture chunk tickets to prepare its arena, independently of the agent algorithm.
+[Acceptance evidence](../A6/verification/A6-11.md) records unit, production-runtime and disposable Minecraft menu/entity checks. The opted-in fixture uses explicit test funding and frozen claims, follows normal server menu/quote/settlement paths and is excluded from release jars. It verifies partial/full payment once, unload replacement, death/reconnect, no loot/XP, receipt recovery without an agent and a second-process cooldown check. It uses fixture chunk tickets to prepare its arena, independently of the agent algorithm.
 
 A6-12 owns broader bank/credit menus and public integration. Manual visual GUI inspection, in-game FX confirmation and actual dimension travel remain outside this package's recorded fixture coverage. Their financial/protocol gates and dimension checks are implemented, with underlying FX settlement covered upstream.

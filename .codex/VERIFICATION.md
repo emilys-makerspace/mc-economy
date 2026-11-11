@@ -12,12 +12,14 @@ This policy applies to all current and future modules, phases, packages and sub-
 
 ## Keep test creation proportional
 
+A10-04 external-client testing is manual-only and currently pending by explicit user instruction. Do not include it in CircleCI jobs, pass/fail gates or coverage requirements. Existing self-contained integrated-client CI scenarios remain in scope and do not count as external-client evidence.
+
 Do not add tests for every helper, accessor, constant, internal branch or permutation. Add a small behavior test only when it protects a meaningful outcome or reproduces a concrete defect. Prefer existing fixtures using real services and SQLite. Do not introduce mock-heavy interaction tests, tests that restate the implementation, or new fixture frameworks for routine work. Reuse an existing acceptance scenario rather than layering unit, integration, restart, crash, abuse and performance tests over the same unchanged behavior. Add a process/restart/game scenario only when the changed behavior needs that environment and existing evidence does not cover it.
 
 One owner runs Gradle and game checks sequentially. Reuse still-applicable evidence; rerun when changed code, a failure, or a required gate justifies it. Record selected commands, results, scope and caveats once in the package evidence. Distinguish the repository suite total from tests added or selected for the sub-task; a larger test count is not an acceptance goal.
 
 This guide controls verification scope across the project. Older prompt instructions to run targeted tests followed by an unfiltered build, or automatically run the full suite at completion, are superseded. Historical verification records remain factual records of what ran, not instructions to repeat those runs.
 
-Historical evidence: [A1-01](verification/A1-01.md) · [A1-02](verification/A1-02.md) · [A1-03](verification/A1-03.md) · [A1-04](verification/A1-04.md).
+Historical evidence: [A1-01](A1/verification/A1-01.md) · [A1-02](A1/verification/A1-02.md) · [A1-03](A1/verification/A1-03.md) · [A1-04](A1/verification/A1-04.md).
 
-Current integrated foundation gate: [A1-05-03](verification/A1-05-03.md).
+Current integrated foundation gate: [A1-05-03](A1/verification/A1-05-03.md).

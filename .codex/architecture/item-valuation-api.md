@@ -2,7 +2,7 @@
 
 Current extension: [A9-05 source-transition foundation](trade-source-transition.md) delivers additiveV51 facts/epochs and no-carry settlement services; production activation remains separately selected A9-06 work. Prior package descriptions below retain their recorded historical scope.
 
-Delivered by [A9-04](../A9-04.md), with [scoped evidence](../verification/A9-04.md), extending [component/container valuation](item-valuation-variants.md). Public interface: `api.ItemValuationIntegration`, version1. [User integration example](../../docs/INTEGRATION_API.md#generic-provider-registration).
+Delivered by [A9-04](../A9/A9-04.md), with [scoped evidence](../A9/verification/A9-04.md), extending [component/container valuation](item-valuation-variants.md). Public interface: `api.ItemValuationIntegration`, version1. [User integration example](../../docs/INTEGRATION_API.md#generic-provider-registration).
 
 ## Read admission and immutable results
 
@@ -38,4 +38,4 @@ Conservative mod metadata is plain/non-damageable/non-container. Custom componen
 
 Connected permission-level2 operators have `/economy valuation status`, `coverage`, `value <item> [currency]` and `history [limit]`. Max16 command requests per server, bounded output, server/player/operator/session revalidation before display and stop cleanup. API/operator results retain reason codes and proof roots; no player-facing unsupported-listing explanations were added.
 
-Coverage separates1,333 vanilla classifications (349BASE/760DERIVED/109VARIANT/115operator-unpriced), supported component states and intentionally unregistered mod identities. Classification is not a numerical guarantee for arbitrary datapacks/components/budget exhaustion. Public reference values confer no financial qualification, custody, money or trade authority. [A10 handoff](a9-read-only-handoff.md) records read-only use; A9-05/06 own source transition and trader activation.
+Coverage separates1,333 vanilla classifications (349BASE/760DERIVED/109VARIANT/115operator-unpriced), supported component states and intentionally unregistered mod identities. Classification is not a numerical guarantee for arbitrary datapacks/components/budget exhaustion. Public reference values confer no financial qualification, custody, money or trade authority. [A10 handoff](../A9/architecture/a9-read-only-handoff.md) records read-only use; A9-05/06 own source transition and trader activation.

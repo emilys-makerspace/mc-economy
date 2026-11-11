@@ -51,7 +51,7 @@ A7 can use stable world/loan identity, owner-authorized contract/schedule/instal
 
 Loans.capabilities advertises fixed unsecured lending and identifies the required B6 adapter for secured or variable products. A separately accepted adapter must supply authoritative world/owner asset identity, current valuation/revision witness, approved priority, atomic cross-facility pledge uniqueness and journaled release or realization. Original fixed contract authority and funded claim accounting remain the integration boundary.
 
-[Loan contracts](loans.md) and [diagnostic commands](loan-diagnostics.md) describe the current entry points. [Verification](../verification/A6-09-03.md) records measured results and the runtime scope.
+[Loan contracts](loans.md) and [diagnostic commands](loan-diagnostics.md) describe the current entry points. [Verification](../A6/verification/A6-09-03.md) records measured results and the runtime scope.
 
 ## A6-10-01 current integration
 

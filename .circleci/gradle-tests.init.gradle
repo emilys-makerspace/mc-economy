@@ -11,17 +11,11 @@ gradle.projectsEvaluated {
         }
     }
     project.tasks.named('jacocoTestReport') {
-        executionData.setFrom(project.fileTree('build/circleci/batches') {
-            include '**/jacoco.exec'
+        def aggregateDir = project.findProperty('circleciAggregateDir')
+        executionData.setFrom(project.fileTree(aggregateDir == null ? 'build/circleci' : aggregateDir) {
+            include '**/batches/**/jacoco.exec'
         })
-    }
-    // Impact analysis must measure one atom, never the accumulated node coverage.
-    if (project.hasProperty('circleciImpactDir')) {
-        def impactDir = project.property('circleciImpactDir')
-        project.tasks.named('jacocoTestReport') {
-            executionData.setFrom(project.file("${impactDir}/jacoco.exec"))
-            reports.xml.outputLocation.set(project.file("${impactDir}/jacoco.xml"))
-            reports.html.required = false
-        }
+        reports.xml.required = true
+        reports.html.required = true
     }
 }

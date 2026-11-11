@@ -1,6 +1,6 @@
 # CHF currency and cash contract
 
-[A6-03-01 handoff](../A6-03-01.md) · [verification](../verification/A6-03-01.md) · [approved D16 policy](../../prompts/A6-credit-debt/POLICIES-BANKING.md#chf-opening-publication-and-physical-change--d16)
+[A6-03-01 handoff](../A6/A6-03-01.md) · [verification](../A6/verification/A6-03-01.md) · [approved D16 policy](../../prompts/A6-credit-debt/POLICIES-BANKING.md#chf-opening-publication-and-physical-change--d16)
 
 ## Registry and authoritative availability
 

@@ -1,6 +1,6 @@
 # Server integration contracts
 
-Economy targets Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Separate integration mods can consume the server banking interface below.
+Economy targets Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Separate integration mods can consume the authenticated server facades below. The [API reference](API_REFERENCE.md) inventories exact signatures, legacy type exposure, completion/cancellation, failure and retained-version contracts.
 
 ## Banking API version 2
 
@@ -48,25 +48,26 @@ Generated branches expose ordinary authenticated kiosk services. Branches and st
 | Versioned surface | Current version | Scope |
 | --- | --- | --- |
 | `BankingIntegration` | 2 | Server financial integration interface. |
-| Banking menu transport | 8 | Offered actions bound to the current player, menu, session and revision. |
+| Banking menu transport | 12 | Offered actions bound to the current player, menu, session and revision. |
 | Banker dialogue transport | 1 | Explicit questions and fresh routing to physical banking access. |
 | Trader menu transport | 1 | Bounded server-offered actions; no client prices or financial authority. |
-| `EconomicSimulationIntegration` | 1 | Cached immutable snapshots and bounded asynchronous rate history. |
+| `EconomicSimulationIntegration` | 1 | Existing cached snapshots and legacy selected-plan history. |
+| `EconomicSimulationHistory` | 1 | Additive API-owned selected-plan pages with explicit financial-day cursors. |
 | `ItemValuationIntegration` | 1 | Authenticated immutable item-reference reads, history and typed provider contributions. |
 | `BranchPlans` serialization | 1 | Internal captured source, provider, geometry and placement provenance. |
-| World storage schema | 50 | Internal projections, migration validation and journal recovery. |
+| World storage schema | 54 | Internal projections, migration validation and journal recovery. |
 
-The transport and persistence versions describe their respective protocols. Integrations use the server API and current grants for financial operations. World storage upgrades follow the stopped-world complete-backup procedure in the server guide.
+Banking transport12 adds the offered owner-settings review/confirmation action to the current wire11 baseline. Update client and server together: older action allowlists cannot decode the new confirmation safely. Existing dashboard/history/query meanings and persisted operation requests remain unchanged. Schema53 contains an additive original-fact read projection; old LedgerHistory ascending cursor semantics remain unchanged. Paired endpoints must use the same wire version; financial canonical requests and persisted intent meanings are unchanged. UI original-outcome lookup never automatically resubmits after absence. The transport and persistence versions describe their respective protocols. Integrations use the server API and current grants for financial operations. World storage upgrades follow the stopped-world complete-backup procedure in the server guide.
 
 ## Downstream consumers
 
 A8 delivers the activity observer, immutable windows, future shared prime/FX activation and stage-0 provider. Ordinary loans capture their explicit currency policy; historical fixed terms and subprime pricing retain their existing meanings.
 
-A9-02 installs internal base/override evaluation and immutable snapshots; A9-03-01 adds detached ordinary recipes, canonical sticks and calibrated processing under a new manifest version while retaining base-only history. A9-03-02 adds version-three vanilla brewing snapshots with exact typed potion identity and shared material costs, preserving earlier encodings. A9-04 exposes the grant-authenticated item-reference API/SPI. A9-03-03 adds version-four supported component/container evaluation with retained typed identities and bounded recursive publication. Trader source activation remains unimplemented. A reference cost is distinct from an accepted financial valuation source. Financial qualification continues to use the current authoritative valuation contracts.
+A9-02 installs internal base/override evaluation and immutable snapshots; A9-03-01 adds detached ordinary recipes, canonical sticks and calibrated processing under a new manifest version while retaining base-only history. A9-03-02 adds version-three vanilla brewing snapshots with exact typed potion identity and shared material costs, preserving earlier encodings. A9-04 exposes the grant-authenticated item-reference API/SPI. A9-03-03 adds version-four supported component/container evaluation with retained typed identities and bounded recursive publication. A9-06 delivers prospective reference-source activation and native checkout in its recorded scope. A reference cost is distinct from an accepted financial valuation source. Financial qualification continues to use the current authoritative valuation contracts.
 
-A10 can extend the player experience and multiplayer coverage using the existing offered-action, authorization, quote and original-outcome rules. Securities, market trading and expanded lending retain their separate B-series prerequisites; monetary NPC commerce is the delivered A8 feature.
+A10 delivers the covered player experience and authenticated local multiplayer/recovery using the existing offered-action, authorization, quote and original-outcome rules. Its [qualified acceptance matrix](../.codex/A10/architecture/a10-acceptance.md) distinguishes actual socket clients, synthetic service owners and accelerated fixtures. External-machine evidence remains pending/manual; no20-client or universal performance claim follows. Securities, market trading and expanded lending retain their [separate B-series handoff](../.codex/A10/architecture/a10-downstream.md); monetary NPC commerce is the delivered core feature. No B-series or third-party module is enabled by this handoff.
 
-[Server guide](SERVER_GUIDE.md), [A7 downstream handoff](../.codex/architecture/a7-downstream.md).
+[Server guide](SERVER_GUIDE.md), [A7 downstream handoff](../.codex/A7/architecture/a7-downstream.md).
 
 ## Economic simulation reads (version1)
 
@@ -74,17 +75,25 @@ On the authenticated server thread, obtain `Economy.serverServices(server).simul
 
 Public operators use the authenticated future-policy commands described in the server guide; clients never send policies, prices, bank authority or SQL callbacks. Trader transport accepts only the currently offered action/value with matching menu/session/revision. Backend `tradeStorage` is trusted maintenance, not public monetary admission. Live monetary work uses the separate economic-current gate and captured revocable server proofs.
 
-`TradePriceSource` remains the detached A9 replacement seam. The installed source is immutable `EmeraldV1`, using captured original emerald quantities, pinned standard quantities and exact effective FX. Future adapters must introduce prospective source epochs/provenance without rewriting saved quotes, carry state or trade history. The separate item-reference API does not activate that trade-price seam.
+`TradePriceSource.EmeraldV1` remains the supported legacy captured source, using original emerald quantities, pinned standard quantities and exact effective FX. A9-05/06 add the source-neutral prospective reference path described below; the item-reference read API alone never activates that path. Original source epochs, quotes, carry and trade history keep their captured interpretation.
 
-## A9 price-source replacement contract
+### Cursor-bearing simulation history (version1)
 
-The current source is the captured immutable `TradePriceSource.EmeraldV1`. Its generic `Basis` exposes source UUID/revision, FX UUID, currency and exact minor principal per standard quantity; it grants no settlement authority. Current durable account/cash Terms and the production controller are still typed to EmeraldV1. **There is no supported live source-switch registry or A9 adapter in A8.** Implementing another `TradePriceSource` alone cannot safely enable it.
+Use `services.simulationHistory().page(grant, Long.MAX_VALUE, limit)` for API-owned immutable historical entries and an explicit next cursor. Limits are1–16. An empty Optional means denied ownership/session/world; a present page with no entries means an authorized empty history. Follow `nextBeforeDay()` only when present. Day indices are the original zero-based financial windows, not calendar dates. Entries preserve exact selected amounts, numerator/denominator, original hashes, record version and policy/world/window identities. A selected plan can appear before its basket finishes; history is not publication readiness or monetary authority. Existing `simulation()` signatures remain supported.
+
+The [complete authenticated consumer example](../src/test/java/ca/emilybelnavis/mcmods/economy/examples/SimulationHistoryExample.java) is compiled with the focused checks and excluded from the release jar. Copy it into the consuming server mod and call `page` from an already authenticated action. Pass a server-thread `stillViewing` predicate for the caller's current menu/session/revision, keep the returned display-abandon action, and call it when that view ends. For another page, reacquire a grant through the example with the returned day cursor. The example routes completion through the server executor and refuses stale player instances, service sessions or worlds. It installs no packet, command, event or compatibility module.
+
+Never block the server thread. Handle synchronous admission rejection as well as failed stages and typed unavailable values. Abandoning display or canceling a consumer future is not a command rollback or provider-publication cancellation. Read the [completion and failure contract](API_REFERENCE.md#authentication-completion-and-cancellation) before writing a consumer.
+
+## Legacy A8 price-source compatibility
+
+The historical A8 source is the captured immutable `TradePriceSource.EmeraldV1`. Its generic `Basis` exposes source UUID/revision, FX UUID, currency and exact minor principal per standard quantity; it grants no settlement authority. Its legacy durable account/cash Terms retain EmeraldV1 types. A8 alone supplied no live source switch; A9-05/06 deliver the separately versioned transition and activation described below. Implementing another `TradePriceSource` alone cannot safely enable it.
 
 A separately selected A9 adapter must add source-neutral, versioned durable quote/fact terms and an authoritative prospective active source/epoch. BOOK captures that identity and SETTLE checks it again for uncommitted quotes; a source UUID/revision/epoch switch invalidates old uncommitted quotes without consuming money, items or stock. Resolve a committed original operation before those freshness checks: it must still return its captured outcome after a source change, without another trade or delivery.
 
 A source transition must journal its boundary and fractional-carry/residual treatment. Existing carry epochs cannot be silently reset or reused with different content. Preserve recorded trades, balances, stock/restock progress, exact components/ingredients and historical activity principals; a new reference price does not revalue old observations or rate windows. Demand/recovery anchors change only under their explicit transition contract. Missing A9 inputs must report unavailable rather than silently falling back to the old price. A9 reference prices do not automatically become accepted bank qualification/wealth sources.
 
-[Detailed downstream contract](../.codex/architecture/a8-downstream.md) lists the required migration and acceptance boundaries. A9 reference reads and the A9-05 durable source-transition foundation are implemented. A9-06 delivers explicit production activation and controller/native admission as described below. The preceding A8 contract describes the historical migration boundary.
+[Detailed downstream contract](../.codex/A8/architecture/a8-downstream.md) lists the required migration and acceptance boundaries. A9 reference reads and the A9-05 durable source-transition foundation are implemented. A9-06 delivers explicit production activation and controller/native admission as described below. The preceding A8 contract describes the historical migration boundary.
 
 ## Item reference reads (version1)
 

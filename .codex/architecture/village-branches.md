@@ -1,6 +1,6 @@
 # Persistent village branches
 
-Branch persistence was introduced in V36; current world schema is V39 after [A7-05 staffing](banker-staffing.md). Production source reconciliation, physical placement, explicit terrain retry and captured-desk bankers are installed. [A7 revision-1 contracts](a7-shared-contracts.md) retain policy/geometry; this document records implemented interfaces and conservative limits. [Verification](../verification/A7-02.md) records the selected real SQLite checks.
+Branch persistence was introduced in V36; current world schema is V39 after [A7-05 staffing](banker-staffing.md). Production source reconciliation, physical placement, explicit terrain retry and captured-desk bankers are installed. [A7 revision-1 contracts](../A7/architecture/a7-shared-contracts.md) retain policy/geometry; this document records implemented interfaces and conservative limits. [Verification](../A7/verification/A7-02.md) records the selected real SQLite checks.
 
 ## Captured plans and identities
 
@@ -57,4 +57,4 @@ Operator work uses detached atomic permission leases refreshed before storage ca
 
 A7-03 now consumes typed physical branch identity, legacy/wide service anchors and stable terminal generations/bindings; its [upgrade contract](kiosk-upgrades.md) is current. A7-04 supplies [metadata reconciliation, receipts and safe explicit terrain retries](village-generation.md). Pending plans have no invented anchors; V38 accepted later-site choices install anchors separately from immutable capture, preserving all removal tombstones. A7-05 adds desk admission, assignment/vacancy/timer/spawn records while consuming the durable pause flag and reserved desk geometry. [A7-05 staffing](banker-staffing.md) is installed with conservative UUID reconciliation and explicit-only dialogue.
 
-[A7-06](../A7-06.md) records integrated account access and recovery acceptance. [Downstream contracts](a7-downstream.md) identify stable financial API boundaries and internal presentation formats.
+[A7-06](../A7/A7-06.md) records integrated account access and recovery acceptance. [Downstream contracts](../A7/architecture/a7-downstream.md) identify stable financial API boundaries and internal presentation formats.

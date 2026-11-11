@@ -6,11 +6,16 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
 
-/** Frozen v1 extraction of original CashCatalog register declarations; no Minecraft class loading. */
+/**
+ * Frozen v1 extraction of original CashCatalog register declarations; no Minecraft class loading.
+ */
 public final class CashDenominations {
-    private CashDenominations() {}
-    public static final String SHA256="1be0052d2dedefdb34021f24c3d07e0eae7e590a0f39230aeef7eff18e40323c";
-    private static final String MANIFEST="""
+  private CashDenominations() {}
+
+  public static final String SHA256 =
+      "1be0052d2dedefdb34021f24c3d07e0eae7e590a0f39230aeef7eff18e40323c";
+  private static final String MANIFEST =
+      """
         economy:aud_bill_10|AUD|1000|true
         economy:aud_bill_100|AUD|10000|true
         economy:aud_bill_20|AUD|2000|true
@@ -142,13 +147,43 @@ public final class CashDenominations {
         economy:usd_coin_25|USD|25|false
         economy:usd_coin_5|USD|5|false
         economy:usd_coin_50|USD|50|false
-        """.strip();
-    private static final Map<String,WithdrawalPlanner.Denomination> VALUES=load();
-    private static Map<String,WithdrawalPlanner.Denomination> load(){
-        try{String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(MANIFEST.getBytes(StandardCharsets.UTF_8)));if(!hash.equals(SHA256))throw new IllegalStateException("Frozen cash manifest changed");}
-        catch(NoSuchAlgorithmException impossible){throw new AssertionError(impossible);}
-        var values=new TreeMap<String,WithdrawalPlanner.Denomination>();for(String line:MANIFEST.split("\n")){String[] p=line.split("\\|",-1);var denomination=new WithdrawalPlanner.Denomination(p[0],EconomyCurrency.valueOf(p[1]),Long.parseLong(p[2]),Boolean.parseBoolean(p[3]));if(values.put(p[0],denomination)!=null)throw new IllegalStateException("Duplicate denomination");}return Collections.unmodifiableMap(values);
+        """
+          .strip();
+  private static final Map<String, WithdrawalPlanner.Denomination> VALUES = load();
+
+  private static Map<String, WithdrawalPlanner.Denomination> load() {
+    try {
+      String hash =
+          HexFormat.of()
+              .formatHex(
+                  MessageDigest.getInstance("SHA-256")
+                      .digest(MANIFEST.getBytes(StandardCharsets.UTF_8)));
+      if (!hash.equals(SHA256)) throw new IllegalStateException("Frozen cash manifest changed");
+    } catch (NoSuchAlgorithmException impossible) {
+      throw new AssertionError(impossible);
     }
-    public static WithdrawalPlanner.Denomination require(String id){var value=VALUES.get(id);if(value==null)throw new IllegalArgumentException("Unknown original cash denomination");return value;}
-    public static List<WithdrawalPlanner.Denomination> forCurrency(EconomyCurrency currency){return VALUES.values().stream().filter(d->d.currency()==currency).toList();}
+    var values = new TreeMap<String, WithdrawalPlanner.Denomination>();
+    for (String line : MANIFEST.split("\n")) {
+      String[] p = line.split("\\|", -1);
+      var denomination =
+          new WithdrawalPlanner.Denomination(
+              p[0],
+              EconomyCurrency.valueOf(p[1]),
+              Long.parseLong(p[2]),
+              Boolean.parseBoolean(p[3]));
+      if (values.put(p[0], denomination) != null)
+        throw new IllegalStateException("Duplicate denomination");
+    }
+    return Collections.unmodifiableMap(values);
+  }
+
+  public static WithdrawalPlanner.Denomination require(String id) {
+    var value = VALUES.get(id);
+    if (value == null) throw new IllegalArgumentException("Unknown original cash denomination");
+    return value;
+  }
+
+  public static List<WithdrawalPlanner.Denomination> forCurrency(EconomyCurrency currency) {
+    return VALUES.values().stream().filter(d -> d.currency() == currency).toList();
+  }
 }

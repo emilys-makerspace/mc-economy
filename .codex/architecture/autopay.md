@@ -24,4 +24,4 @@ Startup folds statement and legacy REPAYMENT events through an indexed immutable
 
 Schema validation checks exact table/index declarations, canonical settings/window bodies and projected identities, consent/deadline coupling, retry bounds and statement identity/time/amount bounds. Pre-upgrade complete-world backups remain required for schemas1–34. Restores support clean schemas4–35 through the existing format.
 
-[Acceptance evidence](../verification/A6-13.md) records execution and broader gameplay limits. Downstream phases require explicit selection.
+[Acceptance evidence](../A6/verification/A6-13.md) records execution and broader gameplay limits. Downstream phases require explicit selection.

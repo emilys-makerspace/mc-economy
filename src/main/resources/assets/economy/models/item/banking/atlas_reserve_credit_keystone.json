@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "economy:item/banking/atlas_reserve_credit_keystone"
+  }
+}

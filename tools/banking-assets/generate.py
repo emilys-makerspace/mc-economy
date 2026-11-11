@@ -15,7 +15,7 @@ def tier_badge(tier):
     else:p.rect(7,4,9,12,PAPER)
     return p
 
-def card(bank,product,network,tier):
+def card(bank,product,network):
     p=Canvas(64,64);primary=color(bank['primary']);accent=color(bank['accent']);fg=contrast(primary)
     p.polygon([(4,12),(58,12),(62,16),(62,48),(58,52),(4,52),(2,50),(2,14)],fg)
     p.rect(5,15,59,49,primary)
@@ -27,16 +27,12 @@ def card(bank,product,network,tier):
     # Original pixel lettering, no player names, numbers, limits or credentials.
     for i,label in enumerate(bank['label'][:2]):p.text(label,31,25+i*6,fg)
     p.text(bank['currency'],31,39,fg)
-    if product=='credit':p.blit(tier_badge(tier),44,14,16,9)
     if network:p.blit(mark(network,fg),46,35,14,14)
     else:
         p.rect(48,45,60,48,fg);p.line(48,44,54,40,fg);p.line(54,40,59,44,fg)
-    if product=='credit' and tier==2:
-        p.line(7,48,27,48,accent);p.line(7,46,27,46,accent)
     return p
 
-def icons():
-    result=[]
+def write_icon_sources():
     for name in ['accounts','debit','credit','loan','replace','deposit','withdraw','fx','history','tier2','collections','branch']:
         p=Canvas(16,16);c=PAPER
         if name=='accounts':
@@ -65,12 +61,10 @@ def icons():
             p.line(2,14,14,14,c)
         else:
             p.rect(4,1,12,15,c);p.rect(5,3,11,8,INK);p.rect(6,10,10,12,INK);p.rect(2,14,14,16,c)
-        path='gui/sprites/banking/'+name;p.save(key_path('textures',path));p.svg(HERE/'sources/icons'/f'{name}.svg')
-        result.append({'key':name,'sprite':'economy:banking/'+name,'texture':'economy:'+path})
-    return result
+        p.svg(HERE/'sources/icons'/f'{name}.svg')
 
 def cards_and_marks():
-    cards=[];issuers=[];networks=[];lang={};sheet=Canvas(864, len(BANKS)*84, '#192631')
+    cards=[];issuers=[];lang={};sheet=Canvas(864, len(BANKS)*84, '#192631')
     for idx,bank in enumerate(BANKS):
         key=bank['key'];primary=color(bank['primary']);accent=color(bank['accent'])
         logo=mark(key,accent);logo.save(key_path('textures','gui/sprites/banking/issuers/'+key));logo.svg(HERE/'sources/issuers'/f'{key}.svg')
@@ -81,21 +75,19 @@ def cards_and_marks():
         lang['bank.economy.'+key]=bank['name']
         sheet.text(bank['name'].upper(),5,idx*84+5,PAPER);sheet.text(bank['currency']+' '+bank['tier'].replace('_',' '),5,idx*84+14,PAPER)
         x=210
-        for tier in ([1,2] if bank['tier']=='HYBRID' else [2] if bank['tier']=='TIER2_ONLY' else [1]):
-            for product,network in [('debit',None)]+[('credit',n.lower()) for n in bank['networks']]:
-                item=key+'_'+product+('_'+network if network else '')+'_t'+str(tier)
-                art=card(bank,product,network,tier);art.save(key_path('textures','item/banking/'+item));art.svg(HERE/'sources/cards'/f'{item}.svg')
-                model='item/banking/'+item;texture='item/banking/'+item
-                output(ASSETS/'models'/f'{model}.json',{'parent':'minecraft:item/generated','textures':{'layer0':'economy:'+texture}})
-                label=bank['name']+' '+(('Tier 2 ' if tier==2 else 'Tier 1 ')+network.title()+' Credit Card' if network else 'Debit Card')
-                lang['item.economy.'+item]=label
-                cards.append({'key':item,'institution':'economy:bank/'+key,'product':product,'tier':tier,'network':network,
-                              'texture':'economy:'+texture,'model':'economy:'+model,'translation':'item.economy.'+item,
-                              'registered':False,'financial_authority':False})
-                sheet.blit(art,x,idx*84+18,64,64);sheet.blit(art,x+43,idx*84+2,16,16);x+=78
+        for product,network in [('debit',None)]+[('credit',n.lower()) for n in bank['networks']]:
+            item=key+'_'+product+('_'+network if network else '')
+            art=card(bank,product,network);art.save(key_path('textures','item/banking/'+item));art.svg(HERE/'sources/cards'/f'{item}.svg')
+            model='item/banking/'+item;texture='item/banking/'+item
+            output(ASSETS/'models'/f'{model}.json',{'parent':'minecraft:item/generated','textures':{'layer0':'economy:'+texture}})
+            label=bank['name']+' '+(network.title()+' Credit Card' if network else 'Debit Card')
+            lang['item.economy.'+item]=label
+            cards.append({'key':item,'institution':'economy:bank/'+key,'product':product,'network':network,
+                          'texture':'economy:'+texture,'model':'economy:'+model,'translation':'item.economy.'+item,
+                          'registered':False,'financial_authority':False})
+            sheet.blit(art,x,idx*84+18,64,64);sheet.blit(art,x+43,idx*84+2,16,16);x+=78
     for network in NETWORKS:
-        key=network['key'];logo=mark(key,network['accent']);logo.save(key_path('textures','gui/sprites/banking/networks/'+key));logo.svg(HERE/'sources/networks'/f'{key}.svg')
-        networks.append({**network,'sprite':'economy:banking/networks/'+key,'texture':'economy:gui/sprites/banking/networks/'+key})
+        key=network['key'];logo=mark(key,network['accent']);logo.svg(HERE/'sources/networks'/f'{key}.svg')
         lang['network.economy.'+key]=network['name']
     sheet.save(HERE/'previews/cards.png')
     for page in range(3):
@@ -108,21 +100,21 @@ def cards_and_marks():
         marks.blit(mark(bank['key'],PAPER),x+4,y+2,32,32);marks.text(str(i+1),x+12,y+36,PAPER)
     for i,network in enumerate(NETWORKS):marks.blit(mark(network['key'],PAPER),10+i*66,92,32,32)
     marks.save(HERE/'previews/marks.png')
-    return issuers,networks,cards,lang
+    return issuers,cards,lang
 
 def generate():
     import hardware,agent
-    issuers,networks,cards,lang=cards_and_marks()
-    ui=icons();hardware_data=hardware.generate();agent_data=agent.generate()
+    issuers,cards,lang=cards_and_marks()
+    write_icon_sources()
+    hardware_data=hardware.generate();agent_data=agent.generate()
     for bank in BANKS:
         for kind,title in [('atm','ATM'),('teller','Teller Station'),('kiosk','Branch Kiosk')]:
             lang['block.economy.'+bank['key']+'_'+kind]=bank['name']+' '+title+' ('+bank['currency']+')'
     lang.update({'art.economy.preview_only':'Art preview only; usable cards require server issuance.',
                  'entity.economy.collection_agent':'Collection Agent','art.economy.tier1':'Tier 1','art.economy.tier2':'Tier 2'})
-    for icon in ui:lang['art.economy.action.'+icon['key']]=icon['key'].replace('_',' ').title()
     manifest={'version':1,'license':'CC0-1.0','source':'tools/banking-assets/generate.py','sources':['art.py','brands.json','hardware.py','agent.py'],
               'scope':'Artwork and model resources only. No issuer, facility, entity, hardware registration or world migration.',
-              'issuers':issuers,'networks':networks,'cards':cards,'icons':ui,'hardware':hardware_data,'agent':agent_data,
+              'issuers':issuers,'networks':NETWORKS,'cards':cards,'hardware':hardware_data,'agent':agent_data,
               'localization':lang}
     output(ASSETS/'banking/art_manifest.json',manifest)
     existing=json.loads((ASSETS/'lang/en_us.json').read_text())
@@ -131,6 +123,6 @@ def generate():
         existing[key]=value
     output(ASSETS/'lang/en_us.json',existing)
     output(HERE/'resource_inventory.json',manifest)
-    print(f'{len(issuers)} issuers, {len(networks)} networks, {len(cards)} card variants, {len(ui)} menu icons')
+    print(f'{len(issuers)} issuers, {len(NETWORKS)} networks, {len(cards)} card variants')
 
 if __name__=='__main__':generate()

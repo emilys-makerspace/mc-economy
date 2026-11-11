@@ -1,0 +1,19 @@
+Exception in thread "main" java.lang.IllegalArgumentException: Unsupported activity source version
+	at ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime.requireVersion(ActivityRuntime.java:184)
+	at ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime.changedCapacities(ActivityRuntime.java:74)
+	at ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime.observe(ActivityRuntime.java:59)
+	at ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.lambda$startupStep$2(FoundationRuntime.java:123)
+	at ca.emilybelnavis.mcmods.economy.storage.SqliteStorage.decorateCommit(SqliteStorage.java:210)
+	at ca.emilybelnavis.mcmods.economy.journal.JournalEngine.process(JournalEngine.java:115)
+	at ca.emilybelnavis.mcmods.economy.journal.JournalEngine.lambda$resolve$0(JournalEngine.java:54)
+	at ca.emilybelnavis.mcmods.economy.storage.SqliteStorage.transaction(SqliteStorage.java:309)
+	at ca.emilybelnavis.mcmods.economy.journal.JournalEngine.resolve(JournalEngine.java:54)
+	at ca.emilybelnavis.mcmods.economy.journal.JournalEngine.submitAttempt(JournalEngine.java:48)
+	at ca.emilybelnavis.mcmods.economy.journal.JournalEngine.submit(JournalEngine.java:43)
+	at ca.emilybelnavis.mcmods.economy.clock.DeadlineDispatcher.advance(DeadlineDispatcher.java:217)
+	at ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.advanceScheduled(FoundationRuntime.java:261)
+	at ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.startupStep(FoundationRuntime.java:176)
+	at DebtBoundaryDiagnostic.main(DebtBoundaryDiagnostic.java:4)
+
+
+Fixed copied-world diagnostic: DIAGNOSTIC_DRAINED; BUILD SUCCESSFUL. Original disposable world preserved.

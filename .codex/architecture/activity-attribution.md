@@ -1,6 +1,6 @@
 # Activity attribution — A8-02-01
 
-Delivered source/counter foundation for [A8 revision 1](a8-shared-contracts.md). World schema is **40**. This package installs no window closer, macro model, rate provider, trader checkout, NPC emission or player diagnostics. Existing prime, daily FX, financial amounts and captured product terms retain their authority.
+Delivered source/counter foundation for [A8 revision 1](../A8/architecture/a8-shared-contracts.md). World schema is **40**. This package installs no window closer, macro model, rate provider, trader checkout, NPC emission or player diagnostics. Existing prime, daily FX, financial amounts and captured product terms retain their authority.
 
 ## Runtime and prospective coverage
 
@@ -48,4 +48,4 @@ Maintain checked per-currency totals incrementally. Both account and aggregate h
 
 Strict historical codecs are registered in `RecordCatalog.core`. Activity schema validation runs on ordinary/recovery storage open and supported offline backup/restore. It streams immutable batches without rerunning the classifier, verifies manifest/world/calendar linkage, every observation/history/source-operation correspondence, checked counter sums and latest capacity/aggregate projections. Required partial indexes cover CASH-only seed work and source/historical reads. Missing or orphaned projections fail closed. Clean restore supports V40 through the existing complete-world workflow; older worlds retain the pre-upgrade backup gate.
 
-[A8-02-01 evidence](../verification/A8-02-01.md) distinguishes executed checks from source review. Next A8-02-02 consumes this manifest, coverage/clock, day counters and journal-ordered capacity history to implement immutable windows and the pure model. It must preserve source kinds, late-time attribution and original outcomes. It does not receive permission to rewrite posted observations or enable rates/traders.
+[A8-02-01 evidence](../A8/verification/A8-02-01.md) distinguishes executed checks from source review. Next A8-02-02 consumes this manifest, coverage/clock, day counters and journal-ordered capacity history to implement immutable windows and the pure model. It must preserve source kinds, late-time attribution and original outcomes. It does not receive permission to rewrite posted observations or enable rates/traders.

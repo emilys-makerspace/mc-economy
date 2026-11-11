@@ -6,7 +6,7 @@ No additional mods are required; SQLite JDBC is bundled. Each world stores its e
 
 ## First startup
 
-New worlds initialize automatically and offer the first connected player a world-currency chooser. Use `/economy choose CAD` to select a currency, with tab completion and lowercase support. Read the upgrade procedure below before opening an existing economy world with a newer schema.
+New worlds initialize automatically and offer the first connected player a world-currency chooser. Use `/economy choose CAD` to select a currency, with tab completion and lowercase support. Only the current chooser lease holder can confirm this first selection; an operator command does not grant another player that lease. `/economy choose` is not a general command for changing an already selected world currency. Read the upgrade procedure below before opening an existing economy world with a newer schema.
 
 ## Scheduling configuration
 
@@ -23,7 +23,7 @@ Create `config/economy-scheduling.properties` in the Minecraft instance director
 
 The callback budget limits when the server starts additional callbacks in a tick. A callback that has already started runs to completion. The drain setting controls how long economy waits for its workers to shut down.
 
-Internal GUI identifiers and journal details are hidden by default. Set `debugGui=true` in the same configuration file and restart the server when those diagnostics are needed.
+Internal GUI diagnostics are hidden by default; authorized transaction details show their original transaction and operation references. Set `debugGui=true` in the same configuration file and restart the server when those diagnostics are needed.
 
 ## Status and diagnostics
 
@@ -38,7 +38,29 @@ After a world has an opening FX publication, in-game operators with permission l
 Enter the baseline in permanent-reference units per major unit of the selected currency.
 The edit takes effect at the next UTC midnight. Variation and pull each accept 0–1,000,000 ppm.
 Bounds accept 0–999,999 ppm, with the resulting band limited to 0.000000000001–1,000,000.
-For an uncertain result, repeat the same command with the same operation UUID.
+Review the exact currency and all four values in the command before submitting. This is a direct operator command, not a terminal screen confirmation. It requires the actual connected operator player; console automation and `/execute as` cannot supply that player's authority. At most16 edits can be pending. Disconnect, demotion, death or session replacement revokes queued authority for new effects. A committed original remains recoverable by the same operation UUID and identical command, even if the current pending policy changed. Do not invent another UUID to recover an uncertain outcome.
+
+Once currency-prime activation or retirement of the legacy daily-FX system is configured, this legacy edit is refused with `FX_TAKEOVER_CONFIGURED`. Use the existing `/economy macro status` and future `pause`, `manual` or `config` paths described below. The refusal does not erase saved policies or permit editing the permanent reference. Core FX admission/refusal/retry messages are localized in UK English, Canadian French and French; technical diagnostic identifiers remain stable.
+
+## Terminal administration and reviewed settings
+
+Owners sneak-right-click their physical terminal with an empty hand. A connected permission-level2 operator can use `/economy admin config` while looking at a loaded terminal within five blocks; it opens the same existing terminal settings surface. `/economy admin binding` inspects the looked-at terminal within six blocks, returning at most six lines of scope, placement, geometry, bank/native currency, cash mode and blocking-work guidance. It neither changes configuration nor edits an account. The separate global admin GUI remains deferred.
+
+| Existing surface/path | Authority and action |
+| --- | --- |
+| World-currency chooser / `/economy choose <currency>` | Current first-player lease; initial selection only. No arbitrary world-currency reset. |
+| Physical terminal Settings | Placement owner or currently authorized operator; same menu, placement, dimension, reach and live session. |
+| Bank selection → confirmation | Review the exact terminal position/revision and bank/native currency. Existing binding and pending-custody rules still apply. |
+| ATM/teller cash mode → **Review settings** → **Confirm these settings** | Review this terminal's position/revision, mode, currency and every bill/coin appearance before one configuration commit. Preview alone writes nothing. |
+| Stale-settings refusal → **Refresh settings** | Reload current state, review again, then confirm. A stale draft never silently applies to a newer revision; refresh itself writes nothing. |
+| Branch account opening/assignment/switch/eligible closure | Use the current branch-offered owner flow and its review/proof. Terminal ownership or operator status alone does not make a customer's account yours. Recover original outcomes and protected payout/Claims through their current services. |
+| `/economy status` | Safe availability/progress; does not disclose another owner's balances or arbitrary backend exceptions. |
+| `/economy diagnostics [calendar [after <cursor>]]` | Existing operator/console gate; cached bounded technical samples, with calendar pages of eight. |
+| Credit/loan/debt owner inspection commands below | Player-backed operator inspection, separately audited and bounded; inspection grants are not owner mutation grants. |
+
+Settings review retains the displayed placement/revision. Another edit, replacement or removal invalidates it. Closing or navigating away discards the review. Every confirmation still uses the current owner/operator checks, revocable physical lease and authoritative journal revision check. Refreshing or inspecting does not advance financial time, create money, cancel a pending delivery or compensate an uncertain physical effect.
+
+Configuration, bank-binding and FX mutations retain their original canonical operations and journal/audit records. Preserve the original operation ID for uncertain work and use existing outcome recovery before attempting a new operation. Detailed financial inspection pages remain audited; terminal hardware inspection is a read of terminal metadata, not a new customer-account audit route. Do not edit the database or force-return money/items to resolve ambiguity.
 
 ## Wider kiosks and legacy upgrades
 
@@ -54,17 +76,17 @@ Use `/locate structure #economy:banks` or `/locate structure economy:bank` to fi
 
 Operators can find nearby branded branch kiosks with `/locate poi economy:bank` or `/locate poi #economy:banks`. Vanilla POI search covers 256 blocks in the current dimension and uses indexed, already discovered kiosks; it does not search unexplored terrain for new bank buildings. Generated and player-placed branded kiosks qualify, including legacy narrow forms. Neutral kiosks and satellite cells do not. Existing kiosks enter the index when their chunks load. A result identifies physical hardware, not a guarantee that banking service is active.
 
-New eligible vanilla plains, desert, savanna, snowy and taiga villages can generate bank branches. Original houses and workplaces determine branch eligibility and capacity; abandoned and empty villages receive none. Existing explored villages are not retrofitted. The mid-century modern buildings have institution signs, local wood, lighting, furnishings and working kiosks. New branch templates include original two-wide banker desks in local wood. Active branches can staff only their captured desks; player-placed desks remain unbound and do not create bankers or grant banking access. Older vanilla desk furniture is preserved and is not automatically converted.
+New eligible vanilla plains, desert, savanna, snowy and taiga villages use a shared 17×15×17 bank layout. Each branch has the selected bank's colors, two native-currency ATMs, one branded kiosk and one banker desk. Abandoned and empty villages receive no branches. Existing placed buildings keep their original design and hardware.
 
 Branch counts use the village's original qualifying houses and workplaces. Farms, roads, decorations, wells, pens and stables do not add to that count.
 
-| Qualifying buildings | Required branches | Optional compact branch |
+| Qualifying buildings | Required branches | Optional third branch |
 | --- | --- | --- |
-| 1–8 | One compact | None |
-| 9–16 | One larger | 25% chance |
-| 17 or more | Two larger | 50% chance |
+| 1–8 | One | None |
+| 9–16 | Two | 25% chance |
+| 17 or more | Two | 50% chance |
 
-A compact branch has one kiosk, desk and banker slot. A larger branch has two of each. Each village uses distinct banks. Its first branch needs an eligible bank in the world's selected currency. Choices are retained after a later world-currency change.
+Each village uses distinct banks. Its first branch needs an eligible bank in the world's selected currency. Each branch serves its own bank's currency, and a later world-currency change preserves captured choices.
 
 Supported generation covers the five vanilla village styles in the Overworld. Modified village resources can prevent new bank generation when their layout cannot be safely recognized. Superflat village/bank generation has a known unresolved limitation tracked in [issue #3](https://github.com/emilybelnavis/economy/issues/3). Ordinary world generation and existing banks remain usable while a new bank plan is waiting for an eligible provider.
 
@@ -95,43 +117,63 @@ Offline time and skipping the night do not advance the replacement wait. Replace
 
 ## Schema upgrades
 
-New worlds initialize automatically. Worlds on schemas 1 through 49 require a validated complete-world backup before upgrading to schema 50. Prepare it while Minecraft is fully stopped:
+Use Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Update the server and connecting clients together: the current banking transport is version 12, and older endpoints cannot use it. Keep the old mod, configuration and complete-world backup until the new server has reached readiness and stopped cleanly. An upgrade is not permission to reset the world or remove its economy data.
+
+New worlds initialize automatically. Worlds on schemas 1 through 53 require a validated complete-world backup before the current additive schema 54 upgrade. Stop the server normally, wait for the process to exit and prepare the backup:
 
 ```sh
 ./gradlew prepareEconomyUpgrade -PeconomyWorld=/absolute/path/to/world
 ```
 
-Backups are placed beside the world in `<world-name>-economy-upgrade-backups/`. Then start Minecraft normally. Missing or changed backups prevent upgrades; they do not erase data. The utility refuses a world whose Minecraft or economy ownership lock is held. It does not copy a running world.
+Backups are placed beside the world in `<world-name>-economy-upgrade-backups/`. Keep that backup directory at its recorded location through the upgrade, then start Minecraft normally. The upgrade receipt binds the backup to the stopped source database and identity; changing the source after preparation requires a new preparation. Missing or changed backups prevent upgrades; they do not erase data. The utility refuses a world whose Minecraft or economy ownership lock is held and does not copy a running world. Do not bypass a refusal by deleting locks, editing a receipt or altering schema records. A pre-upgrade receipt alone is not a clean general-restore backup.
 
 ## Complete-world backup and restore
 
-Stop Minecraft normally and wait for the log message `Economy complete-world clean shutdown recorded`. Then create a backup:
+1. Stop new player activity and retain the original operation UUIDs for any uncertain actions. Use the normal server `stop` command, or Save and Quit for an integrated world. Economy stops admitting new work and drains accepted work within the configured deadline (30 seconds by default).
+2. Wait for the process to exit and the log message `Economy complete-world clean shutdown recorded`. `Economy foundation stopped; drained=true` alone is not the complete-world certificate: Minecraft saves and the post-save identity/checkpoint check must also finish.
+3. Create the backup while the world remains stopped:
 
 ```sh
 ./gradlew backupEconomyWorld -PeconomyWorld=/absolute/path/to/world
 ```
 
-Backups include the world and economy together, with checksums, version/identity information, journal position, and economic checkpoint. They appear under the sibling `<world-name>-economy-upgrade-backups/<backup-id>/` directory.
+Backups include the world and economy together, with a file inventory/checksums, format/schema/identity information, journal position and economic checkpoint. They appear under the sibling `<world-name>-economy-upgrade-backups/<backup-id>/` directory. Preserve the entire backup directory, including its receipts and manifests. Keep Minecraft player, entity, container and chunk saves with the economy database from the same snapshot; a database-only copy or a mixture of snapshots is not a supported backup. Do not remove a WAL file or copy files from a running world.
 
-Restore into a **new, separate directory**:
+Restore into a **new, separate directory** whose parent already exists, outside the backup directory. Keep the current world stopped and intact while checking the copy:
 
 ```sh
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the backup and refuses an existing destination. It preserves the current world; switching to the restored copy is a separate operator action. Restore supports clean schema 4 through 50 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup.
+The restore command validates the receipt, full inventory/checksums, supported format/schema, world identity, journal and economic checkpoints, and offline financial invariants. It validates the staged copy again before publishing the new destination and refuses an existing destination. A successful command reports the restored destination, world ID, journal position and economic checkpoint; retain that output with the backup record. Restore supports clean schema 4 through 54 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup before starting the newer server.
 
-There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination.
+Switching the server's selected world to the restored copy is a separate operator action. Start only that selected copy with the matching mod/configuration, check readiness as described below and stop it normally before treating the recovery as established. A successful offline restore does not establish runtime readiness. Do not run the original and restored copies concurrently: they retain the same economy world identity. A restore returns to the snapshot; it cannot retain player actions or financial outcomes recorded after that backup.
 
-Economy requests become available after startup recovery and required catch-up. Ordinary Minecraft can continue during that work. With an economic system registered, ongoing catch-up processes UTC intervals in chronological order and gates affected writes until current. Sleep and `/time` do not advance economic time. Daily FX starts at the UTC midnight after the world’s opening publication. A fresh world offers the first connected player a denomination chooser.
+There is no online backup, automatic replacement, or retention/deletion service. Operators own backup storage and retention. Failed restores can leave a hidden staging directory without publishing the destination. Preserve failure output and the source backup; choose a fresh destination for a later attempt after resolving the reported cause. Do not publish an incomplete staging directory manually.
+
+## Recovery readiness and shutdown troubleshooting
+
+After upgrade or restore, use `/economy status` and authorized `/economy diagnostics` to check storage availability, failure code/correlation, journal/checkpoints, queue age and calendar progress. Economy requests become available after startup recovery and required catch-up; a responsive Minecraft server alone does not establish economy readiness. Ordinary Minecraft can continue during that work. With an economic system registered, ongoing catch-up processes UTC intervals in chronological order and gates affected writes until current. Compare successive timestamped diagnostic samples when checking progress. Sleep and `/time` do not advance economic time. Daily FX starts at the UTC midnight after the world’s opening publication. A fresh world offers the first connected player a denomination chooser.
+
+If startup is unavailable or catch-up stops progressing, retain the first logged error, correlation and diagnostic samples, stop normally, and preserve the world and backup. Check the matching Java/mod/configuration, free space and reported lock, checksum, identity or readiness cause before restarting. Do not edit journal facts, advance the host clock, enlarge queues or reset the database to force readiness. Storage/schema corruption and malformed provenance require diagnosis; retrying a player mutation cannot fix them.
+
+An interrupted or disconnected action has an uncertain outcome until its original operation is resolved. Use its existing owner receipt/lookup or authorized bounded diagnostic path before creating a fresh reviewed action. A committed original is not reversed by disconnect or shutdown. Do not issue compensating money, restore cash, move custody records or resubmit with a new UUID merely because a callback or item presentation was not observed.
+
+If the log reports unresolved shutdown work, `drained=false`, a save/post-save failure or `Complete-world clean shutdown not certified`, do not describe that stop as clean or edit the clean-witness file. The general backup utility refuses missing or mismatched clean evidence. Preserve the files and logs, resolve the cause, then let the same world recover and complete a normal stop before creating a clean backup. Increasing the drain deadline does not establish that previously unresolved work completed.
 
 Legacy economy databases are not imported. Incompatible, corrupt, or mismatched identity data makes the economy unavailable while ordinary Minecraft play can continue. Preserve the files and inspect the logged error rather than deleting them.
 
 Storage requires filesystem support for exclusive file locks, atomic file publication, and directory synchronization. These checks have been exercised on macOS; other platforms have not been runtime-tested.
 
+## Operational reference measurements
+
+A local dedicated test on the Apple M5 Pro/24GB reference Mac, with a2–4GiB Java21 heap and sparse flat world, passed the fixed20-synthetic-owner workload:2 top-level actions/s, a300-second sample and one20-request burst. Owner history p95 was100.081ms; confirmation-to-financial-outcome p95 was at most50.106ms. The sample reconciled balances, original receipts, trader stock and protected custody, then stopped cleanly. [Measurement scope and results](../.codex/A10/verification/A10-08.md) retain the exact workload, quantiles and restore evidence.
+
+This is service capacity evidence, not20 connected players, physical-delivery throughput or a minimum-hardware specification. No natural background publication occurred during the sample. Populated worlds, rendering, network clients and storage conditions can change observed performance. Use authorized diagnostics to observe queue depth/age and readiness on the actual server; retain controlled overload refusals rather than enlarging queues to hide them.
+
 ## Server integrations
 
-Server integrations can consume `ca.emilybelnavis.mcmods.economy.api.BankingIntegration` version 1 through the server ledger service. It exposes versioned prime, owner valuation and fee quotes, physically authorized credit payment entry points and fixed/variable/secured capability reporting. Financial authority and existing journal/custody rules apply to integrations. A village structure, desk, banker or branded appearance does not issue an integration grant. Use authenticated server context and the existing account and physical-service checks. The interface declares `VERSION = 1` and reports it through `version()`. [BankingIntegration source](../src/main/java/ca/emilybelnavis/mcmods/economy/api/BankingIntegration.java).
+Server integrations can consume `ca.emilybelnavis.mcmods.economy.api.BankingIntegration` version 2 through the server ledger service. It exposes versioned prime, owner valuation and fee quotes, physically authorized credit payment entry points and fixed/variable/secured capability reporting. Financial authority and existing journal/custody rules apply to integrations. A village structure, desk, banker or branded appearance does not issue an integration grant. Use authenticated server context and the existing account and physical-service checks. The interface declares `VERSION = 2` and reports it through `version()`. [BankingIntegration source](../src/main/java/ca/emilybelnavis/mcmods/economy/api/BankingIntegration.java).
 
 See the [server integration contract](INTEGRATION_API.md) for entry points, version boundaries and downstream consumers.
 
@@ -188,7 +230,7 @@ Acceptance combines a real merchant-to-rate SQLite witness with the earlier real
 
 Clear output capacity before quoting. If exact cash change or a rounded positive payout cannot be represented, choose a supported larger quantity or another explicit rail/currency; no rounding shortcut or account fallback is used. Keep saved worlds and economy data together. Ambiguous interrupted item/progression attempts remain for reconciliation instead of obtaining another execution capability. Source replacement/recipe valuation belongs to a separately selected A9 adapter; the current temporary emerald source is retained.
 
-[Acceptance evidence](../.codex/verification/A8-08.md) and [A9 downstream boundary](../.codex/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.
+[Acceptance evidence](../.codex/A8/verification/A8-08.md) and [A9 downstream boundary](../.codex/A8/architecture/a8-downstream.md) distinguish demonstrated behavior, reused evidence and future work.
 
 
 ## Item reference configuration
@@ -241,3 +283,9 @@ A connected permission-level2 operator can review a loaded, captured trader with
 Activated offers use reference unit prices and show the effective unit and total before confirmation. Unsupported entries are omitted. There is no fallback to old emerald prices within activated policy. Exact supported outputs can trade; native required-component buybacks remain unsupported, including empty required predicates. Unknown custom data, operator-only goods, missing mod adapters, bounded work and failed rounded-spread proofs can also disable entries. The review never promises every component permutation.
 
 Activation covers at most32 captured keys and the world supports at most63 enabled keys in one atomic valuation publication; more refuses publication. Pending control requests/reviews are bounded. No old balance, stock/restock, demand anchor, receipt, activity/rate window or fixed loan is revalued, and retired carry is not paid out. Reference values remain separate from financial eligibility.
+
+## Posted history index
+
+Schema53 adds an owner history read index without changing original journal records, balances or legacy cursors. Follow the stopped-world upgrade-backup procedure before opening an older world. Initialization builds and validates the index in bounded batches and resumes persisted construction progress after reopen. Reads stay unavailable until source coverage is ready; malformed provenance refuses readiness instead of rewriting history. Complete-world backup and restore validate this projection against the original journal too.
+
+Player History uses recorded UTC timestamps, separate from the twenty-minute financial calendar. Account/currency/type/date filters read only owned facts; pages retain a committed upper boundary until Refresh. Sparse filters can reach an explicit work limit; refine the query. Original fees, counterparties and FX are shown only when retained facts establish them. Pending/refused operations are resolved through their original-operation controls, not fabricated as posted transactions.

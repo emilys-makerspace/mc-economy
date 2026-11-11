@@ -1,0 +1,35 @@
+gradle-server.log
+A10_OPERATIONS WARMUP 120s; 20 synthetic owners, 2 top-level actions/s
+A10_OPERATIONS SAMPLE 300s; one 20-request burst at second180
+A10_OPERATIONS progress sampleMs=0 issued=1 completed=240 inFlight=1
+A10_OPERATIONS progress sampleMs=30049 issued=61 completed=300 inFlight=1
+A10_OPERATIONS progress sampleMs=60049 issued=121 completed=360 inFlight=1
+A10_OPERATIONS progress sampleMs=90049 issued=181 completed=420 inFlight=1
+A10_OPERATIONS progress sampleMs=120099 issued=241 completed=481 inFlight=0
+A10_OPERATIONS progress sampleMs=150149 issued=301 completed=541 inFlight=0
+A10_OPERATIONS progress sampleMs=180150 issued=380 completed=620 inFlight=0
+A10_OPERATIONS progress sampleMs=210199 issued=421 completed=661 inFlight=0
+A10_OPERATIONS progress sampleMs=240199 issued=481 completed=721 inFlight=0
+A10_OPERATIONS progress sampleMs=270199 issued=541 completed=781 inFlight=0
+A10_OPERATIONS RECOVERY 60s; no further workload submissions
+A10_OPERATIONS progress sampleMs=300249 issued=600 completed=840 inFlight=0
+A10_OPERATIONS progress sampleMs=330249 issued=600 completed=840 inFlight=0
+A10_OPERATIONS progress sampleMs=360299 issued=600 completed=840 inFlight=0
+A10_OPERATIONS WORKLOAD PASSED; requesting normal shutdown
+[12:35:25] [Server thread/INFO] [ca.em.mc.ec.Economy/]: Economy foundation stopped; drained=true
+[12:35:25] [Server thread/INFO] [ca.em.mc.ec.Economy/]: Economy complete-world clean shutdown recorded
+BUILD SUCCESSFUL in 8m 56s
+
+backup.log
+Validated complete-world backup: /private/tmp/economy-a10-08-f25nj3sm/server/world-economy-upgrade-backups/3e1d5ba9-f86f-4655-84f8-810733fc980b
+BUILD SUCCESSFUL in 2s
+
+restore.log
+Restored separate world: Restored[destination=/private/tmp/economy-a10-08-f25nj3sm/server/restored-world, worldId=7dd926bf-0dfb-4a82-af12-054683fe893a, lastJournal=651, economicCheckpoint=0]
+BUILD SUCCESSFUL in 1s
+
+gradle-restore-server.log
+A10_RESTORE READY world=7dd926bf-0dfb-4a82-af12-054683fe893a journal=651; normal shutdown
+[12:37:37] [Server thread/INFO] [ca.em.mc.ec.Economy/]: Economy foundation stopped; drained=true
+[12:37:37] [Server thread/INFO] [ca.em.mc.ec.Economy/]: Economy complete-world clean shutdown recorded
+BUILD SUCCESSFUL in 10s

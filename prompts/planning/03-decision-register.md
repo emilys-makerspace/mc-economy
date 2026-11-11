@@ -82,3 +82,11 @@ The user directed “quadruple the bank funding to 28 billion” and approved th
 ### A6-01 shared contract delivered — 2026-11-04
 
 At the user's request, [CONTRACT.md](../A6-credit-debt/CONTRACT.md) now defines stable identities/manifest, upstream compatibility inventory, service inputs/results, state vocabulary, journal fact families, accounting/clock extensions, bounded work, migration and package acceptance ownership. The approved28B allocation and D01–D17 policies remain normative. A6-01 is a completed document/source-review checkpoint only; no code, migration, assets, Gradle or game verification is claimed. Next eligible packages: A6-02-01 or independent A6-03-01.
+
+## Separate compatibility modules — 2026-11-08
+
+The user moved all third-party compatibility outside A10 into independently installable optional modules to reduce core component loading. [Planning note](separate-integration-modules.md) records the retained Sophisticated/AE2/extension, all-item-value and Wallet Upgrade scope, plus later MineColonies/casino targets. Core API stabilization stays in A10; module implementation needs its own explicit package selection. This supersedes earlier A10 compatibility assignments without discarding their feature requirements.
+
+## A10 prompt approval — 2026-11-08
+
+The user approved [all eleven selectable A10 prompts](../A10-core-integration/EXECUTION.md) and their shared technical/runtime contracts, subject to prerequisites. A10-02 is overview-only. Approval selects/executes no package; A10-01 is next eligible for explicit selection. All mod compatibility remains outside A10 in [separate integration modules](separate-integration-modules.md), whose implementation is not approved by this A10 approval.

@@ -1,6 +1,6 @@
 # Planned A7–A10 scope
 
-A7 is accepted in the bounded scope recorded by [A7-06](../A7-06.md). A8–A10 remain planning material and require explicit selection. This document does not select an implementation prompt. Preserve existing worlds, accounts, balances and historical evidence.
+A7 is accepted in the bounded scope recorded by [A7-06](../A7/A7-06.md). A8–A10 remain planning material and require explicit selection. This document does not select an implementation prompt. Preserve existing worlds, accounts, balances and historical evidence.
 
 ## Sequence
 
@@ -15,7 +15,7 @@ B2 securities, B4 trading and B6 expanded lending keep their own identities and 
 
 ## A7 — Village Banking Package
 
-[A7-01 feasibility outcome](a7-feasibility-plan.md) and [revision-1 shared contracts](a7-shared-contracts.md) now freeze the source/API-backed hook, geometry and interfaces. [Evidence](../verification/A7-01.md) distinguishes completed contract/API work from future actual generation/terrain acceptance. Production generation, trusted kiosk activation, staffing and optional dialogue are delivered. [Current downstream contracts](a7-downstream.md) and [acceptance evidence](../verification/A7-06.md) bind the approved policies below to the implementation and its limits.
+[A7-01 feasibility outcome](../A7/architecture/a7-feasibility-plan.md) and [revision-1 shared contracts](../A7/architecture/a7-shared-contracts.md) now freeze the source/API-backed hook, geometry and interfaces. [Evidence](../A7/verification/A7-01.md) distinguishes completed contract/API work from future actual generation/terrain acceptance. Production generation, trusted kiosk activation, staffing and optional dialogue are delivered. [Current downstream contracts](../A7/architecture/a7-downstream.md) and [acceptance evidence](../A7/verification/A7-06.md) bind the approved policies below to the implementation and its limits.
 
 Target newly generated vanilla villages only. Retrofitting explored villages, player-built settlements and modded villages requires separate compatibility rules. Never overwrite player construction.
 
@@ -99,15 +99,15 @@ Prepare exact prerequisites when selecting a package. Generation and staffing co
 
 ## A8 — Economic simulation
 
-Planning began on 2026-11-07. The user selected a broader macroeconomy driving prime and FX from player/server economic activity only, with a separate prime rate for each currency. [A8 planning](a8-planning.md) records the source constraints, proposed package split and unresolved activity/formula policies. This explicitly expands the previous prime-only planning boundary; it does not approve an implementation or any particular FX driver/formula.
+Planning began on 2026-11-07. The user selected a broader macroeconomy driving prime and FX from player/server economic activity only, with a separate prime rate for each currency. [A8 planning](../A8/architecture/a8-planning.md) records the source constraints, proposed package split and unresolved activity/formula policies. This explicitly expands the previous prime-only planning boundary; it does not approve an implementation or any particular FX driver/formula.
 
 Retain bounded registered scheduling, versioned financial-day rates, historical FX implementations and captured fixed-loan terms. Initial configured prime and existing FX remain authoritative until explicitly selected adapters replace them prospectively. Synthetic cycles, random macro shocks, commodity backing and unrequested downstream integrations are outside the selected scope.
 
-The user approved merchant sales, borrowing/repayment, FX exchanges and monetary issuance/retirement (operator and NPC origins separately recorded), and added monetary villager commerce. [Technical revision 1](a8-shared-contracts.md) and [12 package prompts](../../prompts/A8-economic-simulation/EXECUTION.md) are now prepared, including split attribution/model, markets/hooks, account/cash settlement and FX foundation/provider packages. The user approved technical revision 1 and all 12 packages on 2026-11-07, subject to prerequisites. A8-01 is complete as a source/document checkpoint ([handoff](../A8-01.md)); [A8-02-01](../A8-02-01.md) now delivers source/counter attribution. Other packages remain unselected; A8-02-02 is next. A7 bankers retain their guide role; B4 financial markets remain separate.
+The user approved merchant sales, borrowing/repayment, FX exchanges and monetary issuance/retirement (operator and NPC origins separately recorded), and added monetary villager commerce. [Technical revision 1](../A8/architecture/a8-shared-contracts.md) and [12 package prompts](../../prompts/A8-economic-simulation/EXECUTION.md) are now prepared, including split attribution/model, markets/hooks, account/cash settlement and FX foundation/provider packages. The user approved technical revision 1 and all 12 packages on 2026-11-07, subject to prerequisites. A8-01 is complete as a source/document checkpoint ([handoff](../A8/A8-01.md)); [A8-02-01](../A8/A8-02-01.md) now delivers source/counter attribution. Other packages remain unselected; A8-02-02 is next. A7 bankers retain their guide role; B4 financial markets remain separate.
 
 ## A9 — Basic item valuation
 
-Planning was explicitly selected and gameplay policies settled on 2026-11-07. [Current decisions](a9-planning.md), [approved technical revision 1](a9-shared-contracts.md), [approved catalog](a9-item-catalog.md) and [eight-package queue](../../prompts/A9-item-valuation/EXECUTION.md) supersede the original suggested split below. All A9 planning/package drafts are approved 2026-11-07, subject to prerequisites; implementation remains unselected. The user selected trader baseline replacement, component/brewing valuation, no built-in mod prices without API registration, nearest-cent unit rounding/minimum one cent, and disabled unsupported listings without player-facing explanations. Detailed internal availability/provenance remains available to API/operator diagnostics.
+Planning was explicitly selected and gameplay policies settled on 2026-11-07. [Current decisions](../A9/architecture/a9-planning.md), [approved technical revision 1](../A9/architecture/a9-shared-contracts.md), [approved catalog](../A9/architecture/a9-item-catalog.md) and [eight-package queue](../../prompts/A9-item-valuation/EXECUTION.md) supersede the original suggested split below. All A9 planning/package drafts are approved 2026-11-07, subject to prerequisites; implementation remains unselected. The user selected trader baseline replacement, component/brewing valuation, no built-in mod prices without API registration, nearest-cent unit rounding/minimum one cent, and disabled unsupported listings without player-facing explanations. Detailed internal availability/provenance remains available to API/operator diagnostics.
 
 Currencies remain fiat-like. Authorized one-time 28B institutional capital and operator-created cash/deposits remain separate from reference valuations. Banks spend finite funded cash; claims do not fund spending. Reference prices create no commodity reserve, guaranteed redemption, automatic trading, collateral eligibility or wealth qualification.
 
@@ -119,6 +119,10 @@ Currencies remain fiat-like. Authorized one-time 28B institutional capital and o
 Current packages are A9-01 source feasibility, A9-02 snapshots, A9-03-01 ordinary recipes/processing, A9-03-02 brewing, A9-03-03 variants/containers, A9-04 public integration, A9-05 durable source transition and A9-06 trader activation. A9-03 is overview only. Trader replacement is explicitly planned; no automatic financial qualification, FX driver, arbitrary shop integration or additional listing discovery is selected.
 
 ## A10 — Core integration
+
+Scope revision: all third-party mod compatibility is outside A10 in [standalone optional modules](../../prompts/integrations/README.md). A10 retains core UI/history/API/admin/restore/operations only.
+
+A10 preparation was requested 2026-11-08. [Current specification](../A10/architecture/a10-planning.md) and [eleven approved packages](../../prompts/A10-core-integration/EXECUTION.md) are approved 2026-11-08, subject to prerequisites; no A10 implementation package is selected or executed. Original core UI/history/API/admin/operations requirements remain in scope.
 
 Carry forward banking explanations/navigation, window/GUI-scale review, external multiplayer/network conditions and combined borrowing-to-default-to-collection gameplay. Integrate branch discovery, banker availability, institution/currency explanations and valuation provenance. Reuse unchanged A6 evidence and retain explicit composite gameplay limits. Unsupported B-series capabilities remain unavailable.
 

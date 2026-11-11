@@ -2,7 +2,7 @@
 
 Current extension: [A9-03-03 component/container architecture](item-valuation-variants.md) records v4 typed identity, premium overrides and recursive publication. Earlier version/package descriptions below remain historical in their recorded scope.
 
-Delivered 2026-11-08. [Handoff](../A9-03-02.md), [evidence](../verification/A9-03-02.md), [shared policy](a9-shared-contracts.md), [pinned source freeze](a9-source-contracts.md). Extends [ordinary recipes](item-valuation-recipes.md) and the [V50 snapshot store](item-valuation-snapshots.md). No schema, financial authority, source activation, dependency or scheduler change.
+Delivered 2026-11-08. [Handoff](../A9/A9-03-02.md), [evidence](../A9/verification/A9-03-02.md), [shared policy](../A9/architecture/a9-shared-contracts.md), [pinned source freeze](../A9/architecture/a9-source-contracts.md). Extends [ordinary recipes](item-valuation-recipes.md) and the [V50 snapshot store](item-valuation-snapshots.md). No schema, financial authority, source activation, dependency or scheduler change.
 
 ## Source capture and identity
 

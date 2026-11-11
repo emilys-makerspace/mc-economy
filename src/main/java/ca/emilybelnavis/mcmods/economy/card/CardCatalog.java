@@ -4,6 +4,7 @@ import ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog;
 import java.util.*;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -13,63 +14,102 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 /** Debit and credit appearances. An item is a lookup key, never an account or borrowing grant. */
 public final class CardCatalog {
-    public record Entry(String id, InstitutionCatalog.InstitutionId issuer, int tier, DeferredItem<? extends Item> item) {}
-    private static final DeferredRegister.Items ITEMS=DeferredRegister.createItems("economy");
-    private static final Map<String,Entry> ENTRIES=new LinkedHashMap<>();
-    static {
-        for(var bank:InstitutionCatalog.banks()) {
-            if(bank.tier1())register(bank,1);
-            if(bank.tier2())register(bank,2);
-        }
-        for(var design:CreditCardDesigns.all()) {
-            var bank=InstitutionCatalog.require(design.issuer());
-            var item=ITEMS.register(design.id().substring("economy:".length()),()->new CreditItem(new Item.Properties().stacksTo(1),bank,design.network(),design.tier()));
-            ENTRIES.put(design.id(),new Entry(design.id(),design.issuer(),design.tier(),item));
-        }
+  public record Entry(
+      String id, InstitutionCatalog.InstitutionId issuer, DeferredItem<? extends Item> item) {}
+
+  private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems("economy");
+  private static final Map<String, Entry> ENTRIES = new LinkedHashMap<>();
+
+  static {
+    for (var design : CardDesigns.all()) {
+      var bank = InstitutionCatalog.require(design.issuer());
+      var item =
+          ITEMS.register(
+              design.id().substring("economy:".length()),
+              () -> new DebitItem(new Item.Properties().stacksTo(1), bank));
+      ENTRIES.put(design.id(), new Entry(design.id(), design.issuer(), item));
     }
-    private CardCatalog() {}
-    private static void register(InstitutionCatalog.Entry bank,int tier) {
-        String id=id(bank.id(),tier).substring("economy:".length());
-        var item=ITEMS.register(id,()->new DebitItem(new Item.Properties().stacksTo(1),bank));
-        ENTRIES.put("economy:"+id,new Entry("economy:"+id,bank.id(),tier,item));
+    for (var design : CreditCardDesigns.all()) {
+      var bank = InstitutionCatalog.require(design.issuer());
+      var item =
+          ITEMS.register(
+              design.id().substring("economy:".length()),
+              () -> new CreditItem(new Item.Properties().stacksTo(1), bank, design.network()));
+      ENTRIES.put(design.id(), new Entry(design.id(), design.issuer(), item));
     }
-    public static String id(InstitutionCatalog.InstitutionId issuer,int tier) {
-        return CardDesigns.id(issuer,tier);
+    CardDesigns.legacyAliases().forEach(CardCatalog::alias);
+    CreditCardDesigns.legacyAliases().forEach(CardCatalog::alias);
+  }
+
+  private CardCatalog() {}
+
+  private static void alias(String oldId, String currentId) {
+    ITEMS.addAlias(ResourceLocation.parse(oldId), ResourceLocation.parse(currentId));
+  }
+
+  public static String id(InstitutionCatalog.InstitutionId issuer, int tier) {
+    return CardDesigns.id(issuer, tier);
+  }
+
+  public static List<Entry> all() {
+    return List.copyOf(ENTRIES.values());
+  }
+
+  /** Every registered card is a current, untiered appearance. */
+  public static List<Entry> collectibles() {
+    return all();
+  }
+
+  public static Optional<Entry> byId(String id) {
+    return Optional.ofNullable(ENTRIES.get(id));
+  }
+
+  public static Optional<Entry> find(ItemStack stack) {
+    if (stack.isEmpty()) return Optional.empty();
+    return byId(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+  }
+
+  public static void initialize(IEventBus bus) {
+    ITEMS.register(bus);
+  }
+
+  private static final class CreditItem extends Item {
+    private final InstitutionCatalog.Entry issuer;
+    private final String network;
+
+    CreditItem(Properties properties, InstitutionCatalog.Entry issuer, String network) {
+      super(properties);
+      this.issuer = issuer;
+      this.network = network;
     }
-    public static List<Entry> all(){return List.copyOf(ENTRIES.values());}
-    /** Debit appearances are issuer-specific; only credit cards expose tier variants. */
-    public static List<Entry> collectibles() {
-        var ids = new HashSet<String>();
-        CardDesigns.collectibles().forEach(design -> ids.add(design.id()));
-        CreditCardDesigns.all().forEach(design -> ids.add(design.id()));
-        return ENTRIES.values().stream().filter(entry -> ids.contains(entry.id())).toList();
+
+    @Override
+    public void appendHoverText(
+        ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
+      lines.add(
+          Component.literal(
+              issuer.name() + " · " + network.substring("economy:".length()) + " Credit"));
+      if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_DATA)) {
+        lines.add(Component.translatable("item.economy.issued_card.expiry"));
+      }
     }
-    public static Optional<Entry> byId(String id){return Optional.ofNullable(ENTRIES.get(id));}
-    public static Optional<Entry> find(ItemStack stack) {
-        if(stack.isEmpty())return Optional.empty();
-        return byId(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+  }
+
+  private static final class DebitItem extends Item {
+    private final InstitutionCatalog.Entry issuer;
+
+    DebitItem(Properties properties, InstitutionCatalog.Entry issuer) {
+      super(properties);
+      this.issuer = issuer;
     }
-    public static void initialize(IEventBus bus){ITEMS.register(bus);}
-    private static final class CreditItem extends Item {
-        private final InstitutionCatalog.Entry issuer;
-        private final String network;
-        private final int tier;
-        CreditItem(Properties properties,InstitutionCatalog.Entry issuer,String network,int tier){super(properties);this.issuer=issuer;this.network=network;this.tier=tier;}
-        @Override public void appendHoverText(ItemStack stack,TooltipContext context,List<Component> lines,TooltipFlag flag) {
-            lines.add(Component.literal(issuer.name()+" · "+network.substring("economy:".length())+" Credit · Tier "+tier));
-            if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_DATA)) {
-                lines.add(Component.translatable("item.economy.issued_card.expiry"));
-            }
-        }
+
+    @Override
+    public void appendHoverText(
+        ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
+      lines.add(Component.literal(issuer.name() + " · Debit"));
+      if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_DATA)) {
+        lines.add(Component.translatable("item.economy.issued_card.expiry"));
+      }
     }
-    private static final class DebitItem extends Item {
-        private final InstitutionCatalog.Entry issuer;
-        DebitItem(Properties properties,InstitutionCatalog.Entry issuer){super(properties);this.issuer=issuer;}
-        @Override public void appendHoverText(ItemStack stack,TooltipContext context,List<Component> lines,TooltipFlag flag) {
-            lines.add(Component.literal(issuer.name()+" · Debit"));
-            if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_DATA)) {
-                lines.add(Component.translatable("item.economy.issued_card.expiry"));
-            }
-        }
-    }
+  }
 }

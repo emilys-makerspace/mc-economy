@@ -1,0 +1,172 @@
+{
+  "world": "economy-debt-composite-2fe57f50-5bf7-463e-9ac1-5dcf6ded1481",
+  "primary_facility": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+  "primary_case": "25a35880-4906-3e5e-9322-d495d16f867d",
+  "original_terms_unchanged": true,
+  "original_terms": {
+    "world": "4dbb4c8f-c62e-4557-89d7-47af6287a3ec",
+    "loan": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+    "owner": "380df991-f603-344c-a090-369bad2a924a",
+    "lender": "economy:bank/crownstone",
+    "product": "BANK_LOAN",
+    "currency": "CAD",
+    "principalMinor": "100000",
+    "years": "1",
+    "apr": "0.12",
+    "primeApr": "0.06",
+    "primeVersion": "1",
+    "score": "650",
+    "profileRevision": "1",
+    "tier": "1",
+    "policyVersion": "1",
+    "denominationRevision": "0",
+    "fxPublication": "52b6927d-9c4d-46fc-a6fc-946b449571d0",
+    "worldCurrency": "CAD",
+    "anchor": "1794201296224",
+    "scheduleHash": "032259c7f37456b58297649837ba2860705fd55abccd9c0358a888aa0b926bdf"
+  },
+  "loans": [
+    {
+      "loan_id": "4617a849-7ecd-45b0-8b9d-2f4c3bbfc9a1",
+      "product": "SUBPRIME_LOAN",
+      "currency": "CAD",
+      "status": "DEFAULTED",
+      "debt_minor": 53147
+    },
+    {
+      "loan_id": "48f071bf-2382-43b2-aae1-7a0eae7b7bac",
+      "product": "BANK_LOAN",
+      "currency": "CAD",
+      "status": "DEFAULTED",
+      "debt_minor": 103744
+    },
+    {
+      "loan_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+      "product": "BANK_LOAN",
+      "currency": "CAD",
+      "status": "SETTLED",
+      "debt_minor": 0
+    }
+  ],
+  "case": {
+    "world_id": "4dbb4c8f-c62e-4557-89d7-47af6287a3ec",
+    "case_id": "25a35880-4906-3e5e-9322-d495d16f867d",
+    "kind": "LOAN",
+    "facility_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+    "owner_id": "380df991-f603-344c-a090-369bad2a924a",
+    "creditor": "economy:collector/waystone",
+    "currency": "CAD",
+    "principal_minor": 0,
+    "interest_minor": 0,
+    "default_at": 1794335696224,
+    "acknowledged_at": 1794336896224,
+    "collection_expires": 1795210496224,
+    "report_expires": 1797393296224,
+    "sale": "SOLD",
+    "collectability": "COLLECTIBLE",
+    "payment": "SETTLED",
+    "discount_minor": 0,
+    "revision": 4
+  },
+  "reports": [
+    {
+      "report_id": "1471d3fe-7863-3d93-925f-32432306244a",
+      "revision": 1,
+      "facility_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+      "obligation_id": "183ef3f2-c332-39f2-8dd0-993646dd6a76",
+      "due_at": 1794302096224,
+      "report_at": 1794304496224,
+      "effective_at": 1794304496224
+    },
+    {
+      "report_id": "1471d3fe-7863-3d93-925f-32432306244a",
+      "revision": 2,
+      "facility_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+      "obligation_id": "183ef3f2-c332-39f2-8dd0-993646dd6a76",
+      "due_at": 1794302096224,
+      "report_at": 1794304496224,
+      "effective_at": 1794336896224
+    },
+    {
+      "report_id": "14b8ee73-9bfd-3e54-85bf-92456080dfc2",
+      "revision": 1,
+      "facility_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+      "obligation_id": "e09cfb99-4b2c-324f-9547-eb30df8eb1c2",
+      "due_at": 1794234896224,
+      "report_at": 1794237296224,
+      "effective_at": 1794237296224
+    },
+    {
+      "report_id": "14b8ee73-9bfd-3e54-85bf-92456080dfc2",
+      "revision": 2,
+      "facility_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+      "obligation_id": "e09cfb99-4b2c-324f-9547-eb30df8eb1c2",
+      "due_at": 1794234896224,
+      "report_at": 1794237296224,
+      "effective_at": 1794336896224
+    },
+    {
+      "report_id": "b406deca-ae13-3a89-9e21-36187612875c",
+      "revision": 1,
+      "facility_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+      "obligation_id": "fb6a47df-9e03-3908-ae1f-2fbc88929f52",
+      "due_at": 1794268496224,
+      "report_at": 1794270896224,
+      "effective_at": 1794270896224
+    },
+    {
+      "report_id": "b406deca-ae13-3a89-9e21-36187612875c",
+      "revision": 2,
+      "facility_id": "73d79d49-2681-4dae-a66f-498d55a5c7b6",
+      "obligation_id": "fb6a47df-9e03-3908-ae1f-2fbc88929f52",
+      "due_at": 1794268496224,
+      "report_at": 1794270896224,
+      "effective_at": 1794336896224
+    }
+  ],
+  "payments": [
+    {
+      "operation_id": "5778df91-b82f-49fc-87a3-892e38ff6912",
+      "transaction_id": "3b6744af-cb91-45a6-b114-6276daa0b332",
+      "status": "COMMITTED",
+      "result_code": "COLLECTION_REPAID",
+      "result_payload": "25a35880-4906-3e5e-9322-d495d16f867d",
+      "sequence": 4334,
+      "audit_utc": "2026-11-09T05:19:55.948710Z"
+    },
+    {
+      "operation_id": "736aa571-6cc6-4506-aa97-413b6817dc04",
+      "transaction_id": "7d02de5b-a7f1-480b-b805-b57b51f7115c",
+      "status": "COMMITTED",
+      "result_code": "COLLECTION_SETTLED",
+      "result_payload": "25a35880-4906-3e5e-9322-d495d16f867d",
+      "sequence": 4335,
+      "audit_utc": "2026-11-09T05:19:59.936355Z"
+    }
+  ],
+  "financial_calendar": [
+    {
+      "singleton": 1,
+      "version": 1,
+      "origin_ms": 1794201296224,
+      "observed_wall_ms": 1794336896224,
+      "last_effective_ms": 1794336896224,
+      "completed_effects": 3665,
+      "last_stage": 7,
+      "last_provider": "economy:a6/tier-reevaluation",
+      "last_event": "7b8e3400-75b3-3801-a463-64e52d276082",
+      "last_fact": "1|7b8e3400-75b3-3801-a463-64e52d276082|economy:a6/tier-reevaluation|1794336896224|7|1|380df991-f603-344c-a090-369bad2a924a|1|1|3665"
+    }
+  ],
+  "no_enabled_primary_autopay": true,
+  "institution_cash_accounts": 26,
+  "all_institution_cash_nonnegative": true,
+  "cash_minimum_minor": 0,
+  "journal_audit_range": [
+    {
+      "first": "2026-11-09T05:15:01.568195Z",
+      "last": "2026-11-09T05:20:01.473395Z"
+    }
+  ],
+  "db_sha256": "cbaa34e2927f381bf1a2903595fba43913c0e7e7146e34bf979504a50ac37060"
+}

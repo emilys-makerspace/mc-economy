@@ -44,7 +44,7 @@ Displays include exact origin/version; sampled current, observed and retained UT
 
 ## Foundation acceptance
 
-[A6-02-03](../A6-02-03.md) accepts the shared dispatch/readiness boundary for later score, interest, payment, reporting and collection adapters. [Evidence](../verification/A6-02-03.md) adds exact month/restart identity and cursor preservation, three-month stopped-target/rewind recovery, all nine same-time stages after fixed publication, historical policies, +777ms anchors,65-target paging, and actual worker FIFO/admission witnesses.
+[A6-02-03](../A6/A6-02-03.md) accepts the shared dispatch/readiness boundary for later score, interest, payment, reporting and collection adapters. [Evidence](../A6/verification/A6-02-03.md) adds exact month/restart identity and cursor preservation, three-month stopped-target/rewind recovery, all nine same-time stages after fixed publication, historical policies, +777ms anchors,65-target paging, and actual worker FIFO/admission witnesses.
 
 Standalone disposable JVMs are terminated before a child commit, after a child commit and after event completion; recovery preserves only committed effects and original completion IDs. All bank 1–5-year and subprime 1–8-year terms map to 13 payments/year and13–65/13–104 monthly periods. No production code, schema, fact encoding, API, packet, lifecycle authority or physical effect changes in acceptance.
 

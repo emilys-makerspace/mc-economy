@@ -1,8 +1,8 @@
 # Prospective trade-source epochs and no-carry facts
 
-A9-06 delivered: [reference trader activation](reference-trader-activation.md) adds explicit operator controls/V2 pricing under V52, with accepted native checkout/presentation evidence. See [handoff](../A9-06.md). Earlier package descriptions below retain their recorded historical scope.
+A9-06 delivered: [reference trader activation](reference-trader-activation.md) adds explicit operator controls/V2 pricing under V52, with accepted native checkout/presentation evidence. See [handoff](../A9/A9-06.md). Earlier package descriptions below retain their recorded historical scope.
 
-Delivered by [A9-05](../A9-05.md), with [scoped evidence](../verification/A9-05.md). Extends [public item-reference reads](item-valuation-api.md) and the [A8 downstream boundary](a8-downstream.md). Production reference activation remains A9-06 work.
+Delivered by [A9-05](../A9/A9-05.md), with [scoped evidence](../A9/verification/A9-05.md). Extends [public item-reference reads](item-valuation-api.md) and the [A8 downstream boundary](../A8/architecture/a8-downstream.md). Production reference activation remains A9-06 work.
 
 ## Additive durable identities
 

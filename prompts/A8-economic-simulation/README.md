@@ -1,13 +1,13 @@
 # A8 — Activity-driven economy and monetary villager commerce
 
-Status: technical revision 1 and all 12 package prompts approved by the user on 2026-11-07; A8-01 source review and A8-02-01 attribution are complete in their recorded scopes; A8-02-02 windows/model is complete; A8-03-01 markets/catalog/pricing is complete; A8-03-02 entity hooks/stock/progression is complete; A8-04-01 account/NPC/FX APIs are complete; A8-04-02 cash/physical-custody APIs are complete; A8-05 currency-prime/loan capture is complete; A8-06-01 retirement/exact-time FX foundation is complete; A8-06-02 financial-day provider/handover is complete; A8-07 production integration/menus is complete; A8-08 scoped acceptance/handoff is complete; A8 is accepted in its [recorded scope](../../.codex/architecture/a8-acceptance.md). A9 remains unselected. The user approved [the gameplay decisions](../../.codex/architecture/a8-planning.md). This entry point replaces the former broad draft; it records phase approval without selecting a package or starting implementation, Gradle/tests/game launches, dependency changes or world migration.
+Status: technical revision 1 and all 12 package prompts approved by the user on 2026-11-07; A8-01 source review and A8-02-01 attribution are complete in their recorded scopes; A8-02-02 windows/model is complete; A8-03-01 markets/catalog/pricing is complete; A8-03-02 entity hooks/stock/progression is complete; A8-04-01 account/NPC/FX APIs are complete; A8-04-02 cash/physical-custody APIs are complete; A8-05 currency-prime/loan capture is complete; A8-06-01 retirement/exact-time FX foundation is complete; A8-06-02 financial-day provider/handover is complete; A8-07 production integration/menus is complete; A8-08 scoped acceptance/handoff is complete; A8 is accepted in its [recorded scope](../../.codex/A8/architecture/a8-acceptance.md). A9 remains unselected. The user approved [the gameplay decisions](../../.codex/A8/architecture/a8-planning.md). This entry point replaces the former broad draft; it records phase approval without selecting a package or starting implementation, Gradle/tests/game launches, dependency changes or world migration.
 
 ## Start here
 
 - [Shared package contract](CONTRACT.md): scope, authority and verification rules.
-- [Revision-1 technical contracts](../../.codex/architecture/a8-shared-contracts.md): formulas, interfaces, transaction boundaries, timing, recovery and engineering defaults.
+- [Revision-1 technical contracts](../../.codex/A8/architecture/a8-shared-contracts.md): formulas, interfaces, transaction boundaries, timing, recovery and engineering defaults.
 - [Selection queue](EXECUTION.md): 12 ordered packages and prerequisites; A8-01 through A8-08 complete and accepted; later phases require separate selection.
-- [Gameplay decision record](../../.codex/architecture/a8-planning.md): approved policies and distinction from technical proposals.
+- [Gameplay decision record](../../.codex/A8/architecture/a8-planning.md): approved policies and distinction from technical proposals.
 
 A8 consumes accepted A1–A7 clock, journal, custody, banking and village interfaces. Minecraft 1.21.1, NeoForge 21.1.252 and Java 21 remain pinned. Preserve code, local worlds and backups; no reset or hypothetical deployed-trader conversion work.
 

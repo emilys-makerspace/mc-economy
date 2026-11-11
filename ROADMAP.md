@@ -1,49 +1,39 @@
 # Roadmap
 
-Economy's planned direction, for players who want to see what's coming. These are development goals, with no promised release dates; scope and order may change as the systems are built and playtested.
+Economy's delivered milestones and planned features. Future scope and order may change as systems are built and playtested.
 
-## Available foundation
+## Stage A — Core economy
 
-The current alpha includes multiple currencies, bank accounts, physical cash, player shops, bank-branded terminals, issued cards, fixed unsecured loans, credit reporting, collections and optional automatic payments. See the [README](README.md) for getting started and the [changelog](CHANGELOG.md) for delivered changes.
+Stage A implementation is complete. See the [README](README.md) to get started with the alpha and the [changelog](CHANGELOG.md) for delivered changes.
 
-## A7 — Village Banking Package
+### A1–A6 — Banking and commerce foundation
 
-- Give every newly generated vanilla village a bank, with compact branches in small villages, a larger branch and possible second in medium villages, and two or three distinct branches in large villages.
-- Guarantee a server-currency institution that supports normal primary accounts; add eligible foreign institutions for variety, including at least one in large villages when available.
-- Choose institutions from the existing 23 banks without changing their native currencies. Configure generated branches and supported services automatically.
-- Add banker NPCs who explain banking and guide players to supported menus, with branch staffing based on building size. Branches and money persist independently of their employees; terminals work without bankers.
-- Add a two-wide, two-high banker desk with a monitor and ledger, and broaden the branch kiosk into a two-wide, two-high service console.
+The alpha includes multiple currencies, bank accounts, physical cash, player shops, bank-branded terminals, issued cards, fixed unsecured loans, credit reporting, collections and optional automatic payments.
 
-Guaranteed placement needs a deliberate layout/terrain strategy, not just random village-pool entries. Existing explored villages, player-built villages and modded villages need separate compatibility plans. Existing kiosk upgrades must avoid overwriting neighboring construction.
+### A7 — Village banking
 
-## A8 — Economic simulation
+New eligible vanilla villages can generate staffed bank branches. Branches have native-currency ATMs, branded service kiosks and a banker desk. Existing narrow kiosks can be upgraded when space and support allow. Difficult terrain can leave a branch pending, and explored villages are preserved.
 
-- Extend the world economy with scheduled economic simulation.
-- Connect simulation-driven prime rates to banking while preserving the agreed terms of existing fixed-rate loans.
+### A8 — Economic simulation
 
-## A9 — Basic item valuation
+Monetary villager and wandering-trader commerce contributes to observed economic activity. Exchange rates and currency-specific loan prime update on a 20-minute schedule after activation. Existing fixed-rate loans retain their agreed terms.
 
-- Configure base resource values and explicit item overrides.
-- Derive reference costs from supported recipes, with clear handling of alternatives, output quantities, cycles and unavailable inputs.
-- Provide currency and valuation APIs with versioned provenance explaining each value.
+### A9 — Basic item valuation
 
-These are reference values. They do not add commodity backing, guaranteed redemption, automatic shop prices or collateral eligibility. Currency creation, finite bank funding and the existing exchange-rate model remain separate systems.
+Versioned reference values combine configured base values and item overrides with costs derived from supported recipes. Server integrations can read values and provenance through the valuation API. Operators can opt supported villager and wandering-trader offers into reference pricing.
 
-## A10 — Core integration
+### A10 — Core integration
 
-- Integrate the village banking, simulation and item valuation foundations with clear player explanations and navigation.
-- Review screens at more window sizes and GUI scales.
-- Expand multiplayer testing across network conditions and external clients.
-- Exercise longer combined gameplay flows, from borrowing and repayment through default and Collection Agent encounters.
+Core integration delivered localized banking navigation, transaction history and review screens, with layouts down to a 320×240 logical GUI viewport. Acceptance covered two authenticated local clients, reconnect recovery, a linked debt lifecycle and a complete-world backup restore. External-client verification remains pending. See the [server guide](docs/SERVER_GUIDE.md#operational-reference-measurements) for the scope of the reference workload.
 
-This carries forward the former A8 player experience and broader playtesting scope. A8 economic simulation carries forward the former A7 scope. These phases are planned, not delivered.
+## Stage B — Planned features
 
-## B2 — Securities and portfolio valuation
+### B2 — Securities and portfolio valuation
 
 - Add securities holdings and current market valuations.
 - Include supported investments in net worth and banking qualification, alongside existing assets and debts.
 
-## B4 — Trading
+### B4 — Trading
 
 - Add order execution and trading interfaces beyond the current decorative Stock Trading Computer.
 - Settle trades, holdings, cash and banking fees together.
@@ -51,11 +41,11 @@ This carries forward the former A8 player experience and broader playtesting sco
 
 Trading depends on the securities and valuation foundations.
 
-## B6 — Expanded lending
+### B6 — Expanded lending
 
 - Add variable-rate loans with clear rate-reset rules.
 - Add collateral-backed products with ownership checks, valuation and collateral handling on repayment or default.
 
 These products need their supporting rate and asset systems before they can become available.
 
-Playtesting and polish can accompany other work; the phase labels describe scope rather than a release calendar. The B-series features retain their own prerequisites.
+Playtesting and polish can accompany other work. Phase labels describe scope, and release dates are open.
