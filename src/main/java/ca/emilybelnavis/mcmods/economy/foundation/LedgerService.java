@@ -262,6 +262,9 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
                 .available()
             && new ca.emilybelnavis.mcmods.economy.loan.LoanLiabilities()
                 .read(reads, owner.world(), player, java.time.Instant.ofEpochMilli(now))
+                .available()
+            && new ca.emilybelnavis.mcmods.economy.overdraft.OverdraftExposure()
+                .read(reads, owner.world(), player, java.time.Instant.ofEpochMilli(now))
                 .available();
     var tier =
         pricing
@@ -275,7 +278,15 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
       loanExposure =
           ca.emilybelnavis.mcmods.economy.loan.Loans.exposure(
               reads, owner, denomination.currency(), fx, now);
-      blocked = ca.emilybelnavis.mcmods.economy.loan.Loans.blocked(reads, owner, now);
+      loanExposure =
+          Math.addExact(
+              loanExposure,
+              ca.emilybelnavis.mcmods.economy.overdraft.OverdraftExposure.exposure(
+                  reads, owner, denomination.currency(), fx));
+      blocked =
+          ca.emilybelnavis.mcmods.economy.loan.Loans.blocked(reads, owner, now)
+              || ca.emilybelnavis.mcmods.economy.overdraft.OverdraftExposure.blocked(
+                  reads, owner, now);
     } catch (IllegalArgumentException | IllegalStateException unavailable) {
       reconciled = false;
     }
@@ -557,18 +568,34 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
       RequestId attempt,
       ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
       ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof) {
+    return drawCredit(grant, operation, attempt, request, proof, false);
+  }
+
+  /** Trusted mod integration flag; never copied from a client packet. */
+  public JournalService.Submission drawCredit(
+      PartyAuthorization.Grant grant,
+      OperationId operation,
+      RequestId attempt,
+      ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
+      ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof,
+      boolean allowOverLimit) {
     requireOwner(grant);
     if (request.kind() != ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawKind.ADVANCE)
       throw new IllegalArgumentException("Use atomic register checkout for purchases");
     var handler =
         ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.draw(
-            grant.target(), request, this::creditInputs, proof, services::financialMillis);
+            grant.target(),
+            request,
+            this::creditInputs,
+            proof,
+            services::financialMillis,
+            allowOverLimit);
     return services.submitOwned(
         grant,
         ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DRAW,
         operation,
         attempt,
-        unboundCreditRequest(grant, request.request()),
+        unboundCreditRequest(grant, request.request(allowOverLimit)),
         ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(handler),
         null);
   }
@@ -1004,6 +1031,156 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
         null);
   }
 
+  public record OverdraftContext(
+      AccountIdentity account,
+      Optional<ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.Protection> protection,
+      long postedMinor,
+      long minimumMinor,
+      long maximumMinor,
+      java.math.BigDecimal apr,
+      long profileRevision) {}
+
+  public CompletionStage<Optional<OverdraftContext>> overdraftContext(
+      PartyAuthorization.Grant grant, AccountId accountId) {
+    requireOwner(grant);
+    return services.readAccounts(
+        grant,
+        false,
+        reads -> {
+          var account = AccountCatalog.find(reads, grant.target(), accountId).orElse(null);
+          if (account == null
+              || account.purpose() != AccountIdentity.Purpose.BANK
+              || account.status() != AccountIdentity.Status.OPEN) return Optional.empty();
+          long now = services.financialMillis();
+          var profile =
+              ca.emilybelnavis.mcmods.economy.credit.CreditProfiles.find(reads, grant.target())
+                  .orElse(null);
+          int score =
+              profile == null
+                  ? ca.emilybelnavis.mcmods.economy.credit.CreditProfiles.INITIAL_SCORE
+                  : profile.score();
+          var fx = ca.emilybelnavis.mcmods.economy.fx.FxService.at(reads, now);
+          var denomination = RebaseSettlement.denomination(reads).orElse(null);
+          if (fx == null || denomination == null) return Optional.empty();
+          long maximum =
+              ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.maximum(
+                  reads, grant.target(), account.currency(), now);
+          return Optional.of(
+              new OverdraftContext(
+                  account,
+                  ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.find(
+                      reads, accountId.value()),
+                  Settlement.posted(reads, accountId.value(), account.currency()),
+                  ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.minimum(
+                      reads, account.currency(), now),
+                  maximum,
+                  ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.apr(score),
+                  profile == null ? 0 : profile.revision()));
+        });
+  }
+
+  public CompletionStage<
+          Optional<ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.ApplicationRequest>>
+      quoteOverdraft(PartyAuthorization.Grant grant, AccountId accountId, long limitMinor) {
+    requireOwner(grant);
+    return services.readAccounts(
+        grant,
+        false,
+        reads -> {
+          var account = AccountCatalog.find(reads, grant.target(), accountId).orElse(null);
+          var fx =
+              ca.emilybelnavis.mcmods.economy.fx.FxService.at(reads, services.financialMillis());
+          if (account == null
+              || account.purpose() != AccountIdentity.Purpose.BANK
+              || account.status() != AccountIdentity.Status.OPEN
+              || fx == null) return Optional.empty();
+          var profile =
+              ca.emilybelnavis.mcmods.economy.credit.CreditProfiles.find(reads, grant.target())
+                  .orElse(null);
+          return Optional.of(
+              new ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.ApplicationRequest(
+                  grant.target().world(),
+                  ((PartyRef.Player) grant.target().owner()).id(),
+                  accountId,
+                  limitMinor,
+                  account.revision(),
+                  profile == null ? 0 : profile.revision(),
+                  fx.id()));
+        });
+  }
+
+  public JournalService.Submission applyOverdraft(
+      PartyAuthorization.Grant grant,
+      OperationId operation,
+      RequestId attempt,
+      ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.ApplicationRequest request) {
+    requireOwner(grant);
+    return services.submitOwned(
+        grant,
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.APPLY,
+        operation,
+        attempt,
+        unboundCreditRequest(grant, request.request()),
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.application(
+            grant.target(), request, services::financialMillis),
+        null);
+  }
+
+  public JournalService.Submission cancelOverdraft(
+      PartyAuthorization.Grant grant,
+      OperationId operation,
+      RequestId attempt,
+      AccountId account,
+      long protectionRevision) {
+    requireOwner(grant);
+    var request =
+        ca.emilybelnavis.mcmods.economy.overdraft.OverdraftCancellation.request(
+            grant.target().world(),
+            ((PartyRef.Player) grant.target().owner()).id(),
+            account,
+            protectionRevision);
+    return services.submitOwned(
+        grant,
+        ca.emilybelnavis.mcmods.economy.overdraft.OverdraftCancellation.CANCEL,
+        operation,
+        attempt,
+        unboundCreditRequest(grant, request),
+        ca.emilybelnavis.mcmods.economy.overdraft.OverdraftCancellation.registration(
+            grant.target(), account, protectionRevision, services::financialMillis),
+        null);
+  }
+
+  /**
+   * Explicit trusted debit authority is selected by integration code, never from player packets.
+   */
+  public JournalService.Submission debitAccount(
+      PartyAuthorization.Grant grant,
+      OperationId operation,
+      RequestId attempt,
+      AccountId source,
+      AccountId destination,
+      Money amount,
+      ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind authority) {
+    requireOwner(grant);
+    var request =
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.debitRequest(
+            grant.target(), source.value(), destination.value(), amount, authority);
+    return services.submitOwned(
+        grant,
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DEBIT,
+        operation,
+        attempt,
+        unboundCreditRequest(grant, request),
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.debit(
+            grant.target(),
+            source.value(),
+            destination.value(),
+            amount,
+            authority,
+            services::financialMillis),
+        null);
+  }
+
   public record LoanContext(
       ca.emilybelnavis.mcmods.economy.account.AccountRebasePlanner.Denomination denomination,
       long calendarOrigin,
@@ -1033,6 +1210,9 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
       var cards = ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.owned(reads, owner);
       if (cards.size() > 128) throw new IllegalStateException("Credit exposure bound");
       var denomination = RebaseSettlement.denomination(reads).orElseThrow();
+      other =
+          ca.emilybelnavis.mcmods.economy.overdraft.OverdraftExposure.exposure(
+              reads, owner, denomination.currency(), credit.fx());
       for (var card : cards) {
         long raw =
             card.status() == ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.Status.ACTIVE
@@ -2917,13 +3097,27 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
       PartyAuthorization.Grant grant,
       ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
       ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof) {
+    return creditCheckout(grant, request, proof, false);
+  }
+
+  /** Trusted integration checkout, bound to the explicitly flagged canonical credit request. */
+  public RegisterSales.SettlementComposer creditCheckout(
+      PartyAuthorization.Grant grant,
+      ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
+      ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof,
+      boolean allowOverLimit) {
     requireOwner(grant);
     if (request.kind() != ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawKind.PURCHASE)
       throw new IllegalArgumentException("Purchase required");
     var registration =
         ca.emilybelnavis.mcmods.economy.credit.CreditSafety.production(
             ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.draw(
-                grant.target(), request, this::creditInputs, proof, services::financialMillis));
+                grant.target(),
+                request,
+                this::creditInputs,
+                proof,
+                services::financialMillis,
+                allowOverLimit));
     return (intent, sale, reads) -> {
       if (!intent.actor().equals(request.owner())
           || !sale.buyer().equals(request.owner())
@@ -2933,7 +3127,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
               .request()
               .fields()
               .getOrDefault("credit_request", "")
-              .equals(new java.util.TreeMap<>(request.request().fields()).toString()))
+              .equals(new java.util.TreeMap<>(request.request(allowOverLimit).fields()).toString()))
         throw new IllegalArgumentException("CREDIT_SALE_BINDING");
       var child =
           new Journal.Intent(
@@ -2941,7 +3135,7 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
               intent.requestId(),
               intent.actor(),
               ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DRAW,
-              request.request(),
+              request.request(allowOverLimit),
               null,
               null);
       var decision = registration.handler().prepare(child, reads);

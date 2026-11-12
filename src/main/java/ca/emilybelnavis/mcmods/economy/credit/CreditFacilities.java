@@ -700,6 +700,11 @@ public final class CreditFacilities {
     }
 
     public Journal.CanonicalRequest request() {
+      return request(false);
+    }
+
+    /** Trusted server integrations opt in explicitly; ordinary request bytes remain unchanged. */
+    public Journal.CanonicalRequest request(boolean allowOverLimit) {
       var fields =
           new TreeMap<>(
               Map.ofEntries(
@@ -716,6 +721,7 @@ public final class CreditFacilities {
                   Map.entry("quote", quote.toString()),
                   Map.entry("expires", Long.toString(expiresAt))));
       if (fees != null) fields.put("advance_fees_v2", fees.encoded());
+      if (allowOverLimit) fields.put("trusted_credit_over_limit_v1", "true");
       return canonical(world, owner, fields);
     }
   }
@@ -724,13 +730,27 @@ public final class CreditFacilities {
   @SuppressWarnings("java:S1845")
   public static Registration draw(
       PartyRef owner, DrawRequest request, InputSource inputs, LiveDraw live, LongSupplier clock) {
+    return draw(owner, request, inputs, live, clock, false);
+  }
+
+  /**
+   * Trusted Java-only override of contractual headroom. Owner, admission, risk restrictions and
+   * advance sublimits still apply; excess principal is funded from the issuer's own capital.
+   */
+  public static Registration draw(
+      PartyRef owner,
+      DrawRequest request,
+      InputSource inputs,
+      LiveDraw live,
+      LongSupplier clock,
+      boolean allowOverLimit) {
     Objects.requireNonNull(inputs);
     Objects.requireNonNull(live);
     Objects.requireNonNull(clock);
     return new Registration(
         1,
         (intent, reads) -> {
-          if (!matches(owner, intent, DRAW, request.request())
+          if (!matches(owner, intent, DRAW, request.request(allowOverLimit))
               || !CreditProfiles.owns(owner, request.world(), request.owner()))
             return reject("CREDIT_DRAW_REQUEST");
           long now = clock.getAsLong();
@@ -748,7 +768,10 @@ public final class CreditFacilities {
               || f.revision() != request.facilityRevision()) return reject("CREDIT_CARD_STALE");
           if (f.status() != Status.ACTIVE || f.access() != Access.ENABLED)
             return reject("CREDIT_DRAW_CLOSED");
-          if (!live.valid(intent, reads, t, request.kind(), request.destination()))
+          // The sealed physical proof binds the ordinary captured quote. The trusted override
+          // is checked against the outer canonical request above, never supplied by that proof.
+          var admitted = allowOverLimit ? adapt(intent, DRAW, request.request()) : intent;
+          if (!live.valid(admitted, reads, t, request.kind(), request.destination()))
             return decline("CREDIT_PHYSICAL_ADMISSION");
           if (now >= f.nextDay() || now >= f.nextStatement())
             return decline("CREDIT_CATCHUP_REQUIRED");
@@ -802,15 +825,34 @@ public final class CreditFacilities {
             atmFee = captured.atmMinor();
           }
           long drawTotal = Math.addExact(request.amountMinor(), Math.addExact(advanceFee, atmFee));
+          long currentExposure = Math.addExact(total, source.otherExposureWorldMinor());
+          if (allowOverLimit) {
+            long before =
+                CreditUnderwriting.exposureToWorld(
+                        new Money(f.currency(), Math.max(f.limitMinor(), f.owedMinor())),
+                        denom.currency(),
+                        source.fx())
+                    .minorUnits();
+            long after =
+                CreditUnderwriting.exposureToWorld(
+                        new Money(
+                            f.currency(),
+                            Math.max(f.limitMinor(), Math.addExact(f.owedMinor(), drawTotal))),
+                        denom.currency(),
+                        source.fx())
+                    .minorUnits();
+            currentExposure = Math.addExact(currentExposure, Math.subtractExact(after, before));
+          }
           if (!CreditUnderwriting.drawAllowed(
               profile.score(),
               InstitutionCatalog.require(f.issuer()).tier2() && source.tier2Eligible(),
               blocked,
               f.limitMinor(),
               f.owedMinor(),
-              Math.addExact(total, source.otherExposureWorldMinor()),
+              currentExposure,
               drawTotal,
-              denom.currency())) return reject("CREDIT_DRAW_LIMIT");
+              denom.currency(),
+              allowOverLimit)) return reject("CREDIT_DRAW_LIMIT");
           if (request.kind() == DrawKind.ADVANCE
               && Math.addExact(f.advance().principalMinor(), drawTotal) > f.limitMinor() / 5)
             return reject("CREDIT_ADVANCE_SUBLIMIT");
@@ -855,8 +897,36 @@ public final class CreditFacilities {
           // the advance APR.
           if (advanceFee > 0) addDrawFee(f, f.issuer(), advanceFee, accounts, legs);
           if (atmFee > 0) addDrawFee(f, request.fees().bank(), atmFee, accounts, legs);
-          var posted = InstitutionSettlement.prepare(reads, legs, accounts);
+          // Only this line's unused commitment can fund a draw. Any excess is first reserved
+          // from issuer cash in this same transaction, never from another line's allocation.
+          long unused = Math.max(0, Math.subtractExact(f.limitMinor(), f.principalMinor()));
+          long additional = Math.max(0, Math.subtractExact(drawTotal, unused));
+          Commit funded = null;
+          ReadView drawReads = reads;
+          if (additional > 0) {
+            if (!allowOverLimit) return reject("CREDIT_DRAW_LIMIT");
+            var funding =
+                CreditTreasury.reserve(reads, f.world(), f.issuer(), f.currency(), additional, now);
+            if (!(funding instanceof Commit capital)) return funding;
+            funded = capital;
+            drawReads = FeeSettlement.overlay(reads, capital.records());
+          }
+          var posted = InstitutionSettlement.prepare(drawReads, legs, accounts);
           if (!(posted instanceof Commit money)) return posted;
+          if (funded != null) {
+            var capital = funded;
+            var transfer = money;
+            var records = new ArrayList<>(capital.records());
+            records.addAll(transfer.records());
+            money =
+                new Commit(
+                    records,
+                    transfer.result(),
+                    tx -> {
+                      capital.projections().apply(tx);
+                      transfer.projections().apply(tx);
+                    });
+          }
           if (request.kind() == DrawKind.ADVANCE)
             money =
                 audited(
@@ -1048,9 +1118,15 @@ public final class CreditFacilities {
     var receivable = financial(f, FinancialAccounts.Role.RECEIVABLE);
     var liability = borrower(f, FinancialAccounts.Role.LIABILITY);
     var legs = new ArrayList<>(fundingLegs);
-    if (principalPaid > 0)
-      legs.add(leg(f.access() == Access.CLOSED ? cash : reserve, principalPaid));
-    if (interestPaid > 0) legs.add(leg(cash, interestPaid));
+    long restored =
+        f.access() == Access.CLOSED
+            ? 0
+            : Math.subtractExact(
+                Math.max(0, Math.subtractExact(f.limitMinor(), next.principalMinor())),
+                Math.max(0, Math.subtractExact(f.limitMinor(), f.principalMinor())));
+    if (restored > 0) legs.add(leg(reserve, restored));
+    long cashPaid = Math.addExact(Math.subtractExact(principalPaid, restored), interestPaid);
+    if (cashPaid > 0) legs.add(leg(cash, cashPaid));
     legs.add(leg(receivable, -amount));
     legs.add(leg(liability, amount));
     var accounts = new ArrayList<>(planned);
@@ -1609,14 +1685,15 @@ public final class CreditFacilities {
           else if (DepositYield.distressed(reads, bank.id())) reason = "ISSUER_YIELD_DISTRESSED";
           Commit funding = null;
           if (reason.equals("APPROVED")) {
+            long additional =
+                Math.subtractExact(
+                    Math.max(0, Math.subtractExact(request.newLimitMinor(), f.principalMinor())),
+                    Math.max(0, Math.subtractExact(f.limitMinor(), f.principalMinor())));
             var decision =
-                CreditTreasury.reserve(
-                    reads,
-                    f.world(),
-                    f.issuer(),
-                    f.currency(),
-                    Math.subtractExact(request.newLimitMinor(), f.limitMinor()),
-                    now);
+                additional == 0
+                    ? new Commit(List.of(), new Journal.Result(1, "CREDIT_RESERVED", "0"), tx -> {})
+                    : CreditTreasury.reserve(
+                        reads, f.world(), f.issuer(), f.currency(), additional, now);
             if (decision instanceof Commit funded) funding = funded;
             else
               reason =

@@ -314,6 +314,78 @@ class CreditFacilitiesTest {
   }
 
   @Test
+  void trustedOverLimitDrawUsesIssuerCashAndRepaymentRestoresOnlyContractualReservation()
+      throws Exception {
+    try (var f = new Fixture()) {
+      var line = f.issue();
+      var otherRequest = f.request(250000);
+      assertEquals(
+          "CREDIT_CARD_ISSUED",
+          f.submit(
+                  CreditFacilities.ISSUE,
+                  CreditFacilities.issuance(
+                      f.owner, otherRequest, BankProviders.NO_TIER2, f::inputs, f.time::get),
+                  f.intent(CreditFacilities.ISSUE, otherRequest.request()))
+              .result()
+              .code());
+      long cashBefore = f.balance(FinancialAccounts.Role.CASH);
+      var request = f.drawRequest(line, CreditFacilities.DrawKind.PURCHASE, 260000);
+      assertEquals(
+          "CREDIT_DRAW_LIMIT",
+          f.draw(request, f.intent(CreditFacilities.DRAW, request.request())).result().code());
+      var registration =
+          CreditFacilities.draw(
+              f.owner, request, f::inputs, (i, reads, t, k, a) -> true, f.time::get, true);
+      assertEquals(
+          "CREDIT_DRAW_REQUEST",
+          f.submit(
+                  CreditFacilities.DRAW,
+                  registration,
+                  f.intent(CreditFacilities.DRAW, request.request()))
+              .result()
+              .code());
+      var intent = f.intent(CreditFacilities.DRAW, request.request(true));
+      var drawn = f.submit(CreditFacilities.DRAW, registration, intent);
+      assertEquals("CREDIT_DRAWN", drawn.result().code());
+      assertEquals(drawn, f.submit(CreditFacilities.DRAW, registration, intent));
+      assertEquals(260000, f.cash());
+      assertEquals(cashBefore - 10000, f.balance(FinancialAccounts.Role.CASH));
+      // The other facility's whole commitment remains segregated.
+      assertEquals(250000, f.balance(FinancialAccounts.Role.RESERVATION));
+      for (long amount : new long[] {20000, 240000}) {
+        line = f.get(line.id());
+        long ledger =
+            f.store.transaction(tx -> WealthValuation.ledgerRevision(tx::query, f.account.value()));
+        var repayment =
+            new CreditFacilities.RepaymentRequest(
+                f.owner.world(),
+                f.actor,
+                line.id(),
+                f.account,
+                amount,
+                line.revision(),
+                1,
+                ledger,
+                UUID.randomUUID(),
+                f.time.get() + 30000);
+        assertEquals(
+            "CREDIT_REPAID",
+            f.submit(
+                    CreditFacilities.REPAY,
+                    CreditFacilities.repayment(f.owner, repayment, f.time::get),
+                    f.intent(CreditFacilities.REPAY, repayment.request()))
+                .result()
+                .code());
+        assertEquals(cashBefore, f.balance(FinancialAccounts.Role.CASH));
+        assertEquals(
+            amount == 20000 ? 260000 : 500000, f.balance(FinancialAccounts.Role.RESERVATION));
+      }
+      assertEquals(0, f.get(line.id()).owedMinor());
+      assertEquals(0, f.cash());
+    }
+  }
+
+  @Test
   void advancesUseOutstandingTwentyPercentSublimitAndRepaymentRestoresReservation()
       throws Exception {
     try (var f = new Fixture()) {

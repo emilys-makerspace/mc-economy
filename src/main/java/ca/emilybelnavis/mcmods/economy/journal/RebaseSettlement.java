@@ -160,6 +160,21 @@ public final class RebaseSettlement {
           new Journal.Record(FACT, 1, target.name() + "|" + revision + "|" + rates.updateId()));
       for (var entry : plan.mappings()) {
         UUID primary = entry.primary().id().value();
+        var primaryOverdraft =
+            ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.find(reads, primary).orElse(null);
+        var collisionOverdraft =
+            entry.collision() == null
+                ? null
+                : ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.find(
+                        reads, entry.collision().id().value())
+                    .orElse(null);
+        if (primaryOverdraft != null
+                && !primaryOverdraft.closed()
+                && primaryOverdraft.protectedAccount()
+            || collisionOverdraft != null
+                && !collisionOverdraft.closed()
+                && collisionOverdraft.protectedAccount())
+          return reject("OVERDRAFT_TRANSITION_BLOCKED");
         long balance = Settlement.posted(reads, primary, source);
         long collision =
             entry.collision() == null

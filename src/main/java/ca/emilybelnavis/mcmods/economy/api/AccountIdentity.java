@@ -32,7 +32,7 @@ public record AccountIdentity(
     if (!(owner.owner() instanceof PartyRef.Player)
         || revision < 1
         || (purpose == Purpose.BANK) != (currency != null)
-        || primary && (purpose != Purpose.BANK || status != Status.OPEN)
+        || primary && purpose != Purpose.BANK
         || purpose == Purpose.TRADING && status != Status.OPEN) {
       throw new IllegalArgumentException("Invalid account identity");
     }

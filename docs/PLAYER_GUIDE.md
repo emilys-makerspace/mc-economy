@@ -100,6 +100,20 @@ Creative builders can place a persistent, stationary representative with `/summo
 
 A Collection Agent now follows online debtors with collectible cases. Right-click within six blocks to review current creditors and balances, choose an owned BANK account, preview a partial or full payment and confirm its exact debit. A different currency shows an explicit FX/fee review. Exit leaves debt unchanged. The agent is nonhostile and gives no loot or experience. Killing it delays replacement for seven financial days. A crash leaving an uncertain live presentation conservatively protects the same window from recovery. Saved payment receipts recover after reconnect even when final settlement removed the agent.
 
+## Overdrafts
+
+Every bank account can apply for overdraft protection through **Bank and credit services → Overdraft protection** at its bank's kiosk. Requested protection starts at CAD 100; other currencies convert this amount and round to the nearest whole multiple of 20. Applications use the existing credit score and combined exposure rules. The displayed maximum is advisory; approval rechecks current debt and eligibility. Higher limits require another reviewed application.
+
+Protection costs CAD 5 equivalent per financial month while enrolled. Interest accrues only for time spent below zero and posts daily. APR follows credit score bands: below 580, 18%; 580–649, 17%; 650–699, 16%; 700–749, 15%; 750–799, 14%; 800–849, 13%; 850 and above, 12%. Scores below 500 cannot obtain protection. The rate is captured when protection is approved or increased.
+
+Without protection, an ordinary payment can leave the account overdrawn by at most CAD 5, converted and rounded to the nearest whole multiple of 5 in another currency. This small overdraft has no overdraft fee. A larger ordinary payment is declined without a fee. A larger **pre-authorized debit**, including a scheduled automatic payment attempt, is declined and charges CAD 49.99 equivalent. Retrying the same operation never duplicates that fee; a later scheduled retry is a separate debit attempt.
+
+With protection, ordinary debits must remain within the approved allowance. Bank fees and interest can take the balance beyond it. Trusted mod integrations can explicitly permit a bank overdraft beyond the allowance or a credit card transaction beyond its limit; players cannot select these overrides in a banking screen. Existing card cash-advance sublimits and other eligibility checks still apply.
+
+After entering a protected overdraft, restore a strictly positive balance for one complete financial day within 90 financial days. Zero does not reset the clock. Recovery started just before the deadline may finish its full positive day; a relapse to zero or below after the deadline closes the account immediately. Otherwise an unrecovered account closes at the deadline, its debit card is revoked, and outstanding debt becomes a collection case. This also applies to the primary account; closure retains its identity and history rather than granting a replacement account. Use existing collection services to repay the debt.
+
+A financial day is 20 real minutes under the existing persistent calendar, including elapsed offline time; sleeping does not advance it. Cancel protection at a kiosk after repayment and completion of the positive-day recovery. Earned interest must be posted first. Cancel before changing banks or rebasing an account's currency.
+
 ## Shops
 
 Register owners can use `/economy shop price <units>` while looking at their register and holding the exact product batch, or set a whole-unit price in Shop. The price uses the seller's primary-account currency. Buyers review the exact batch and price before confirming and need room for the entire batch. Account-funded purchases require matching buyer currency; an active owned credit card can fund a purchase through the credit-card flow described below. Undelivered paid goods remain protected claims.

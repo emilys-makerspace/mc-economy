@@ -108,3 +108,7 @@ The registry now declares eleven currencies. Published-rate membership filters o
 ## A6-06 debit linkage
 
 [Issued cards](issued-cards.md) are separate authoritative owner/account/provider-epoch records, with one active debit token per BANK account. Provider changes/closure and rebase collision retirement revoke retired tokens; permanent primary rebase retains the account/token exception. No extra account slots, score or debt are created.
+
+## Overdrafts (2026-11-12)
+
+[Current overdraft contract](overdrafts.md) supersedes nonnegative AccountFunds: v2 supports signed available/posted funds; reserved/restricted remain nonnegative. V55 permits involuntary primary closure with retained identity/history and collection debt. Voluntary closure cannot erase debt.

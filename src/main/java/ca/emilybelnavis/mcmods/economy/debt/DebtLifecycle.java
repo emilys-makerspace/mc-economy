@@ -923,9 +923,7 @@ public final class DebtLifecycle {
       PlayerId owner,
       InstitutionCatalog.InstitutionId creditor,
       EconomyCurrency currency) {
-    var borrower =
-        new InstitutionCatalog.InstitutionId(
-            (kind == Kind.CARD ? "economy:borrower/" : "economy:loan-borrower/") + owner.value());
+    var borrower = DebtClaims.borrower(kind, owner);
     return DebtClaims.matches(reads, world, borrower, FinancialAccounts.Role.LIABILITY, currency)
         && DebtClaims.matches(reads, world, creditor, FinancialAccounts.Role.RECEIVABLE, currency);
   }

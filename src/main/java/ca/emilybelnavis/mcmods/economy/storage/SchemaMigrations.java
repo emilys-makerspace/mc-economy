@@ -8,7 +8,7 @@ import java.util.UUID;
 /** Ordered trusted SQL; the complete pending chain shares one transaction. */
 final class SchemaMigrations {
   static final int MINIMUM_SUPPORTED = 1;
-  static final int CURRENT = 54;
+  static final int CURRENT = 55;
   static final int APPLICATION_ID = 0x45434F4E;
 
   record Migration(int version, String name, List<String> statements) {
@@ -203,7 +203,17 @@ final class SchemaMigrations {
           new Migration(
               54,
               "three generated service anchors per village bank",
-              VillageBranchSchema.threeAnchorMigration()));
+              VillageBranchSchema.threeAnchorMigration()),
+          new Migration(
+              55, "bank overdraft protection and collection defaults", overdraftStatements()));
+
+  private static List<String> overdraftStatements() {
+    var statements = new java.util.ArrayList<String>();
+    statements.addAll(AccountSchema.overdraftMigration());
+    statements.addAll(ca.emilybelnavis.mcmods.economy.debt.DebtSchema.overdraftMigration());
+    statements.addAll(ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.statements());
+    return List.copyOf(statements);
+  }
 
   private static List<String> referenceTradeStatements() {
     var statements = new java.util.ArrayList<String>();

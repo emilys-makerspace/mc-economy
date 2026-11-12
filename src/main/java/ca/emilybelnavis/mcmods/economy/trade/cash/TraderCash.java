@@ -105,7 +105,8 @@ final class TraderCash {
       values.add(
           new CashIssuance.Lot(
               world,
-              stableId.apply("lot|" + world.value() + "|" + original + "|" + line.denomination().id()),
+              stableId.apply(
+                  "lot|" + world.value() + "|" + original + "|" + line.denomination().id()),
               line.denomination().id(),
               line.count(),
               line.count(),

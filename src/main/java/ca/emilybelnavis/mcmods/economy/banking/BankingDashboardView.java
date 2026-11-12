@@ -55,7 +55,7 @@ public record BankingDashboardView(
   public record AccountRow(UUID id, Money available, Money reserved, boolean primary) {
     public AccountRow {
       Objects.requireNonNull(id);
-      positive(available);
+      Objects.requireNonNull(available);
       positive(reserved);
       if (available.currency() != reserved.currency())
         throw new IllegalArgumentException("Dashboard account currency");

@@ -128,7 +128,10 @@ public final class BankingOperation {
   public static View outcome(ca.emilybelnavis.mcmods.economy.journal.Journal.Outcome outcome) {
     var state =
         switch (outcome.status()) {
-          case COMMITTED -> State.COMPLETED;
+          case COMMITTED ->
+              outcome.result().code().equals("PAD_DECLINED_FEE_CHARGED")
+                  ? State.DECLINED
+                  : State.COMPLETED;
           case DURABLY_REJECTED ->
               staleCode(outcome.result().code()) ? State.EXPIRED_STALE : State.DECLINED;
           default -> State.OUTCOME_UNCERTAIN;
@@ -150,6 +153,8 @@ public final class BankingOperation {
             "FX_QUOTE_CONSUMED",
             "PRICING_QUOTE_STALE",
             "ACCOUNT_STALE",
+            "OVERDRAFT_ACCOUNT_STALE",
+            "OVERDRAFT_FX_STALE",
             "DESTINATION_STALE",
             "FX_PROVIDER_STALE",
             "QUOTE_EXPIRED",
@@ -170,6 +175,8 @@ public final class BankingOperation {
             "card_confirm",
             "branch_accept",
             "finance_credit_confirm",
+            "finance_od_confirm",
+            "finance_od_cancel_ok",
             "finance_credit_raise_ok",
             "finance_credit_repl_ok",
             "finance_credit_pay_ok",

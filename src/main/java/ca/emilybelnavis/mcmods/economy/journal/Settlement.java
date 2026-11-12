@@ -102,7 +102,14 @@ public final class Settlement {
       List<PostingBatch.Leg> legs,
       PostingBatch.Authority authority,
       Holds.Hold captured) {
-    return prepare(reads, legs, authority, captured, Map.of(), false);
+    return prepare(
+        reads,
+        legs,
+        authority,
+        captured,
+        Map.of(),
+        false,
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.NORMAL);
   }
 
   static JournalEngine.Decision prepareMinor(
@@ -110,7 +117,14 @@ public final class Settlement {
       List<PostingBatch.Leg> legs,
       PostingBatch.Authority authority,
       Holds.Hold captured) {
-    return prepare(reads, legs, authority, captured, Map.of(), true);
+    return prepare(
+        reads,
+        legs,
+        authority,
+        captured,
+        Map.of(),
+        true,
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.NORMAL);
   }
 
   static JournalEngine.Decision prepareRebase(
@@ -126,7 +140,23 @@ public final class Settlement {
         legs.stream()
             .anyMatch(
                 leg -> leg.amount().minorUnits() % leg.accountCurrency().minorUnitsPerMajor() != 0);
-    return prepare(reads, legs, authority, null, Map.copyOf(newCurrencies), fractional);
+    return prepare(
+        reads,
+        legs,
+        authority,
+        null,
+        Map.copyOf(newCurrencies),
+        fractional,
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.NORMAL);
+  }
+
+  /** Explicit trusted server composition; callers bind kind in their own canonical request. */
+  public static JournalEngine.Decision prepareTrusted(
+      JournalEngine.ReadView reads,
+      List<PostingBatch.Leg> legs,
+      PostingBatch.Authority authority,
+      ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind kind) {
+    return prepare(reads, legs, authority, null, Map.of(), true, kind);
   }
 
   private static JournalEngine.Decision prepare(
@@ -135,7 +165,8 @@ public final class Settlement {
       PostingBatch.Authority authority,
       Holds.Hold captured,
       Map<UUID, EconomyCurrency> newCurrencies,
-      boolean minor) {
+      boolean minor,
+      ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind debitKind) {
     var decision =
         minor ? PostingBatch.prepareMinor(legs, authority) : PostingBatch.prepare(legs, authority);
     if (!(decision instanceof JournalEngine.Commit commit)) return decision;
@@ -167,7 +198,14 @@ public final class Settlement {
               && captured.amount().currency() == account.currency()) {
             reserved = Math.subtractExact(reserved, captured.amount().minorUnits());
           }
-          if (next < reserved) return reject("INSUFFICIENT_FUNDS");
+          if (!ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.permits(
+              reads,
+              account.id(),
+              account.currency(),
+              posted(reads, account.id(), account.currency()),
+              next,
+              reserved,
+              debitKind)) return reject("INSUFFICIENT_FUNDS");
         }
         balances.put(account, next);
       }

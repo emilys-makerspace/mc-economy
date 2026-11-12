@@ -20,7 +20,7 @@ class AccountFundsTest {
   @Test
   void postedSumsDisjointMinorUnitCategories() {
     var view = new AccountFunds(CAD, 7_000, 2_500, 500);
-    assertEquals(1, view.version());
+    assertEquals(2, view.version());
     assertEquals(10_000, view.postedMinorUnits());
     assertEquals(new Money(CAD, 10_000), view.posted());
     assertEquals(
@@ -29,8 +29,8 @@ class AccountFundsTest {
   }
 
   @Test
-  void rejectsNegativeCategoriesAndEitherOverflowBoundary() {
-    assertThrows(IllegalArgumentException.class, () -> new AccountFunds(CAD, -1, 0, 0));
+  void acceptsOverdraftBalancesButRejectsNegativeReservationsAndOverflow() {
+    assertEquals(-1, new AccountFunds(CAD, -1, 0, 0).postedMinorUnits());
     assertThrows(IllegalArgumentException.class, () -> new AccountFunds(CAD, 0, -1, 0));
     assertThrows(IllegalArgumentException.class, () -> new AccountFunds(CAD, 0, 0, -1));
     assertThrows(ArithmeticException.class, () -> new AccountFunds(CAD, Long.MAX_VALUE, 1, 0));

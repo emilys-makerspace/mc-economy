@@ -2,9 +2,9 @@
 
 Economy targets Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Separate integration mods can consume the authenticated server facades below. The [API reference](API_REFERENCE.md) inventories exact signatures, legacy type exposure, completion/cancellation, failure and retained-version contracts.
 
-## Banking API version 2
+## Banking API version 3
 
-`ca.emilybelnavis.mcmods.economy.api.BankingIntegration` declares `VERSION = 2` and exposes `version()`. The active server's ledger service implements it.
+`ca.emilybelnavis.mcmods.economy.api.BankingIntegration` declares `VERSION = 3` and exposes `version()`. The active server's ledger service implements it.
 
 Resolve services on the server thread after Economy reaches READY.
 
@@ -39,6 +39,16 @@ Fixed unsecured lending is available under current policies. Variable and secure
 
 [BankingIntegration source](../src/main/java/ca/emilybelnavis/mcmods/economy/api/BankingIntegration.java), [server authorization](../src/main/java/ca/emilybelnavis/mcmods/economy/foundation/PartyAuthorization.java).
 
+## Trusted overdraft and over-limit authority
+
+`debitAccount(grant, operation, attempt, source, destination, amount, authority)` performs an authenticated same-currency BANK transfer. Choose `Overdrafts.DebitKind.NORMAL`, `PRE_AUTHORIZED`, `INTEGRATION_OVERRIDE` or `BANK_CHARGE` in trusted Java code. Never populate this authority from a player packet. Ordinary debits enforce the small unprotected tolerance or approved protection. `PRE_AUTHORIZED` additionally commits the applicable CAD 49.99 equivalent fee when an unprotected debit would exceed tolerance; `PAD_DECLINED_FEE_CHARGED` means the intended payment did not occur, although its decline fee committed. Both exceptional authorities can exceed the allowance. Ownership, open accounts, valid currencies and checked arithmetic still apply.
+
+Credit callers can use `drawCredit(..., proof, true)` or `creditCheckout(..., proof, true)` to override contractual headroom. Freeze `request.request(true)` into the register's `credit_request` binding for flagged checkout. The flag is part of the canonical journal request; an operation retried with a different flag conflicts. Existing overloads retain ordinary behavior and original canonical bytes. Admission, token, network, arrears, total exposure and advance sublimit checks remain. Extra principal is funded by the issuer's own cash; repayments restore only the original contractual reservation.
+
+`AccountFunds.VERSION` is 2. `availableMinorUnits` and `postedMinorUnits()` can be negative; reserved/restricted categories remain nonnegative. Do not treat unavailable funds as zero or add an overdraft allowance to assets. Negative BANK balances reduce net worth; frozen overdraft collections replace that balance with a separate reconciled liability.
+
+Banking transport 13 adds overdraft application/cancellation actions and signed account dashboard balances. Update both endpoints together. Storage schema 55 preserves existing accounts, holds, provider bindings and historical facts while allowing involuntary primary-account closure and overdraft collection cases.
+
 ## Village banking boundaries
 
 Generated branches expose ordinary authenticated kiosk services. Branches and staff provide physical access and guidance. Customer accounts belong to the existing owner/account services. Losing a building, kiosk, desk or employee preserves account identity, balances and obligations.
@@ -47,8 +57,8 @@ Generated branches expose ordinary authenticated kiosk services. Branches and st
 
 | Versioned surface | Current version | Scope |
 | --- | --- | --- |
-| `BankingIntegration` | 2 | Server financial integration interface. |
-| Banking menu transport | 12 | Offered actions bound to the current player, menu, session and revision. |
+| `BankingIntegration` | 3 | Server financial integration interface. |
+| Banking menu transport | 13 | Offered actions bound to the current player, menu, session and revision. |
 | Banker dialogue transport | 1 | Explicit questions and fresh routing to physical banking access. |
 | Trader menu transport | 1 | Bounded server-offered actions; no client prices or financial authority. |
 | `EconomicSimulationIntegration` | 1 | Existing cached snapshots and legacy selected-plan history. |

@@ -65,7 +65,15 @@ public final class Holds {
           if (!authority.allows(intent, account, null, reads)) return reject("HOLD_ACCESS");
           if (!Settlement.openBank(reads, account, amount.currency()))
             return reject("HOLD_ACCOUNT");
-          if (available(reads, account, amount.currency()) < amount.minorUnits())
+          long balance = Settlement.posted(reads, account, amount.currency());
+          if (!ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.permits(
+              reads,
+              account,
+              amount.currency(),
+              balance,
+              Math.subtractExact(balance, amount.minorUnits()),
+              reserved(reads, account, amount.currency()),
+              ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.NORMAL))
             return reject("INSUFFICIENT_FUNDS");
           var hold = new Hold(intent.operationId().value(), account, amount, State.ACTIVE);
           return commit(

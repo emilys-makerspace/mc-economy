@@ -68,6 +68,7 @@ public final class PricingRuntime {
         });
     sources.add(new ca.emilybelnavis.mcmods.economy.credit.CreditLiabilities());
     sources.add(new ca.emilybelnavis.mcmods.economy.loan.LoanLiabilities());
+    sources.add(new ca.emilybelnavis.mcmods.economy.overdraft.OverdraftExposure());
     sources.addAll(extensions);
     return new WealthValuation(sources);
   }

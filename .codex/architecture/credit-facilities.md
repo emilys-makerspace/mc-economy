@@ -59,3 +59,7 @@ Credit underwriting includes outstanding loan exposure and blockers; loan underw
 ## Fixed advance fees (2026-11-09)
 
 Current physical advances freeze `AdvanceFees` (terminal anchor/generation/revision, bank and amounts) in their canonical request. All banks charge a CAD3.00 base fee converted to facility currency. A different issuing bank at an ATM adds a converted CAD2.50 base fee; tellers and same-bank ATMs are exempt. Both fees use captured current CAD/target rates and round once to the nearest 0.25 target major unit or 25 JPY, with HALF_UP ties. The canonical request includes the FX publication; changed publications reject a stale review. The requested proceeds, issuer fee and ATM surcharge consume reservation and advance principal together; fees count toward all underwriting/headroom checks and the outstanding 20% sublimit, accrue at the advance APR and follow existing repayment allocation. Fees are earned atomically by their supplying institutions. Purchase draws are unchanged. Old committed outcomes and historical snapshots retain their original amounts; replay cannot charge again.
+
+## Trusted over-limit integration (2026-11-12)
+
+[Current override contract](overdrafts.md) adds trusted Java-only flagged draws/checkout. Ordinary canonical bytes remain unchanged. Flagged transactions may exceed contractual headroom using issuer-funded extra principal; other risk/authority and advance sublimit checks remain. Repayment/increase reservations account for over-limit principal.

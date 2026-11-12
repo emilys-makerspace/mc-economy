@@ -10,13 +10,13 @@ Call `Economy.serverServices(server)` on the server thread. It can return `null`
 
 | Accessor on current `ServerServices` | Interface / version |
 | --- | --- |
-| `ledger()` | `api.BankingIntegration`,2 |
+| `ledger()` | `api.BankingIntegration`,3 |
 | `simulation()` | `api.EconomicSimulationIntegration`,1 |
 | `simulationHistory()` | `api.EconomicSimulationHistory`,1, additive cursor-bearing projection |
 | `itemValuation(server)` | `api.ItemValuationIntegration`,1; identity adapter1 |
 | `itemValuationProvider(server)` | `ItemValuationIntegration.Provider`, same session and loaded-module authentication |
 
-Existing three facade signatures and version meanings are unchanged. No legacy domain class is moved, removed or deprecated. Existing consumers can keep their compiled calls; consumers needing cursor-bearing rate history can adopt `simulationHistory()` independently. There is no unavoidable break or migration of saved data in A10-06. Interface version, current banking wire12, storage schema54, item identity adapter version and retained record/manifest versions are separate identifiers.
+Existing facade methods remain available. BankingIntegration3 adds trusted debit authority and flagged credit overloads. No legacy domain class is moved, removed or deprecated. Existing consumers can keep their compiled calls; consumers needing cursor-bearing rate history can adopt `simulationHistory()` independently. There is no unavoidable break or migration of saved data in A10-06. Interface version, current banking wire13, storage schema55, item identity adapter version and retained record/manifest versions are separate identifiers.
 
 Legacy exposure is deliberate and remains supported: BankingIntegration uses `foundation.PartyAuthorization.Grant`, `pricing.PricingPolicy/WealthValuation/ServicePricing`, `institution.InstitutionCatalog`, `foundation.LedgerService.CreditDrawQuote`, `credit.CreditFacilities/CreditDrawAdmission`, `journal.TerminalPolicy/JournalService/RegisterSales`, and `loan.Loans.Capabilities`. EconomicSimulationIntegration uses `simulation.SimulationDiagnostics.Snapshot` and `simulation.macro.MacroPlans.Outcome`, transitively currency-prime policies, effective FX snapshots, model ratios and mode enums. Do not serialize these Java implementation names as an independent persistence format. Retain their explicit identities/versions with durable consumer data.
 
@@ -46,7 +46,7 @@ No facade has a cancellation/rollback endpoint. Canceling a consumer's future or
 
 Storage/worker failure and shutdown can fail pending stages. Do not silently turn failures into zero balances, empty portfolios, current FX or another payment. This package adds no universal error envelope over existing signatures.
 
-## BankingIntegration2 signature inventory
+## BankingIntegration3 signature inventory
 
 Types below are the existing Java types; `Grant` means `PartyAuthorization.Grant` and identifiers are `api.Identifiers` records.
 
@@ -60,6 +60,9 @@ Types below are the existing Java types; `Grant` means `PartyAuthorization.Grant
 | `quoteCreditDraw(Grant, UUID token, TerminalPolicy.Anchor, UUID generation, AccountId funding, long amount, boolean purchase)` | `CompletionStage<Optional<LedgerService.CreditDrawQuote>>` |
 | `drawCredit(Grant, OperationId, RequestId, CreditFacilities.DrawRequest, CreditDrawAdmission.Proof)` | `JournalService.Submission` |
 | `creditCheckout(Grant, CreditFacilities.DrawRequest, CreditDrawAdmission.Proof)` | `RegisterSales.SettlementComposer` |
+| `drawCredit(Grant, OperationId, RequestId, CreditFacilities.DrawRequest, CreditDrawAdmission.Proof, boolean allowOverLimit)` | `JournalService.Submission` |
+| `creditCheckout(Grant, CreditFacilities.DrawRequest, CreditDrawAdmission.Proof, boolean allowOverLimit)` | `RegisterSales.SettlementComposer` |
+| `debitAccount(Grant, OperationId, RequestId, AccountId source, AccountId destination, Money, Overdrafts.DebitKind)` | `JournalService.Submission` |
 | `version()` / `collateralCapabilities()` | `int` / `Loans.Capabilities` |
 
 Global prime does not infer currency. `primeAt` requires a trusted past/current instant and preserves the saved policy identity; it does not reprice an old loan. Quotes retain exact currency, amounts, source revisions and expiry. Positive draw amounts must satisfy the current facility/product and sealed physical admission; a quote alone is not a draw capability. Purchase composition belongs only in the existing register COMMIT transaction. Current fixed unsecured lending remains supported; variable/secured products remain unsupported with the existing reason. No broad remote lending, account access or financial event stream is added.

@@ -229,10 +229,48 @@ public final class AutopayRuntime {
         || account.currency() != currency)
       return progress(
           null, settings, old, Autopay.State.CANCELLED, amount, null, at, "FUNDING_CLOSED", true);
-    if (Holds.available(reads, account.id().value(), currency) < amount) {
+    long balance = Settlement.posted(reads, account.id().value(), currency);
+    long after = Math.subtractExact(balance, amount);
+    if (!ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.permits(
+        reads,
+        account.id().value(),
+        currency,
+        balance,
+        after,
+        Holds.reserved(reads, account.id().value(), currency),
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.PRE_AUTHORIZED)) {
       boolean exhausted = old.attempts() == 2;
+      Commit declinedFee = null;
+      var protection =
+          ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.find(reads, account.id().value())
+              .orElse(null);
+      if ((protection == null || !protection.protectedAccount())
+          && after
+              < -ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.tolerance(
+                  reads, currency, at)) {
+        var bank =
+            ca.emilybelnavis.mcmods.economy.institution.BankProviders.find(reads, account.id())
+                .orElse(null);
+        if (bank != null && !bank.legacy()) {
+          long fee =
+              ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.converted(
+                  reads, currency, new java.math.BigDecimal("49.99"), 0, at);
+          var charged =
+              FeeSettlement.charge(
+                  reads,
+                  settings.world(),
+                  settings.owner(),
+                  new ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId(
+                      bank.bankKey()),
+                  new Money(currency, fee),
+                  account.id().value());
+          if (!(charged instanceof Commit committed))
+            throw new IllegalStateException("PAD decline fee unavailable");
+          declinedFee = committed;
+        }
+      }
       return progress(
-          null,
+          declinedFee,
           settings,
           old,
           exhausted ? Autopay.State.EXHAUSTED : Autopay.State.WAITING,

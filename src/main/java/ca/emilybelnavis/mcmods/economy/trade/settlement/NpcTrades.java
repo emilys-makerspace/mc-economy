@@ -325,16 +325,6 @@ public final class NpcTrades {
                     leg(bridge, NPC_BRIDGE, currency, -principal),
                     leg(issuance, ISSUANCE, currency, principal))));
       if (!groups.equals(expectedGroups(quote))) return rejected("NPC_FINANCIAL_PLAN_CHANGED");
-      long accountDebit =
-          offer.side() == Pricing.Side.BUY
-              ? (foreign == null
-                  ? principal
-                  : Math.addExact(
-                      foreign.conversion().debit().minorUnits(),
-                      foreign.pricing().fee().minorUnits()))
-              : 0;
-      if (accountDebit > Holds.available(reads, terms.account().value(), quote.accountCurrency()))
-        return rejected("INSUFFICIENT_FUNDS");
       var financialDecision =
           NpcSettlement.prepare(
               reads, quote.world(), groups, foreign == null ? List.of() : foreign.accounts());

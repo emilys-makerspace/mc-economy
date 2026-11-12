@@ -86,6 +86,13 @@ class AutopayTest {
   @Test
   void insufficientFundsAreAllOrNothingAndFinalRetryPrecedesDuePlusTwoReport() throws Exception {
     try (var f = new LoanTestFixture(path)) {
+      f.store.transaction(
+          tx -> {
+            tx.execute(
+                "INSERT INTO bank_account_providers VALUES(?,?,0,1,0)",
+                List.of(f.account.value().toString(), LoanTestFixture.BANK.key()));
+            return null;
+          });
       var loan = f.originate();
       enable(f, DebtRecords.Kind.LOAN, loan.id(), Autopay.Mode.LOAN_DUE);
       setCash(f, 0);
@@ -94,12 +101,12 @@ class AutopayTest {
       catchup(f, scheduler, due);
       long required = f.get(loan.id()).servicing().requiredMinor();
       assertTrue(required > 0);
-      assertEquals(0, cash(f));
+      assertEquals(-4999, cash(f));
       f.reopen();
       scheduler = scheduler(f);
       catchup(f, scheduler, due + DebtRecords.DAY);
       assertEquals(required, f.get(loan.id()).servicing().requiredMinor());
-      assertEquals(0, cash(f));
+      assertEquals(-9998, cash(f));
       f.clock.set(due + 2 * DebtRecords.DAY - 1);
       setCash(f, required);
       catchup(f, scheduler, due + 2 * DebtRecords.DAY);

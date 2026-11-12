@@ -375,10 +375,16 @@ public final class DepositYield {
     var plan = new Plan(reads);
     plan.base(original.records());
     var saved = new HashSet<StateKey>();
+    var savedClaims = new HashMap<StateKey, Claim>();
     original.records().stream()
         .filter(r -> r.type().equals(FACT))
         .map(r -> decode(r.payload()))
-        .forEach(c -> saved.add(new StateKey(c.account().value(), c.bank().key(), c.currency())));
+        .forEach(
+            c -> {
+              var key = new StateKey(c.account().value(), c.bank().key(), c.currency());
+              saved.add(key);
+              savedClaims.put(key, c);
+            });
     var deltas = postingDeltas(original.records());
     var affected = new TreeSet<UUID>();
     deltas.keySet().forEach(k -> affected.add(k.id));
@@ -386,6 +392,7 @@ public final class DepositYield {
     var newOwners = new HashMap<UUID, PlayerId>();
     var newCurrencies = new HashMap<UUID, EconomyCurrency>();
     var closes = new HashSet<UUID>();
+    var involuntaryCloses = new HashSet<UUID>();
     for (var record : original.records()) {
       var p = record.payload().split("\\|", -1);
       if (record.type().equals("economy:bank-provider")
@@ -404,6 +411,14 @@ public final class DepositYield {
         var id = UUID.fromString(p[1]);
         affected.add(id);
         closes.add(id);
+      }
+      if (record
+          .type()
+          .equals(ca.emilybelnavis.mcmods.economy.overdraft.OverdraftCollections.FACT)) {
+        var id = UUID.fromString(p[1]);
+        affected.add(id);
+        closes.add(id);
+        involuntaryCloses.add(id);
       }
       if (record.type().equals(RebaseSettlement.MAPPING)) {
         var id = UUID.fromString(p[1]);
@@ -461,12 +476,45 @@ public final class DepositYield {
       var key = new AccountId(id);
       if (oldBank != null
           && (saved.contains(new StateKey(id, oldBank, oldCurrency))
-              || plan.current.containsKey(new StateKey(id, oldBank, oldCurrency)))) continue;
+              || plan.current.containsKey(new StateKey(id, oldBank, oldCurrency)))
+          && !involuntaryCloses.contains(id)) continue;
       if (oldBank != null && !oldBank.equals(BankProviders.UNASSIGNED_PROVIDER)) {
-        var prior =
-            load(reads, key, new InstitutionCatalog.InstitutionId(oldBank), oldCurrency, effective);
+        var stateKey = new StateKey(id, oldBank, oldCurrency);
+        var prior = plan.current.get(stateKey);
+        if (prior == null) prior = savedClaims.get(stateKey);
+        if (prior == null)
+          prior =
+              load(
+                  reads,
+                  key,
+                  new InstitutionCatalog.InstitutionId(oldBank),
+                  oldCurrency,
+                  effective);
         boolean changed = !Objects.equals(oldBank, bank) || oldCurrency != currency;
-        if (closes.contains(id)) {
+        if (involuntaryCloses.contains(id)) {
+          // A default cannot require an owner-selected payout destination or fresh bank liquidity.
+          // Stop deposit principal earning, but preserve all earned yield and its payable claim;
+          // the existing closed-account settlement route can later pay an open destination.
+          var next = prior.active() ? finishPartial(prior, effective, reads) : prior;
+          next =
+              plan.recognize(
+                  next, Math.subtractExact(next.recognizedMinor(), prior.recognizedMinor()));
+          plan.save(
+              change(
+                  next,
+                  false,
+                  effective,
+                  next.dayStart(),
+                  0,
+                  zero(),
+                  next.accruedMajor(),
+                  next.priorCloseMajor(),
+                  next.recognizedMinor(),
+                  next.dueMillis(),
+                  next.distressed(),
+                  next.paidMajor(),
+                  next.apr()));
+        } else if (closes.contains(id)) {
           var others =
               reads.query(
                   "SELECT * FROM deposit_yield_claims WHERE account_id=? AND NOT(bank_key=? AND currency=?) AND (recognized_minor>0 OR accrued_major NOT IN ('0','0.000000000000000000')) ORDER BY bank_key,currency LIMIT 254",
@@ -574,8 +622,11 @@ public final class DepositYield {
         } else {
           var next = segment(prior, effective, reads);
           long balance =
-              Math.addExact(prior.balanceMinor(), deltas.getOrDefault(new Key(id, currency), 0L));
-          if (balance < 0) throw new IllegalStateException("Negative yield principal");
+              Math.max(
+                  0,
+                  Math.addExact(
+                      Settlement.posted(reads, id, currency),
+                      deltas.getOrDefault(new Key(id, currency), 0L)));
           plan.save(
               change(
                   next,
@@ -604,6 +655,7 @@ public final class DepositYield {
             Math.addExact(
                 Settlement.posted(reads, id, currency),
                 deltas.getOrDefault(new Key(id, currency), 0L));
+        balance = Math.max(0, balance);
         var targetBank = new InstitutionCatalog.InstitutionId(bank);
         var retained = find(reads, key, targetBank, currency);
         Claim blank;
@@ -800,7 +852,7 @@ public final class DepositYield {
             && !binding.isEmpty()
             && binding.getFirst().get("bank_key").equals(bank.key());
     long start = Objects.requireNonNull(activation(reads));
-    long balance = active ? Settlement.posted(reads, account.value(), currency) : 0;
+    long balance = active ? Math.max(0, Settlement.posted(reads, account.value(), currency)) : 0;
     return initial(account, owner, bank, currency, Math.min(start, now), balance, reads);
   }
 
@@ -1065,7 +1117,10 @@ public final class DepositYield {
                     now);
           target = segment(target, now, reads);
           long balance =
-              Settlement.posted(overlay(reads, deltas), destination.value(), destinationCurrency);
+              Math.max(
+                  0,
+                  Settlement.posted(
+                      overlay(reads, deltas), destination.value(), destinationCurrency));
           save(
               change(
                   target,
@@ -1107,7 +1162,9 @@ public final class DepositYield {
               s.lastMillis(),
               s.dayStart(),
               s.active() && destination.equals(s.account())
-                  ? Math.addExact(s.balanceMinor(), amount)
+                  ? Math.max(
+                      0,
+                      Settlement.posted(overlay(reads, deltas), destination.value(), s.currency()))
                   : s.balanceMinor(),
               s.weightedMajorMillis(),
               residual,

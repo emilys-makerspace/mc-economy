@@ -2,18 +2,18 @@ package ca.emilybelnavis.mcmods.economy.api;
 
 import java.util.Objects;
 
-/** Version 1 ledger view for one currency of a nonnegative account product. */
+/** Version 2 ledger view. Available funds may be negative for an overdrawn bank account. */
 public record AccountFunds(
     EconomyCurrency currency,
     long availableMinorUnits,
     long reservedMinorUnits,
     long restrictedMinorUnits) {
-  public static final int VERSION = 1;
+  public static final int VERSION = 2;
 
   public AccountFunds {
     Objects.requireNonNull(currency, "currency");
-    if (availableMinorUnits < 0 || reservedMinorUnits < 0 || restrictedMinorUnits < 0) {
-      throw new IllegalArgumentException("Negative account funds category");
+    if (reservedMinorUnits < 0 || restrictedMinorUnits < 0) {
+      throw new IllegalArgumentException("Negative reserved or restricted funds");
     }
     total(availableMinorUnits, reservedMinorUnits, restrictedMinorUnits);
   }
@@ -22,7 +22,7 @@ public record AccountFunds(
     return VERSION;
   }
 
-  /** The ledger assigns each posted minor unit to exactly one of the three categories. */
+  /** Signed available funds plus reserved and restricted funds give the posted balance. */
   public long postedMinorUnits() {
     return total(availableMinorUnits, reservedMinorUnits, restrictedMinorUnits);
   }

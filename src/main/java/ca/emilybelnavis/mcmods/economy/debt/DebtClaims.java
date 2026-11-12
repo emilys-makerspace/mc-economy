@@ -94,4 +94,22 @@ public final class DebtClaims {
     return Settlement.posted(reads, FinancialAccounts.id(world, party, role, currency), currency)
         == expected;
   }
+
+  /** Frozen overdrafts live in their case, so case changes maintain their claim totals directly. */
+  public static List<String> overdraftStatements() {
+    return List.of(
+        "CREATE TRIGGER debt_claim_overdraft_insert AFTER INSERT ON debt_cases WHEN NEW.kind='OVERDRAFT' BEGIN INSERT INTO debt_claim_totals VALUES(NEW.world_id,NEW.creditor,'RECEIVABLE',NEW.currency,NEW.principal_minor+NEW.interest_minor) ON CONFLICT(world_id,party,role,currency) DO UPDATE SET minor=minor+excluded.minor; INSERT INTO debt_claim_totals VALUES(NEW.world_id,'economy:overdraft-borrower/'||NEW.owner_id,'LIABILITY',NEW.currency,NEW.principal_minor+NEW.interest_minor) ON CONFLICT(world_id,party,role,currency) DO UPDATE SET minor=minor+excluded.minor; END",
+        "CREATE TRIGGER debt_claim_overdraft_update AFTER UPDATE ON debt_cases WHEN NEW.kind='OVERDRAFT' BEGIN UPDATE debt_claim_totals SET minor=minor+NEW.principal_minor+NEW.interest_minor-OLD.principal_minor-OLD.interest_minor WHERE world_id=NEW.world_id AND party='economy:overdraft-borrower/'||NEW.owner_id AND role='LIABILITY' AND currency=NEW.currency; UPDATE debt_claim_totals SET minor=minor+NEW.principal_minor+NEW.interest_minor-OLD.principal_minor-OLD.interest_minor WHERE NEW.creditor=OLD.creditor AND world_id=NEW.world_id AND party=NEW.creditor AND role='RECEIVABLE' AND currency=NEW.currency; END");
+  }
+
+  public static InstitutionCatalog.InstitutionId borrower(
+      DebtRecords.Kind kind, ca.emilybelnavis.mcmods.economy.api.Identifiers.PlayerId owner) {
+    String prefix =
+        switch (kind) {
+          case CARD -> "economy:borrower/";
+          case LOAN -> "economy:loan-borrower/";
+          case OVERDRAFT -> "economy:overdraft-borrower/";
+        };
+    return new InstitutionCatalog.InstitutionId(prefix + owner.value());
+  }
 }

@@ -3,6 +3,7 @@ package ca.emilybelnavis.mcmods.economy.debt;
 import ca.emilybelnavis.mcmods.economy.storage.StorageException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Additive lifecycle projections and append-only report revision lookup. */
@@ -37,17 +38,53 @@ public final class DebtSchema {
   }
 
   public static void validate(Connection connection) throws SQLException {
+    int version;
+    try (var statement = connection.createStatement();
+        var rows = statement.executeQuery("PRAGMA user_version")) {
+      rows.next();
+      version = rows.getInt(1);
+    }
     var expected = statements();
     for (int index = 0; index < NAMES.size(); index++) {
       try (var query = connection.prepareStatement("SELECT sql FROM sqlite_schema WHERE name=?")) {
         query.setString(1, NAMES.get(index));
         try (var rows = query.executeQuery()) {
-          if (!rows.next() || !expected.get(index).equals(rows.getString(1))) {
+          String definition = expected.get(index);
+          if (version >= 55 && definition.startsWith("CREATE TABLE debt_cases"))
+            definition = overdraftCases();
+          if (!rows.next() || !definition.equals(rows.getString(1))) {
             throw new StorageException(
                 StorageException.Kind.SCHEMA, "Missing or changed debt lifecycle schema");
           }
         }
       }
     }
+  }
+
+  /** Existing facts/checks remain unchanged; only new frozen OVERDRAFT cases use the new kind. */
+  public static List<String> overdraftMigration() {
+    var sql = new ArrayList<String>();
+    sql.add("CREATE TABLE overdraft_debt_cases_backup AS SELECT * FROM debt_cases");
+    sql.add("DROP TABLE debt_cases");
+    sql.add(overdraftCases());
+    sql.add("INSERT INTO debt_cases SELECT * FROM overdraft_debt_cases_backup");
+    sql.add("DROP TABLE overdraft_debt_cases_backup");
+    for (String statement : statements())
+      if (statement.startsWith("CREATE INDEX debt_case_")
+          || statement.startsWith("CREATE INDEX debt_pending_sale")) sql.add(statement);
+    sql.add(
+        "CREATE INDEX debt_collectible_expiry ON debt_cases(collection_expires,case_id) WHERE collectability='COLLECTIBLE' AND payment<>'SETTLED'");
+    sql.add(
+        "CREATE INDEX collection_agent_eligible ON debt_cases(world_id,owner_id,case_id) WHERE collectability='COLLECTIBLE' AND payment<>'SETTLED'");
+    // The generic creditor-transfer trigger belongs to the rebuilt table.
+    sql.add(DebtClaims.statements().getLast());
+    sql.addAll(DebtClaims.overdraftStatements());
+    return List.copyOf(sql);
+  }
+
+  private static String overdraftCases() {
+    return statements()
+        .get(4)
+        .replace("kind IN('CARD','LOAN')", "kind IN('CARD','LOAN','OVERDRAFT')");
   }
 }

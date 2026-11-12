@@ -349,7 +349,7 @@ public final class BankingNetwork {
   }
 
   private static void register(RegisterPayloadHandlersEvent event) {
-    var registrar = event.registrar("12");
+    var registrar = event.registrar("13");
     registrar.playToServer(
         Action.PAYLOAD_TYPE,
         Action.CODEC,

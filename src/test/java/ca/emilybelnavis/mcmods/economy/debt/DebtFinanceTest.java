@@ -8,6 +8,7 @@ import ca.emilybelnavis.mcmods.economy.credit.*;
 import ca.emilybelnavis.mcmods.economy.fx.FxService;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.journal.*;
+import ca.emilybelnavis.mcmods.economy.overdraft.OverdraftCollections;
 import ca.emilybelnavis.mcmods.economy.storage.*;
 import java.math.BigDecimal;
 import java.nio.file.Path;
@@ -242,6 +243,131 @@ class DebtFinanceTest {
     @Override
     public void close() throws Exception {
       store.close();
+    }
+  }
+
+  @Test
+  void overdraftDefaultClosesPrimaryAndKeepsSoldDebtPayableWithoutCreatingCash() throws Exception {
+    try (var fixture = new Fixture()) {
+      long defaultAt = 90 * DebtRecords.DAY;
+      long bankCash = fixture.balance(BANK, FinancialAccounts.Role.CASH);
+      long priorClaim = fixture.balance(BANK, FinancialAccounts.Role.RECEIVABLE);
+      var overdraftBorrower = DebtClaims.borrower(DebtRecords.Kind.OVERDRAFT, fixture.player);
+      // Seed an existing negative account and outstanding hold; the default must cancel the hold
+      // and preserve the primary identity rather than attempting ordinary voluntary closure.
+      fixture.store.transaction(
+          tx -> {
+            tx.execute(
+                "INSERT INTO bank_account_providers VALUES(?,?,0,1,0)",
+                List.of(fixture.funding.value().toString(), BANK.key()));
+            LedgerProjection.write(tx, fixture.funding.value(), CAD, -10000);
+            tx.execute(
+                "INSERT INTO ledger_holds VALUES(?,?,?,? ,?,'ACTIVE')",
+                List.of(
+                    UUID.randomUUID().toString(),
+                    fixture.funding.value().toString(),
+                    "CAD",
+                    "200",
+                    Journal.actorKey(fixture.player)));
+            return null;
+          });
+      committed(
+          fixture.submit(
+              new Journal.Kind("fixture:overdraft", "fixture:default"),
+              new Journal.CanonicalRequest(1, Map.of("effective", Long.toString(defaultAt))),
+              new JournalEngine.Registration(
+                  1,
+                  (intent, reads) ->
+                      OverdraftCollections.defaultAccount(
+                          reads, fixture.funding.value(), defaultAt))));
+      var pending =
+          fixture.store.transaction(
+              tx ->
+                  DebtLifecycle.facilityCase(
+                          tx::query, DebtRecords.Kind.OVERDRAFT, fixture.funding.value())
+                      .orElseThrow());
+      assertEquals(10000, pending.debtMinor());
+      assertEquals(bankCash, fixture.balance(BANK, FinancialAccounts.Role.CASH));
+      assertEquals(priorClaim + 10000, fixture.balance(BANK, FinancialAccounts.Role.RECEIVABLE));
+      assertEquals(-10000, fixture.balance(overdraftBorrower, FinancialAccounts.Role.LIABILITY));
+      fixture.store.transaction(
+          tx -> {
+            var account =
+                tx.query(
+                        "SELECT status,is_primary FROM account_catalog WHERE account_id=?",
+                        List.of(fixture.funding.value().toString()),
+                        1)
+                    .getFirst();
+            assertEquals("CLOSED", account.get("status"));
+            assertEquals("1", account.get("is_primary"));
+            assertEquals(0, Settlement.posted(tx::query, fixture.funding.value(), CAD));
+            assertEquals(0, Holds.reserved(tx::query, fixture.funding.value(), CAD));
+            assertTrue(
+                DebtClaims.matches(
+                    tx::query,
+                    fixture.world,
+                    overdraftBorrower,
+                    FinancialAccounts.Role.LIABILITY,
+                    CAD));
+            return null;
+          });
+      committed(
+          fixture.submit(
+              new Journal.Kind("fixture:overdraft", "fixture:sell"),
+              new Journal.CanonicalRequest(1, Map.of("effective", Long.toString(defaultAt + 1))),
+              new JournalEngine.Registration(
+                  1, (intent, reads) -> DebtLifecycle.sell(reads, pending.id(), defaultAt + 1))));
+      var repayment = UUID.randomUUID();
+      fixture.store.transaction(
+          tx -> {
+            tx.execute(
+                "INSERT INTO account_catalog VALUES(?,?,'BANK','CAD','OPEN',1,0)",
+                List.of(repayment.toString(), fixture.player.value().toString()));
+            return null;
+          });
+      var funds =
+          List.of(
+              new PostingBatch.Leg(
+                  Settlement.issuanceAccount(CAD),
+                  PostingBatch.Role.ISSUANCE,
+                  CAD,
+                  new Money(CAD, -10000)),
+              new PostingBatch.Leg(
+                  repayment, PostingBatch.Role.ACCOUNT, CAD, new Money(CAD, 10000)));
+      committed(
+          fixture.submit(
+              new Journal.Kind("fixture:overdraft", "fixture:fund"),
+              Settlement.minorRequest(funds),
+              Settlement.registrationMinor((intent, leg, reads) -> PostingBatch.Authority.ISSUE)));
+      for (long amount : List.of(4000L, 6000L)) {
+        var current =
+            fixture.store.transaction(
+                tx -> DebtLifecycle.findCase(tx::query, pending.id()).orElseThrow());
+        var legs =
+            List.of(
+                new PostingBatch.Leg(
+                    repayment, PostingBatch.Role.ACCOUNT, CAD, new Money(CAD, -amount)));
+        committed(
+            fixture.submit(
+                new Journal.Kind("fixture:overdraft", "fixture:pay"),
+                new Journal.CanonicalRequest(1, Map.of("amount", Long.toString(amount))),
+                new JournalEngine.Registration(
+                    1,
+                    (intent, reads) ->
+                        DebtLifecycle.pay(
+                            reads, current, amount, defaultAt + 2, legs, List.of()))));
+      }
+      var settled =
+          fixture.store.transaction(
+              tx -> DebtLifecycle.findCase(tx::query, pending.id()).orElseThrow());
+      assertEquals(DebtRecords.Sale.SOLD, settled.sale());
+      assertEquals(DebtRecords.Payment.SETTLED, settled.payment());
+      assertEquals(0, settled.debtMinor());
+      assertEquals(0, fixture.balance(overdraftBorrower, FinancialAccounts.Role.LIABILITY));
+      assertEquals(
+          0, fixture.balance(InstitutionCatalog.WAYSTONE, FinancialAccounts.Role.RECEIVABLE));
+      assertEquals(
+          0, fixture.balance(InstitutionCatalog.WAYSTONE, FinancialAccounts.Role.ALLOWANCE));
     }
   }
 

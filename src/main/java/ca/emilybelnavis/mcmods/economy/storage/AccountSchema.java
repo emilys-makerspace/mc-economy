@@ -2,6 +2,7 @@ package ca.emilybelnavis.mcmods.economy.storage;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 /** V6 account catalog constraints and owner lookup indexes. */
@@ -66,6 +67,33 @@ final class AccountSchema {
     return statements().get(6).replace("OFFSET 2", "OFFSET 3");
   }
 
+  /** Preserve every identity while allowing involuntary closure of a primary BANK account. */
+  public static List<String> overdraftMigration() {
+    var sql = new ArrayList<String>();
+    // References from holds/providers remain valid once the table has been recreated in this
+    // transaction. Do not rename the old table: that would rewrite their foreign-key targets.
+    sql.add("PRAGMA defer_foreign_keys=ON");
+    sql.add("CREATE TABLE overdraft_account_catalog_backup AS SELECT * FROM account_catalog");
+    sql.add("DROP TABLE account_catalog");
+    sql.add(overdraftTable());
+    sql.add("INSERT INTO account_catalog SELECT * FROM overdraft_account_catalog_backup");
+    sql.add("DROP TABLE overdraft_account_catalog_backup");
+    for (String original : statements().subList(1, statements().size()))
+      sql.add(
+          original.startsWith("CREATE TRIGGER account_insert_guard")
+              ? fourAccountGuard()
+              : original);
+    return List.copyOf(sql);
+  }
+
+  private static String overdraftTable() {
+    return statements()
+        .getFirst()
+        .replace(
+            "CHECK(is_primary=0 OR (purpose='BANK' AND status='OPEN'))",
+            "CHECK(is_primary=0 OR purpose='BANK')");
+  }
+
   static void validate(Connection connection) throws SQLException {
     int schema;
     try (var stmt = connection.createStatement();
@@ -79,6 +107,8 @@ final class AccountSchema {
             schema >= 20 && original.startsWith("CREATE TRIGGER account_insert_guard")
                 ? fourAccountGuard()
                 : original;
+        if (schema >= 55 && original.startsWith("CREATE TABLE account_catalog"))
+          sql = overdraftTable();
         // CREATE [UNIQUE] <object kind> <object name> ...
         String[] tokens = sql.split("[\\s(]+", 5);
         String name = tokens[tokens[1].equals("UNIQUE") ? 3 : 2];

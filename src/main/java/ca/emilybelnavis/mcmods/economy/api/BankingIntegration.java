@@ -7,9 +7,9 @@ import ca.emilybelnavis.mcmods.economy.pricing.*;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 
-/** Version-two server integration contract. Grants come from authenticated server context. */
+/** Version-three server integration contract. Grants come from authenticated server context. */
 public interface BankingIntegration {
-  int VERSION = 2;
+  int VERSION = 3;
 
   /** Legacy global configured-policy access; does not infer a currency. */
   CompletionStage<Optional<PricingPolicy.Policy>> prime(PartyAuthorization.Grant grant);
@@ -54,12 +54,48 @@ public interface BankingIntegration {
       ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof);
 
   /**
+   * Trusted server integration override of contractual credit headroom. This flag must never be
+   * accepted from a client packet. The physical proof and all other risk/authority checks remain.
+   */
+  ca.emilybelnavis.mcmods.economy.journal.JournalService.Submission drawCredit(
+      PartyAuthorization.Grant grant,
+      Identifiers.OperationId operation,
+      Identifiers.RequestId attempt,
+      ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
+      ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof,
+      boolean allowOverLimit);
+
+  /**
    * Install only as the register COMMIT composer, with its exact frozen canonical credit binding.
    */
   ca.emilybelnavis.mcmods.economy.journal.RegisterSales.SettlementComposer creditCheckout(
       PartyAuthorization.Grant grant,
       ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
       ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof);
+
+  /**
+   * Trusted over-limit variant. Freeze request.request(allowOverLimit) into the register's
+   * credit_request binding; ordinary checkout callers retain the unchanged overload above.
+   */
+  ca.emilybelnavis.mcmods.economy.journal.RegisterSales.SettlementComposer creditCheckout(
+      PartyAuthorization.Grant grant,
+      ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DrawRequest request,
+      ca.emilybelnavis.mcmods.economy.credit.CreditDrawAdmission.Proof proof,
+      boolean allowOverLimit);
+
+  /**
+   * Bank debit authority must be chosen by trusted integration code, never copied from a packet.
+   * PRE_AUTHORIZED preserves a declined debit while charging its applicable insufficient-funds fee.
+   * INTEGRATION_OVERRIDE permits spending beyond the overdraft allowance.
+   */
+  ca.emilybelnavis.mcmods.economy.journal.JournalService.Submission debitAccount(
+      PartyAuthorization.Grant grant,
+      Identifiers.OperationId operation,
+      Identifiers.RequestId attempt,
+      Identifiers.AccountId source,
+      Identifiers.AccountId destination,
+      Money amount,
+      ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind authority);
 
   // Integration mods rely on both VERSION and version().
   @SuppressWarnings("java:S1845")

@@ -419,6 +419,22 @@ public final class DebtDiagnostics {
               card.revision(),
               card.owedMinor());
     }
+    if (kind == Kind.OVERDRAFT) {
+      var debt =
+          DebtLifecycle.facilityCase(reads, kind, id)
+              .filter(c -> c.world().equals(owner.world()) && c.owner().equals(player(owner)))
+              .orElse(null);
+      return debt == null
+          ? null
+          : new Facility(
+              kind,
+              id,
+              debt.origin(),
+              debt.currency(),
+              debt.payment() == Payment.SETTLED ? "SETTLED" : "DEFAULTED",
+              debt.revision(),
+              debt.debtMinor());
+    }
     var loan = Loans.find(reads, id).filter(c -> c.party().equals(owner)).orElse(null);
     return loan == null
         ? null
@@ -445,10 +461,7 @@ public final class DebtDiagnostics {
       Facility facility,
       Optional<DebtRecords.Case> debt) {
     var creditor = debt.map(DebtRecords.Case::creditor).orElse(facility.origin());
-    var borrower =
-        new InstitutionId(
-            (facility.kind() == Kind.CARD ? "economy:borrower/" : "economy:loan-borrower/")
-                + player(owner).value());
+    var borrower = DebtClaims.borrower(facility.kind(), player(owner));
     long receivable =
         Settlement.posted(
             reads,

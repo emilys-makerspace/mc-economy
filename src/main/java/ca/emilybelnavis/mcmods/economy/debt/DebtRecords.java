@@ -27,7 +27,8 @@ public final class DebtRecords {
 
   public enum Kind {
     CARD,
-    LOAN
+    LOAN,
+    OVERDRAFT
   }
 
   public enum Sale {

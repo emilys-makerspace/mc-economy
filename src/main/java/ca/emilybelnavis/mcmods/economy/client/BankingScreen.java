@@ -625,6 +625,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                   case "finance_credit_preview", "finance_credit_limit" ->
                       ui("ui.client.credit_limit");
                   case "credit_adv_preview" -> ui("ui.client.advance_amount");
+                  case "finance_od_preview" -> ui("ui.finance.od.input");
                   default -> ui("ui.client.debt_payment");
                 };
             amountBox(
@@ -639,7 +640,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                     : Set.of("finance_credit_preview", "finance_credit_limit")
                             .contains(choice.action())
                         ? "2500"
-                        : "100.00");
+                        : choice.action().equals("finance_od_preview") ? "100" : "100.00");
             if (choice.action().equals("finance_loan_preview")) {
               termInput =
                   addRenderableWidget(

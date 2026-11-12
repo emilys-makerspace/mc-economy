@@ -355,13 +355,36 @@ public final class CreditUnderwriting {
       long currentExposure,
       long draw,
       EconomyCurrency worldCurrency) {
+    return drawAllowed(
+        score,
+        tierTwo,
+        creditBlocked,
+        contractualLimit,
+        owed,
+        currentExposure,
+        draw,
+        worldCurrency,
+        false);
+  }
+
+  /** The trusted integration flag bypasses headroom only, never credit risk restrictions. */
+  public static boolean drawAllowed(
+      int score,
+      boolean tierTwo,
+      boolean creditBlocked,
+      long contractualLimit,
+      long owed,
+      long currentExposure,
+      long draw,
+      EconomyCurrency worldCurrency,
+      boolean allowOverLimit) {
     checkScore(score);
     if (contractualLimit < 0 || owed < 0 || currentExposure < 0 || draw <= 0)
       throw new IllegalArgumentException("Draw input");
     if (score < 500
         || creditBlocked
-        || owed > contractualLimit
-        || exceeds(owed, draw, contractualLimit)) return false;
+        || !allowOverLimit && (owed > contractualLimit || exceeds(owed, draw, contractualLimit)))
+      return false;
     return currentExposure <= minor(exposureCeiling(score, tierTwo), worldCurrency);
   }
 

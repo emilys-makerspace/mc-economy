@@ -55,9 +55,12 @@ public final class DebtFinance {
   public static Frozen freeze(
       ReadView reads, DebtRecords.Kind kind, UUID facility, long effective) {
     if (effective < 0) throw new IllegalArgumentException("Default instant");
-    return kind == DebtRecords.Kind.CARD
-        ? freezeCard(reads, facility, effective)
-        : freezeLoan(reads, facility, effective);
+    return switch (kind) {
+      case CARD -> freezeCard(reads, facility, effective);
+      case LOAN -> freezeLoan(reads, facility, effective);
+      case OVERDRAFT ->
+          throw new IllegalArgumentException("Overdrafts use their 90-day account default");
+    };
   }
 
   private static Frozen freezeCard(ReadView reads, UUID id, long effective) {
@@ -395,6 +398,23 @@ public final class DebtFinance {
           Math.subtractExact(next.owedMinor(), next.principalMinor()),
           discount);
     }
+    if (debt.kind() == DebtRecords.Kind.OVERDRAFT) {
+      long interestPaid = Math.min(amount, debt.interestMinor());
+      long principalPaid = Math.subtractExact(amount, interestPaid);
+      var commit =
+          compose(
+              reads,
+              legs,
+              accounts,
+              List.of(accountingFact(debt, "PAYMENT", effective, amount, discount)),
+              "COLLECTION_PAID",
+              tx -> {});
+      return new PaymentPlan(
+          commit,
+          Math.subtractExact(debt.principalMinor(), principalPaid),
+          Math.subtractExact(debt.interestMinor(), interestPaid),
+          discount);
+    }
     var old = Loans.find(reads, debt.facility()).orElseThrow();
     var paid = LoanServicing.repay(old.servicing(), amount, old.servicing().lastAccrued());
     var next =
@@ -433,7 +453,9 @@ public final class DebtFinance {
     var facts = new ArrayList<Journal.Record>();
     facts.add(accountingFact(debt, "WRITE_OFF", debt.collectionExpires(), debt.debtMinor(), loss));
     Projection clearRequirements;
-    if (debt.kind() == DebtRecords.Kind.CARD) {
+    if (debt.kind() == DebtRecords.Kind.OVERDRAFT) {
+      clearRequirements = tx -> {};
+    } else if (debt.kind() == DebtRecords.Kind.CARD) {
       var old = CreditFacilities.find(reads, debt.facility()).orElseThrow();
       var next =
           card(
@@ -473,7 +495,24 @@ public final class DebtFinance {
   }
 
   private static void requireFrozen(ReadView reads, DebtRecords.Case debt) {
-    if (debt.kind() == DebtRecords.Kind.CARD) {
+    if (debt.kind() == DebtRecords.Kind.OVERDRAFT) {
+      var rows =
+          reads.query(
+              "SELECT owner_id,currency,status FROM account_catalog WHERE account_id=? AND purpose='BANK'",
+              List.of(debt.facility().toString()),
+              1);
+      var source = rows.isEmpty() ? null : rows.getFirst();
+      var binding = BankProviders.find(reads, new AccountId(debt.facility())).orElse(null);
+      if (source == null
+          || !source.get("status").equals("CLOSED")
+          || !source.get("owner_id").equals(debt.owner().value().toString())
+          || !source.get("currency").equals(debt.currency().name())
+          || binding == null
+          || !binding.bankKey().equals(debt.origin().key())
+          || Settlement.posted(reads, debt.facility(), debt.currency()) != 0
+          || !DebtLifecycle.findCase(reads, debt.id()).filter(debt::equals).isPresent())
+        throw new IllegalArgumentException("Frozen overdraft binding");
+    } else if (debt.kind() == DebtRecords.Kind.CARD) {
       var source =
           CreditFacilities.find(reads, debt.facility())
               .orElseThrow(() -> new IllegalArgumentException("Credit source unavailable"));
@@ -621,9 +660,7 @@ public final class DebtFinance {
   }
 
   private static InstitutionCatalog.InstitutionId borrower(DebtRecords.Kind kind, PlayerId owner) {
-    return new InstitutionCatalog.InstitutionId(
-        (kind == DebtRecords.Kind.CARD ? "economy:borrower/" : "economy:loan-borrower/")
-            + owner.value());
+    return DebtClaims.borrower(kind, owner);
   }
 
   private static void add(

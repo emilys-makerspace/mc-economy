@@ -174,15 +174,16 @@ public final class WealthValuation {
       for (var row : accounts) {
         var currency = EconomyCurrency.valueOf(row.get("currency"));
         long minor = Long.parseLong(row.get("minor_units"));
-        if (minor < 0) return unavailable("VALUATION_NEGATIVE_ASSET", now);
         var amount =
-            BigDecimal.valueOf(minor).divide(BigDecimal.valueOf(currency.minorUnitsPerMajor()));
+            BigDecimal.valueOf(minor)
+                .abs()
+                .divide(BigDecimal.valueOf(currency.minorUnitsPerMajor()));
         var component = new Component("ledger:" + row.get("account_id"), currency, amount);
         net =
             net.add(
                 value(
                     component,
-                    Kind.ASSET,
+                    minor < 0 ? Kind.LIABILITY : Kind.ASSET,
                     fx.rates(),
                     denomination.currency(),
                     components,

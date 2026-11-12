@@ -334,6 +334,16 @@ public final class BankProviders {
           }
           if (binding.bankKey().equals(UNASSIGNED_PROVIDER))
             return reject("PROVIDER_ASSIGNMENT_REQUIRED");
+          if (c.action() == BranchAdmission.Action.SWITCH_SOURCE
+              || c.action() == BranchAdmission.Action.SWITCH_TARGET) {
+            var overdraft =
+                ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.find(
+                        reads, account.id().value())
+                    .orElse(null);
+            if (Settlement.posted(reads, account.id().value(), account.currency()) < 0
+                || overdraft != null && !overdraft.closed() && overdraft.protectedAccount())
+              return reject("OVERDRAFT_TRANSITION_BLOCKED");
+          }
           if (c.action() == BranchAdmission.Action.SWITCH_SOURCE) {
             if (!binding.bankKey().equals(bank.id().key())
                 || c.target() == null

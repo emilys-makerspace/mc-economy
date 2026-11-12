@@ -15,6 +15,19 @@ public final class InstitutionSettlement {
       JournalEngine.ReadView reads,
       List<PostingBatch.Leg> legs,
       List<FinancialAccounts.Account> planned) {
+    return prepare(
+        reads,
+        legs,
+        planned,
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.NORMAL);
+  }
+
+  /** Caller binds this trusted authority to the canonical domain operation. */
+  public static JournalEngine.Decision prepare(
+      JournalEngine.ReadView reads,
+      List<PostingBatch.Leg> legs,
+      List<FinancialAccounts.Account> planned,
+      ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind debitKind) {
     var authority =
         legs.stream().anyMatch(l -> l.role() == PostingBatch.Role.CLEARING)
             ? PostingBatch.Authority.FX
@@ -65,8 +78,14 @@ public final class InstitutionSettlement {
         var a = accounts.get(key.id());
         if (a == null
             && !key.id().equals(Settlement.clearingAccount(key.currency()))
-            && next < Holds.reserved(reads, key.id(), key.currency()))
-          return reject("INSUFFICIENT_FUNDS");
+            && !ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.permits(
+                reads,
+                key.id(),
+                key.currency(),
+                Settlement.posted(reads, key.id(), key.currency()),
+                next,
+                Holds.reserved(reads, key.id(), key.currency()),
+                debitKind)) return reject("INSUFFICIENT_FUNDS");
         if (a != null) {
           boolean invalid =
               switch (a.role()) {

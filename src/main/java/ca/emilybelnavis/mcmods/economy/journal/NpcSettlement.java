@@ -120,7 +120,14 @@ public final class NpcSettlement {
           if (role == PostingBatch.Role.NPC_BRIDGE && value < 0)
             return reject("NPC_BRIDGE_INTERMEDIATE");
           if (role == PostingBatch.Role.ACCOUNT
-              && value < Holds.reserved(reads, key.id(), key.currency()))
+              && !ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.permits(
+                  reads,
+                  key.id(),
+                  key.currency(),
+                  Settlement.posted(reads, key.id(), key.currency()),
+                  value,
+                  Holds.reserved(reads, key.id(), key.currency()),
+                  ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.NORMAL))
             return reject("INSUFFICIENT_FUNDS");
           var financial = registered.get(key.id());
           if (financial != null && !normal(financial.role(), value))

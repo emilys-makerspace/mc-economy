@@ -36,6 +36,10 @@ public final class DebtLifecycleSchema {
     DebtSchema.validate(connection);
     var sql = new ArrayList<>(DebtClaims.statements());
     sql.addAll(extra());
+    try (var statement = connection.createStatement();
+        var rows = statement.executeQuery("PRAGMA user_version")) {
+      if (rows.next() && rows.getInt(1) >= 55) sql.addAll(DebtClaims.overdraftStatements());
+    }
     for (var expected : sql) {
       if (!expected.startsWith("CREATE ")) continue;
       String name = expected.split(" ", 4)[2].split("\\(", 2)[0];

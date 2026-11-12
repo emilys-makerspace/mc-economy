@@ -264,6 +264,7 @@ public final class CreditReport {
       case "ADVANCE" -> UiText.t("ui.finance.label.advance");
       case "CARD" -> UiText.t("ui.finance.label.card");
       case "LOAN" -> UiText.t("ui.finance.label.loan");
+      case "OVERDRAFT" -> UiText.t("ui.finance.label.overdraft");
       case "BANK_LOAN" -> UiText.t("ui.finance.label.bank_loan");
       case "SUBPRIME_LOAN" -> UiText.t("ui.finance.label.subprime_loan");
       case "PENDING" -> UiText.t("ui.finance.label.pending");

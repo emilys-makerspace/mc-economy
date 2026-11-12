@@ -335,7 +335,13 @@ public final class SqliteStorage implements FoundationStore {
       ca.emilybelnavis.mcmods.economy.journal.Journal.Intent intent,
       ca.emilybelnavis.mcmods.economy.journal.JournalEngine.ReadView reads,
       ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit commit) {
-    var decision = commitObserver.prepare(intent, reads, commit);
+    var decision =
+        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.decorate(intent, reads, commit);
+    if (decision instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted)
+      decision = commitObserver.prepare(intent, reads, accepted);
+    if (decision instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted)
+      decision =
+          ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.decorate(intent, reads, accepted);
     if (decision instanceof ca.emilybelnavis.mcmods.economy.journal.JournalEngine.Commit accepted)
       decision =
           ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle.observe(intent, reads, accepted);

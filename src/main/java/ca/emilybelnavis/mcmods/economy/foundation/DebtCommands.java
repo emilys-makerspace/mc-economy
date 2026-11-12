@@ -99,7 +99,7 @@ public final class DebtCommands {
                                                   kind,
                                                   UuidArgument.getUuid(c, "after")))))));
     var payments = Commands.literal("payments");
-    for (var kind : DebtRecords.Kind.values())
+    for (var kind : java.util.List.of(DebtRecords.Kind.CARD, DebtRecords.Kind.LOAN))
       payments.then(
           Commands.literal(kind.name().toLowerCase(Locale.ROOT))
               .then(

@@ -789,8 +789,10 @@ public final class CollectionDialogue {
   }
 
   private static String kind(DebtRecords.Kind value) {
-    return value == DebtRecords.Kind.CARD
-        ? UiText.t("ui.dialogue.kind.card")
-        : UiText.t("ui.dialogue.kind.loan");
+    return switch (value) {
+      case CARD -> UiText.t("ui.dialogue.kind.card");
+      case LOAN -> UiText.t("ui.dialogue.kind.loan");
+      case OVERDRAFT -> UiText.t("ui.dialogue.kind.overdraft");
+    };
   }
 }

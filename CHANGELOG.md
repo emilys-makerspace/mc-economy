@@ -2,6 +2,16 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-12
+
+### Overdraft protection and integration overrides
+
+- Added bank overdraft applications, credit-based 12–18% APR, a CAD 5 equivalent monthly protection fee, and kiosk review/cancellation.
+- Added the small CAD 5 equivalent fee-free overdraft allowance and a CAD 49.99 equivalent fee for larger declined pre-authorized debits.
+- Protected overdrafts require a full positive financial day of recovery within 90 days; unrecovered accounts close and transfer their debt to collections, including primary accounts.
+- Added trusted server integration overrides for bank overdrafts and credit card over-limit transactions, with original-operation recovery and issuer-funded credit draws.
+- Bank balances, trading, deposit yield and net worth now support negative bank balances. Storage upgrades to schema 55; update banking clients and servers together for transport 13. BankingIntegration is version 3.
+
 ## 2026-11-09
 
 ### Stage A core integration

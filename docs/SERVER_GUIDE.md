@@ -117,9 +117,9 @@ Offline time and skipping the night do not advance the replacement wait. Replace
 
 ## Schema upgrades
 
-Use Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Update the server and connecting clients together: the current banking transport is version 12, and older endpoints cannot use it. Keep the old mod, configuration and complete-world backup until the new server has reached readiness and stopped cleanly. An upgrade is not permission to reset the world or remove its economy data.
+Use Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Update the server and connecting clients together: the current banking transport is version 13, and older endpoints cannot use it. Keep the old mod, configuration and complete-world backup until the new server has reached readiness and stopped cleanly. An upgrade is not permission to reset the world or remove its economy data.
 
-New worlds initialize automatically. Worlds on schemas 1 through 53 require a validated complete-world backup before the current additive schema 54 upgrade. Stop the server normally, wait for the process to exit and prepare the backup:
+New worlds initialize automatically. Worlds on schemas 1 through 54 require a validated complete-world backup before the current schema 55 upgrade. Stop the server normally, wait for the process to exit and prepare the backup:
 
 ```sh
 ./gradlew prepareEconomyUpgrade -PeconomyWorld=/absolute/path/to/world
@@ -145,7 +145,7 @@ Restore into a **new, separate directory** whose parent already exists, outside 
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the receipt, full inventory/checksums, supported format/schema, world identity, journal and economic checkpoints, and offline financial invariants. It validates the staged copy again before publishing the new destination and refuses an existing destination. A successful command reports the restored destination, world ID, journal position and economic checkpoint; retain that output with the backup record. Restore supports clean schema 4 through 54 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup before starting the newer server.
+The restore command validates the receipt, full inventory/checksums, supported format/schema, world identity, journal and economic checkpoints, and offline financial invariants. It validates the staged copy again before publishing the new destination and refuses an existing destination. A successful command reports the restored destination, world ID, journal position and economic checkpoint; retain that output with the backup record. Restore supports clean schema 4 through 55 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup before starting the newer server.
 
 Switching the server's selected world to the restored copy is a separate operator action. Start only that selected copy with the matching mod/configuration, check readiness as described below and stop it normally before treating the recovery as established. A successful offline restore does not establish runtime readiness. Do not run the original and restored copies concurrently: they retain the same economy world identity. A restore returns to the snapshot; it cannot retain player actions or financial outcomes recorded after that backup.
 

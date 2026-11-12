@@ -116,6 +116,7 @@ public final class FoundationRuntime implements FoundationStore {
           java.util.stream.Stream.of(
                   ca.emilybelnavis.mcmods.economy.pricing.PricingRuntime.providers(valuation),
                   ca.emilybelnavis.mcmods.economy.credit.CreditRuntime.providers(),
+                  ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.providers(),
                   java.util.List.of(
                       ca.emilybelnavis.mcmods.economy.loan.LoanRuntime.provider(),
                       ca.emilybelnavis.mcmods.economy.autopay.AutopayRuntime.provider()),

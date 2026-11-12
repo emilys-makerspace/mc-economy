@@ -79,11 +79,10 @@ public final class AccountLifecycle {
   }
 
   public record ClosureState(
-      long postedMinorUnits, boolean activeHold, boolean restricted, boolean unresolvedObligation) {
-    public ClosureState {
-      if (postedMinorUnits < 0) throw new IllegalArgumentException("Negative BANK balance");
-    }
-  }
+      long postedMinorUnits,
+      boolean activeHold,
+      boolean restricted,
+      boolean unresolvedObligation) {}
 
   public enum Eligibility {
     EMPTY,
@@ -272,7 +271,8 @@ public final class AccountLifecycle {
     if (state == null) return Eligibility.CLOSURE_STATE_UNAVAILABLE;
     if (state.activeHold()) return Eligibility.ACTIVE_HOLD;
     if (state.restricted()) return Eligibility.RESTRICTED_FUNDS;
-    if (state.unresolvedObligation()) return Eligibility.UNRESOLVED_OBLIGATION;
+    if (state.unresolvedObligation() || state.postedMinorUnits() < 0)
+      return Eligibility.UNRESOLVED_OBLIGATION;
 
     if (close.destination() == null)
       return state.postedMinorUnits() == 0

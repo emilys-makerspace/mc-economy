@@ -97,7 +97,13 @@ public final class FeeSettlement {
                       tx, Settlement.issuanceAccount(currency), currency, nextIssuance);
                 });
       }
-    } else money = InstitutionSettlement.prepare(reads, legs, accounts);
+    } else
+      money =
+          InstitutionSettlement.prepare(
+              reads,
+              legs,
+              accounts,
+              ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.BANK_CHARGE);
     if (!(money instanceof JournalEngine.Commit transfer)) return money;
     var recognition =
         InstitutionSettlement.prepare(

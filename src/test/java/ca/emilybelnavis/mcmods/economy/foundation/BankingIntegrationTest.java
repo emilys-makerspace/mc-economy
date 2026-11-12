@@ -79,7 +79,7 @@ class BankingIntegrationTest {
     await(services, services.readiness());
     try {
       BankingIntegration api = services.ledger();
-      assertEquals(2, api.version());
+      assertEquals(3, api.version());
       assertTrue(api.collateralCapabilities().fixed());
       assertFalse(api.collateralCapabilities().variable());
       assertFalse(api.collateralCapabilities().secured());

@@ -70,6 +70,8 @@ public final class RecordCatalog {
             ca.emilybelnavis.mcmods.economy.pricing.ServicePricing.register(
                 ca.emilybelnavis.mcmods.economy.interest.DepositYield.register(catalog)));
     catalog = ca.emilybelnavis.mcmods.economy.autopay.Autopay.register(catalog);
+    catalog = ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.register(catalog);
+    catalog = ca.emilybelnavis.mcmods.economy.overdraft.OverdraftCollections.register(catalog);
     catalog =
         catalog.with(
             new Key(ca.emilybelnavis.mcmods.economy.journal.BankStaffing.FACT, 1),

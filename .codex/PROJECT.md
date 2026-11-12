@@ -1,5 +1,7 @@
 # Current project state
 
+2026-11-12 — Bank overdraft applications, tolerance/PAD fees, time-weighted interest, 90-day closure/collections and trusted bank/card overrides are implemented. Current schema 55, banking wire 13, BankingIntegration 3 and AccountFunds 2 supersede earlier current-version inventory. [Contract](architecture/overdrafts.md), [verification](verification/overdrafts.md). Existing worlds/backups preserved; no compatibility module selected.
+
 Stage A records are grouped by phase. Each folder contains its package handoffs and verification evidence. Phase-specific architecture and historical handoffs are included where available.
 
 [A1](A1/) · [A2](A2/) · [A3](A3/) · [A4](A4/) · [A5](A5/) · [A6](A6/) · [A7](A7/) · [A8](A8/) · [A9](A9/) · [A10](A10/)
@@ -147,7 +149,7 @@ The user approved activity-driven prime and FX, both every 20 real minutes, curr
 
 2026-11-09 — All eleven selectable A10 packages are complete in their recorded scopes. [A10-09 handoff](A10/A10-09.md), [traceable acceptance matrix](A10/architecture/a10-acceptance.md), [current checks](A10/verification/A10-09.md) and [API/B-series handoff](A10/architecture/a10-downstream.md) close the phase with **qualified partial acceptance**. Actual external-machine client evidence remains pending/manual and excluded from CircleCI; full external verification is reserved. No B-series or compatibility package is selected.
 
-Current inventory: Minecraft1.21.1 / NeoForge21.1.252 / Java21, schema54, banking wire12 (paired endpoints), BankingIntegration2, EconomicSimulationIntegration1, ItemValuationIntegration1 and additive EconomicSimulationHistory1. Main-source/development-runtime and runClient/runServer wiring remain. Historical handoffs and preparation baselines retain their original versions and are not current pending-work lists.
+Current inventory: Minecraft 1.21.1 / NeoForge 21.1.252 / Java 21, schema54, banking wire12 (paired endpoints), BankingIntegration2, EconomicSimulationIntegration1, ItemValuationIntegration1 and additive EconomicSimulationHistory1. Main-source/development-runtime and runClient/runServer wiring remain. Historical handoffs and preparation baselines retain their original versions and are not current pending-work lists.
 
 - [A10-01](A10/A10-01.md) froze source/authority contracts. [A10-02-01](A10/A10-02-01.md) delivered dashboard/navigation/typed status; [A10-02-02](A10/A10-02-02.md) delivered frozen filtered original history; [A10-02-03](A10/A10-02-03.md) delivered covered core localization.
 - [A10-03](A10/A10-03.md) verified the finite native320×240 minimum/normal/larger layout matrix. Later replacement terminal navigation supersedes dense Home/footer descriptions; [A10-09](A10/verification/A10-09.md) fixes its English-only text and renderer inference and supplies eight current native cases/16 complete frames at normal/minimum French boundaries. The original [terminal accounting/closure checks](verification/terminal-ui.md) remain separate.

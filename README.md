@@ -50,6 +50,8 @@ Accounts are limited to four per player, with one per currency. Creative cards a
 
 Covered terminal navigation, account activity, financial reviews, filtered history and banker/collection explanations support English (UK), French (Canada) and French (France), selected through Minecraft's language setting. Some asset names and operator diagnostics remain English. Displayed amounts use the selected language's number formatting and retain their currency code. Enter amounts with ASCII digits, a decimal point and no grouping separators (for example `12.50`); commas and grouped numbers are rejected. UTC date filters and command syntax keep their documented format.
 
+Bank accounts allow a small fee-free overdraft. Apply for overdraft protection under bank services at a kiosk for a larger allowance; review the monthly fee, interest rate and recovery deadline before confirming. Unrecovered protected overdrafts close after 90 financial days and go to collections. See the [player guide](docs/PLAYER_GUIDE.md#overdrafts) for thresholds and pre-authorized debit fees.
+
 Banking, banker, trader and collection menus support a minimum 320×240 logical GUI viewport. Use the visible arrows or Page Up/Page Down to read long terms, and Tab to reach controls. Dialogue choices have separate pages and full-label tooltips. Resizing preserves drafts; changed server terms require a fresh review.
 
 Local multiplayer has been checked with two authenticated sessions. External-client testing remains pending. The [server guide](docs/SERVER_GUIDE.md#operational-reference-measurements) records the separate 20-synthetic-owner workload and its limits; those measurements do not establish 20 connected players or a minimum hardware specification.

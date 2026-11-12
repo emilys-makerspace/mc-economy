@@ -8,7 +8,8 @@ public final class FinanceActions {
   private FinanceActions() {}
 
   public static boolean handles(String action) {
-    return AutopayMenus.handles(action)
+    return OverdraftMenus.handles(action)
+        || AutopayMenus.handles(action)
         || action.equals("finance_home")
         || CreditMenus.handles(action)
         || LoanMenus.handles(action)
@@ -19,6 +20,7 @@ public final class FinanceActions {
 
   public static boolean input(String action) {
     return Set.of(
+            "finance_od_preview",
             "finance_credit_preview",
             "finance_credit_amount",
             "finance_credit_limit",
@@ -31,6 +33,17 @@ public final class FinanceActions {
 
   public static boolean allowed(BankingMenu.Access access, String action) {
     if (!handles(action)) return false;
+    if (OverdraftMenus.handles(action))
+      return (access == BankingMenu.Access.ATM
+              || access == BankingMenu.Access.TELLER
+              || access == BankingMenu.Access.KIOSK)
+          && (!Set.of(
+                      "finance_od_preview",
+                      "finance_od_confirm",
+                      "finance_od_cancel",
+                      "finance_od_cancel_ok")
+                  .contains(action)
+              || access == BankingMenu.Access.KIOSK);
     if (CreditUse.handles(action))
       return access == BankingMenu.Access.ATM
           || access == BankingMenu.Access.TELLER
