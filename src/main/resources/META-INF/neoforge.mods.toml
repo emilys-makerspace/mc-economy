@@ -7,7 +7,7 @@ config="economy.mixins.json"
 config="economy.valuation.mixins.json"
 [[mods]]
 modId="economy"
-version="0.4.0-alpha"
+version="0.6.0-alpha"
 displayName="Economy"
 logoFile="economy-icon.png"
 logoBlur=false
