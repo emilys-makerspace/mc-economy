@@ -8,6 +8,7 @@ import ca.emilybelnavis.mcmods.economy.clock.*;
 import ca.emilybelnavis.mcmods.economy.debt.*;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.journal.*;
+import ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts;
 import java.nio.file.Path;
 import java.time.*;
 import java.util.*;
@@ -495,7 +496,7 @@ class DebtLifecycleTest {
   }
 
   @Test
-  void foreignCollectionRepaymentChargesSeparateFeeConsumesOnceAndRollsBackFeeFailure()
+  void foreignCollectionRepaymentChargesSeparateFeeConsumesOnceAndRejectsUnderfundedPrincipal()
       throws Exception {
     try (var f = new LoanTestFixture(path)) {
       var loan = f.originate();
@@ -573,10 +574,17 @@ class DebtLifecycleTest {
                         tx::query, f.owner, payment, book.price(fx, fee), now);
                   });
       var first = capture.get();
+      long funded =
+          f.store.transaction(
+              tx ->
+                  first.fx().debit().minorUnits()
+                      - Overdrafts.tolerance(
+                          tx::query, EconomyCurrency.USD, Overdrafts.now(tx::query))
+                      - 1);
       f.store.transaction(
           tx -> {
             ca.emilybelnavis.mcmods.economy.storage.LedgerProjection.write(
-                tx, account.value(), EconomyCurrency.USD, first.fx().debit().minorUnits());
+                tx, account.value(), EconomyCurrency.USD, funded);
             return null;
           });
       var constrained = capture.get();
@@ -689,7 +697,7 @@ class DebtLifecycleTest {
                       fixture.owner,
                       debt.id(),
                       fixture.account,
-                      100,
+                      501,
                       fixture.clock.get()));
       long frontier = fixture.store.lastCommittedSequence();
       var result =

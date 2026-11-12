@@ -385,7 +385,7 @@ class WithdrawalsTest {
   }
 
   @Test
-  void atmFeeCannotOverdrawAndProviderChangeInvalidatesReview() throws Exception {
+  void atmFeeCanOverdrawAndProviderChangeInvalidatesReview() throws Exception {
     var store = open();
     try {
       seed(store, TerminalPolicy.Kind.ATM);
@@ -394,6 +394,12 @@ class WithdrawalsTest {
               tx.execute(
                   "DELETE FROM bank_account_providers WHERE account_id=?",
                   List.of(account.toString())));
+      // The withdrawal principal exhausts cash plus the CAD 5 overdraft tolerance.
+      store.transaction(
+          tx -> {
+            ca.emilybelnavis.mcmods.economy.storage.LedgerProjection.write(tx, account, CAD, 9500);
+            return null;
+          });
       var reserve =
           intent(
               Withdrawals.Action.RESERVE, Withdrawals.reserveRequest(preview(store, 10000, null)));
@@ -403,13 +409,26 @@ class WithdrawalsTest {
               .submit(reserve)
               .status());
       assertEquals(
-          "INSUFFICIENT_FUNDS",
+          "WITHDRAWAL_COMMIT",
           engine(store, Withdrawals.Action.COMMIT, WithdrawalDelivery::prepare)
               .submit(commit(reserve.operationId().value()))
               .result()
               .code());
-      assertEquals(10000, balance(store));
-      assertEquals("0", count(store, "cash_issuance"));
+      assertEquals(-750, balance(store));
+      assertEquals("1", count(store, "cash_issuance"));
+      store.transaction(
+          tx -> {
+            ca.emilybelnavis.mcmods.economy.storage.LedgerProjection.write(tx, account, CAD, 10000);
+            return null;
+          });
+      var secondReserve =
+          intent(
+              Withdrawals.Action.RESERVE, Withdrawals.reserveRequest(preview(store, 10000, null)));
+      assertEquals(
+          Status.COMMITTED,
+          engine(store, Withdrawals.Action.RESERVE, WithdrawalDelivery::prepare)
+              .submit(secondReserve)
+              .status());
       store.transaction(
           tx ->
               tx.execute(
@@ -418,7 +437,7 @@ class WithdrawalsTest {
       assertEquals(
           "WITHDRAWAL_STALE",
           engine(store, Withdrawals.Action.COMMIT, WithdrawalDelivery::prepare)
-              .submit(commit(reserve.operationId().value()))
+              .submit(commit(secondReserve.operationId().value()))
               .result()
               .code());
       assertEquals(10000, balance(store));

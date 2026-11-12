@@ -386,19 +386,21 @@ class LoanRepaymentFxTest {
   }
 
   @Test
-  void feeFailureAndExpiredOrForeignQuoteCannotPartiallySettleOrConsumeFx() throws Exception {
+  void underfundedPrincipalAndExpiredOrForeignQuoteCannotPartiallySettleOrConsumeFx()
+      throws Exception {
     try (var f = new Fixture()) {
       var first = f.quote(10000, false);
+      long funded = first.fx().debit().minorUnits() - 501; // Principal exceeds the CAD 5 tolerance.
       f.store.transaction(
           tx -> {
-            LedgerProjection.write(
-                tx, f.funding.id().value(), CAD, first.fx().debit().minorUnits());
+            LedgerProjection.write(tx, f.funding.id().value(), CAD, funded);
             return null;
           });
       var q = f.quote(10000, false);
       var result = f.submit(q, f.intent(q));
       assertNotEquals(Journal.Status.COMMITTED, result.status());
       assertEquals(100000, f.loan().owedMinor());
+      assertEquals(funded, f.balance(f.funding.id().value(), CAD));
       assertEquals(
           0,
           f.store

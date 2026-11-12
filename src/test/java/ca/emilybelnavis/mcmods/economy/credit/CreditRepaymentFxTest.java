@@ -272,20 +272,20 @@ class CreditRepaymentFxTest {
   }
 
   @Test
-  void feeCannotOverdrawAfterPrincipalAndFailureConsumesNothing() throws Exception {
+  void principalBeyondOverdraftToleranceConsumesNothing() throws Exception {
     try (var f = new Fixture()) {
       var initial = f.quote(100);
+      long funded =
+          initial.fx().debit().minorUnits() - 501; // Principal exceeds the CAD 5 tolerance.
       f.store.transaction(
           tx -> {
-            LedgerProjection.write(
-                tx, f.funding.id().value(), CAD, initial.fx().debit().minorUnits());
+            LedgerProjection.write(tx, f.funding.id().value(), CAD, funded);
             return null;
           });
-      var q =
-          f.quote(100); // Capture current pricing after setting the source to principal-only funds.
+      var q = f.quote(100); // Capture current pricing after reducing principal headroom.
       var outcome = f.submit(q, f.intent(q));
       assertNotEquals(Journal.Status.COMMITTED, outcome.status());
-      assertEquals(q.fx().debit().minorUnits(), f.balance(f.funding.id().value(), CAD));
+      assertEquals(funded, f.balance(f.funding.id().value(), CAD));
       assertEquals(
           0,
           f.store

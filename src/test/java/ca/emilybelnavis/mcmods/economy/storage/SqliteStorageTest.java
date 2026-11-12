@@ -167,6 +167,7 @@ class SqliteStorageTest {
             "npc_trade_quotes",
             "npc_trade_receipts",
             "operation_outcomes",
+            "overdraft_accounts",
             "owner_history",
             "owner_history_state",
             "payment_clock",

@@ -222,6 +222,22 @@ class OwnerHistoryTest {
         var sql = connection.createStatement()) {
       sql.execute("DROP TABLE owner_history");
       sql.execute("DROP TABLE owner_history_state");
+      sql.execute("DROP TABLE overdraft_accounts");
+      // Restore the pre-V55 table constraints as well as removing its new table.
+      // Reuse the migration's identity-preserving rebuild, substituting the old definitions.
+      for (var statement : AccountSchema.overdraftMigration()) {
+        sql.execute(
+            statement.startsWith("CREATE TABLE account_catalog")
+                ? AccountSchema.statements().getFirst()
+                : statement);
+      }
+      for (var statement : ca.emilybelnavis.mcmods.economy.debt.DebtSchema.overdraftMigration()) {
+        if (statement.startsWith("CREATE TRIGGER debt_claim_overdraft_")) continue;
+        sql.execute(
+            statement.startsWith("CREATE TABLE debt_cases(")
+                ? ca.emilybelnavis.mcmods.economy.debt.DebtSchema.statements().get(4)
+                : statement);
+      }
       sql.execute("DROP TABLE village_branch_anchors");
       for (var statement : VillageBranchSchema.statements()) {
         if (statement.startsWith("CREATE TABLE village_branch_anchors(")

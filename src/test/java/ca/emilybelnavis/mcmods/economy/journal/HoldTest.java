@@ -101,7 +101,7 @@ class HoldTest {
 
       var holdId = reserve.operationId().value();
       var capture = intent(CAPTURE, Holds.captureRequest(holdId, target));
-      var blocked = journal.submit(spend(7_100)).completion().toCompletableFuture();
+      var blocked = journal.submit(spend(7_600)).completion().toCompletableFuture();
       var captured = journal.submit(capture).completion().toCompletableFuture();
       var released =
           journal

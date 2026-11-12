@@ -215,7 +215,7 @@ class CashIssuanceTest {
     var store = open();
     try {
       seed(store);
-      var issue = issue(store, 101);
+      var issue = issue(store, 106);
       assertEquals(
           Status.NOT_ACCEPTED,
           engine(store, ISSUE, financial(issue)).submit(issue.intent()).status());

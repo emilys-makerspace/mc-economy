@@ -275,7 +275,7 @@ class CardReplacementPricingTest {
   }
 
   @Test
-  void combinedFeeFailureCannotPartiallyPayTheFlatFeeOrConsumeFxQuote() throws Exception {
+  void combinedBankFeeCanOverdrawAndConsumesFxQuoteExactlyOnce() throws Exception {
     try (var f = new Fixture(EconomyCurrency.EUR, 10000)) {
       long principal = f.fxQuote().debit().minorUnits();
       f.store.transaction(
@@ -286,13 +286,15 @@ class CardReplacementPricingTest {
       var fx = f.fxQuote();
       var quote = f.capture(fx);
       var original = f.feeIntent(quote);
-      var result = f.engine(quote).submit(original);
-      assertEquals(Journal.Status.DURABLY_REJECTED, result.status());
-      assertEquals(principal, f.balance());
-      assertEquals(0, f.cash(ISSUER));
-      assertEquals(0, f.cash(f.provider));
-      assertEquals(0, f.consumed());
-      assertEquals(0, f.feesConsumed());
+      var engine = f.engine(quote);
+      var result = engine.submit(original);
+      assertEquals(Journal.Status.COMMITTED, result.status());
+      assertEquals(result, engine.submit(original));
+      assertEquals(-fx.fee().minorUnits(), f.balance());
+      assertEquals(principal, f.cash(ISSUER));
+      assertEquals(fx.fee().minorUnits(), f.cash(f.provider));
+      assertEquals(1, f.consumed());
+      assertEquals(1, f.feesConsumed());
     }
   }
 
