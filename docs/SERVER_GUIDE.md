@@ -27,6 +27,8 @@ Internal GUI diagnostics are hidden by default; authorized transaction details s
 
 ## Status and diagnostics
 
+If a placed terminal only flashes and disappears, check `/economy status`: placement is refused while Economy is unavailable or busy, without consuming the item. A `STORAGE_UPGRADE_REQUIRED` failure indicates an upgrade awaiting completion; `STORAGE_SCHEMA` can indicate a legacy or unrecognized database. Use the administrator upgrade review below to inspect supported formats. Existing data is preserved.
+
 Use `/economy status` to check availability and startup or catch-up progress. The server console and permission-level 2 operators can also run `/economy diagnostics` for storage and journal checkpoints, queue waits, possible stalls, and the most recent failure code. Storage checkpoints reflect the latest completed sample. Economic rates describe observed progress and are shown only when measurable. Detailed diagnostics also show the latest FX sample, including selection status, the committed day, backlog, and effective and pending policy revisions. During shutdown, check the server log for unresolved work.
 
 Detailed diagnostics include the financial calendar’s UTC origin, elapsed whole days/months/years, retained clock target, next boundaries and catch-up state. `/economy diagnostics calendar` shows policy versions and active work in pages of eight registry entries; follow the printed `after` command for the next page. Reports use their displayed sample timestamp. Day/month/year values count completed periods from zero. Fixed-interval backlog is separate from the domain pending-event indicator, which is not a total debt or obligation count. These commands are read-only and remain available from cached samples while financial work is catching up.
@@ -119,13 +121,23 @@ Offline time and skipping the night do not advance the replacement wait. Replace
 
 Use Minecraft 1.21.1, NeoForge 21.1.252 and Java 21. Update the server and connecting clients together: the current banking transport is version 13, and older endpoints cannot use it. Keep the old mod, configuration and complete-world backup until the new server has reached readiness and stopped cleanly. An upgrade is not permission to reset the world or remove its economy data.
 
-New worlds initialize automatically. Worlds on schemas 1 through 54 require a validated complete-world backup before the current schema 55 upgrade. Stop the server normally, wait for the process to exit and prepare the backup:
+New worlds initialize automatically. Existing databases need explicit approval before upgrading to this release’s current schema (55). This applies to supported foundation schemas and the recognized original legacy database. Economy stays unavailable until the approved conversion finishes; ordinary Minecraft remains usable so an administrator can log in.
+
+1. Join the server as a permission-level 2 operator and run `/economy upgrade review`. Review the source/target schema, account count, imported balance totals and any archived features.
+2. From that same login, within two minutes, run `/economy upgrade confirm <token>` using the token shown by the review. Console, RCON, command blocks and `/execute as` cannot approve. Disconnecting, losing operator permission or replacing the session invalidates an unfinished review. Approval binds the exact source database, world path and target release; changed source data or another target needs a fresh review.
+3. Wait for the approval-saved message, stop the server normally and wait for the process to exit. From the Economy project, run:
 
 ```sh
-./gradlew prepareEconomyUpgrade -PeconomyWorld=/absolute/path/to/world
+./gradlew upgradeEconomyDatabase -PeconomyWorld=/absolute/path/to/world
 ```
 
-Backups are placed beside the world in `<world-name>-economy-upgrade-backups/`. Keep that backup directory at its recorded location through the upgrade, then start Minecraft normally. The upgrade receipt binds the backup to the stopped source database and identity; changing the source after preparation requires a new preparation. Missing or changed backups prevent upgrades; they do not erase data. The utility refuses a world whose Minecraft or economy ownership lock is held and does not copy a running world. Do not bypass a refusal by deleting locks, editing a receipt or altering schema records. A pre-upgrade receipt alone is not a clean general-restore backup.
+4. Retain the reported backup and start the server normally. Confirm `/economy status` reaches availability.
+
+The offline tool automatically makes a verified complete-world backup beside the world in `<world-name>-economy-upgrade-backups/`, stages the new database and validates it before installation. It holds Minecraft’s and Economy’s ownership locks and never converts a running world. It does not reset or replace the Minecraft world. Keep the backup at its recorded location. If installation is interrupted, keep the same mod release, stop normally and rerun the same tool; normal startup refuses incomplete installation. The tool resumes the exact staged result without repeating imported balances.
+
+The recognized legacy minor-unit format imports bank/trading account IDs, player owners, primary flags, account currencies and exact balances. Bank providers start unassigned and can be assigned through ordinary branch services. Every original table is retained as a read-only `legacy_v0_` archive, including old ledger rows, stock holdings, orders, trades and FX history. Those historical market features do not become active current facilities. The legacy world currency is retained; the current FX model starts with its standard opening rates. Legacy physical items are not automatically granted current cash issuance or card authority. The review explains this scope before confirmation. Unknown layouts, malformed identities/balances, incompatible account limits and databases from newer releases are refused without changing the source.
+
+`prepareEconomyUpgrade` remains available for a separate offline pre-upgrade backup of supported foundation databases. A backup receipt by itself does not grant admin approval or cause a production startup upgrade. New migration steps target the release’s migration registry rather than a fixed version in the importer; future releases still require a matching review and approval. A pre-upgrade backup is retained stopped-state evidence, not a certified clean general-restore backup.
 
 ## Complete-world backup and restore
 
@@ -145,7 +157,7 @@ Restore into a **new, separate directory** whose parent already exists, outside 
 ./gradlew restoreEconomyWorld -PeconomyBackup=/absolute/path/to/backup-id -PeconomyRestoreDestination=/absolute/path/to/new-world
 ```
 
-The restore command validates the receipt, full inventory/checksums, supported format/schema, world identity, journal and economic checkpoints, and offline financial invariants. It validates the staged copy again before publishing the new destination and refuses an existing destination. A successful command reports the restored destination, world ID, journal position and economic checkpoint; retain that output with the backup record. Restore supports clean schema 4 through 55 backups in this mod’s backup format. A restored world on an older schema still requires a pre-upgrade backup before starting the newer server.
+The restore command validates the receipt, full inventory/checksums, supported format/schema, world identity, journal and economic checkpoints, and offline financial invariants. It validates the staged copy again before publishing the new destination and refuses an existing destination. A successful command reports the restored destination, world ID, journal position and economic checkpoint; retain that output with the backup record. Restore supports clean schema 4 through 55 backups in this mod’s backup format. A restored world on an older schema requires a fresh in-game administrator review and approval, followed by the offline upgrade tool.
 
 Switching the server's selected world to the restored copy is a separate operator action. Start only that selected copy with the matching mod/configuration, check readiness as described below and stop it normally before treating the recovery as established. A successful offline restore does not establish runtime readiness. Do not run the original and restored copies concurrently: they retain the same economy world identity. A restore returns to the snapshot; it cannot retain player actions or financial outcomes recorded after that backup.
 

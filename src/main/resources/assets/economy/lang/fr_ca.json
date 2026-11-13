@@ -1860,5 +1860,6 @@
   "screen.economy.result.overdraft_catchup_required": "Le traitement du découvert doit se terminer avant cette modification. Réessayez dans un instant.",
   "screen.economy.result.overdraft_transition_blocked": "Remboursez le découvert et annulez la protection avant de changer de banque ou de devise du compte.",
   "screen.economy.result.overdraft_account": "Ce compte ou sa protection de découvert est indisponible.",
-  "ui.dialogue.kind.overdraft": "Découvert bancaire"
+  "ui.dialogue.kind.overdraft": "Découvert bancaire",
+  "message.economy.terminal_placement_unavailable": "Impossible de placer le terminal : Economy est indisponible ou occupé. Consultez /economy status."
 }

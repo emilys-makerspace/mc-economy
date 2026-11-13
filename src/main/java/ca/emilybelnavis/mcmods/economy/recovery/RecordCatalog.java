@@ -120,6 +120,9 @@ public final class RecordCatalog {
             ca.emilybelnavis.mcmods.economy.institution.BankProviders.register(
                 AccountLifecycle.register(AccountCatalog.register(catalog))))
         .with(new Key("economy:posting", 1), LedgerProjection::validatePosting)
+        .with(
+            new Key(ca.emilybelnavis.mcmods.economy.storage.LegacyImportFacts.FACT, 1),
+            ca.emilybelnavis.mcmods.economy.storage.LegacyImportFacts::validate)
         .with(new Key("economy:posting", 2), LedgerProjection::validatePostingV2)
         .with(new Key("economy:posting", 3), LedgerProjection::validatePostingV3)
         .with(new Key("economy:posting", 4), LedgerProjection::validatePostingV4)

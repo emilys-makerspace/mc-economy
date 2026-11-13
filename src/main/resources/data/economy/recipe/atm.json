@@ -2,22 +2,19 @@
   "type": "minecraft:crafting_shaped",
   "category": "redstone",
   "pattern": [
-    "IGI",
-    "RCR",
-    "III"
+    "CMC",
+    "CDC",
+    "CCC"
   ],
   "key": {
-    "I": {
-      "item": "minecraft:iron_ingot"
-    },
-    "G": {
-      "item": "minecraft:glass_pane"
-    },
-    "R": {
-      "item": "minecraft:redstone"
-    },
     "C": {
-      "item": "minecraft:chest"
+      "item": "minecraft:cobblestone"
+    },
+    "M": {
+      "tag": "economy:bank_notes"
+    },
+    "D": {
+      "item": "minecraft:dispenser"
     }
   },
   "result": {

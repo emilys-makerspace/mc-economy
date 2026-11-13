@@ -119,6 +119,15 @@ tasks.register('prepareEconomyUpgrade', JavaExec) {
     }
 }
 
+// Requires the source/target approval recorded by a directly connected server administrator.
+tasks.register('upgradeEconomyDatabase', JavaExec) {
+    group = 'economy maintenance'
+    description = 'Back up and upgrade a stopped economy database after in-game admin confirmation.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ca.emilybelnavis.mcmods.economy.storage.DatabaseUpgrade'
+    if (providers.gradleProperty('economyWorld').isPresent()) args providers.gradleProperty('economyWorld').get()
+}
+
 tasks.register('backupEconomyWorld', JavaExec) {
     group = 'economy maintenance'
     description = 'Back up a cleanly stopped complete world.'
@@ -172,6 +181,7 @@ if (providers.gradleProperty('custodyInventoryProbe').isPresent()) {
 if (providers.gradleProperty('terminalGeometryProbe').isPresent()) {
     tasks.named('runServer') {
         systemProperty 'economy.terminalGeometryProbe', 'true'
+        if (providers.gradleProperty('atmPlacementProbe').isPresent()) systemProperty 'economy.atmPlacementProbe', 'true'
         doLast {
             def root = file(providers.gradleProperty('economyRunRoot').get() + '/server/world')
             if (new File(root, 'terminal-probe-failed.txt').exists() || !new File(root, 'terminal-probe-passed.txt').exists())

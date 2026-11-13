@@ -168,7 +168,7 @@ public final class FoundationRuntime implements FoundationStore {
 
   public FoundationRuntime(Configuration configuration, int sqliteLockTimeoutMillis) {
     this.configuration = configuration;
-    this.store = new SqliteStorage(configuration.records(), sqliteLockTimeoutMillis);
+    this.store = SqliteStorage.serverStorage(configuration.records(), sqliteLockTimeoutMillis);
   }
 
   private ca.emilybelnavis.mcmods.economy.simulation.SimulationConfig simulationConfig;

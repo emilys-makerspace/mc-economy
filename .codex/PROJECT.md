@@ -1,5 +1,7 @@
 # Current project state
 
+2026-11-12 — Administrator-reviewed legacy imports and supported schema upgrades are implemented through connected-operator confirmation and the stopped-world `upgradeEconomyDatabase` tool. Production startup gates older schemas; source tables/backups are preserved and interrupted installations resume explicitly. [Contract](architecture/database-upgrades.md), [verification](verification/database-upgrades.md). Target remains schema 55; existing player worlds were not converted during development.
+
 2026-11-12 — Bank overdraft applications, tolerance/PAD fees, time-weighted interest, 90-day closure/collections and trusted bank/card overrides are implemented. Current schema 55, banking wire 13, BankingIntegration 3 and AccountFunds 2 supersede earlier current-version inventory. [Contract](architecture/overdrafts.md), [verification](verification/overdrafts.md). Existing worlds/backups preserved; no compatibility module selected.
 
 Stage A records are grouped by phase. Each folder contains its package handoffs and verification evidence. Phase-specific architecture and historical handoffs are included where available.

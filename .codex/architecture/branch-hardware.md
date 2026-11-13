@@ -16,7 +16,7 @@ Stable legacy terminal IDs remain registered. ATM/teller stay two-wide/two-high 
 
 `branch_kiosk` is one-wide/two-high, lower anchor/entity and upper satellite, with horizontal facing, sturdy lower support, loaded-only integrity and guarded placement rollback. Any cell/support loss invalidates the generation and tears down matching cells with one survival drop, none in creative. Dropped kiosk custom-model data preserves its bank appearance only; placement ignores all item state/entity components and creates a fresh unbound identity. Unloaded neighbors defer validation; production never forces chunks.
 
-Neutral ATM/teller recipes remain; 16 ATM dye recipes are removed while all old IDs/items remain. Kiosk recipe: iron/glass/iron; iron/redstone/iron; iron/chest/iron. No acquisition grants capital, accounts, tokens or authority.
+Neutral ATM recipe: cobblestone/note/cobblestone; cobblestone/dispenser/cobblestone; cobblestone/cobblestone/cobblestone. Kiosk uses the same pattern with a book instead of the dispenser. `economy:bank_notes` contains every registered bill denomination (all currencies and Canadian orientations), excludes coins, and consumes one note. All 16 shapeless ATM dye recipes accept `economy:atms`, so neutral and already dyed items can be recoloured. Teller acquisition is unchanged. Crafted output has no bank binding or financial components; no acquisition grants capital, accounts, tokens or authority.
 
 ## Server admission and menus
 

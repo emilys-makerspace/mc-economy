@@ -8,6 +8,7 @@ public final class StorageException extends RuntimeException {
     CONFIGURATION_DRIVER,
     IDENTITY,
     SCHEMA,
+    UPGRADE_REQUIRED,
     CORRUPTION_IO,
     LOCK_TIMEOUT,
     OVERLOAD,

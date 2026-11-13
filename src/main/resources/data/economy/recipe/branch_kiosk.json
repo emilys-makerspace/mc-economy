@@ -2,22 +2,19 @@
   "type": "minecraft:crafting_shaped",
   "category": "redstone",
   "pattern": [
-    "IGI",
-    "IRI",
-    "ICI"
+    "CMC",
+    "CBC",
+    "CCC"
   ],
   "key": {
-    "I": {
-      "item": "minecraft:iron_ingot"
-    },
-    "G": {
-      "item": "minecraft:glass"
-    },
-    "R": {
-      "item": "minecraft:redstone"
-    },
     "C": {
-      "item": "minecraft:chest"
+      "item": "minecraft:cobblestone"
+    },
+    "M": {
+      "tag": "economy:bank_notes"
+    },
+    "B": {
+      "item": "minecraft:book"
     }
   },
   "result": {

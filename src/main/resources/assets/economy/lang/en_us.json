@@ -1738,5 +1738,6 @@
   "screen.economy.result.overdraft_catchup_required": "Overdraft servicing must finish before this change. Try again shortly.",
   "screen.economy.result.overdraft_transition_blocked": "Repay any overdraft and cancel protection before switching banks or changing account currency.",
   "screen.economy.result.overdraft_account": "This account or its overdraft protection is unavailable.",
-  "ui.dialogue.kind.overdraft": "Bank overdraft"
+  "ui.dialogue.kind.overdraft": "Bank overdraft",
+  "message.economy.terminal_placement_unavailable": "Cannot place terminal: Economy is unavailable or busy. Check /economy status."
 }

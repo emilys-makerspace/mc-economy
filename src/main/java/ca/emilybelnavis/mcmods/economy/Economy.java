@@ -168,6 +168,8 @@ public final class Economy {
   }
 
   private void commands(RegisterCommandsEvent event) {
+    ca.emilybelnavis.mcmods.economy.foundation.DatabaseUpgradeCommands.register(
+        event.getDispatcher(), servers::get);
     DenominationChooser.register(event.getDispatcher(), choosers::get);
     FxAdminCommands.register(event.getDispatcher(), servers::get, Clock.systemUTC());
     LedgerCommands.register(event.getDispatcher(), servers::get);
@@ -276,6 +278,7 @@ public final class Economy {
   }
 
   private void tick(ServerTickEvent.Post event) {
+    ca.emilybelnavis.mcmods.economy.foundation.DatabaseUpgradeCommands.tick(event.getServer());
     ServerServices services = servers.get(event.getServer());
     if (services != null) {
       var previous = services.state();
@@ -318,6 +321,7 @@ public final class Economy {
   }
 
   private void stopping(ServerStoppingEvent event) {
+    ca.emilybelnavis.mcmods.economy.foundation.DatabaseUpgradeCommands.stopped(event.getServer());
     fixtureClocks.remove(event.getServer());
     ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
     ca.emilybelnavis.mcmods.economy.foundation.MacroCommands.stopping(event.getServer());

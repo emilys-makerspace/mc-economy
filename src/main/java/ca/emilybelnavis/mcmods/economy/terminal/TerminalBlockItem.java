@@ -24,9 +24,18 @@ public final class TerminalBlockItem extends BlockItem {
     if (context == null
         || !getBlock().isEnabled(context.getLevel().enabledFeatures())
         || !context.canPlace()) return InteractionResult.FAIL;
-    if (context.getLevel() instanceof ServerLevel server
-        && (context.getPlayer() == null || !TerminalLifecycle.canPlace(server)))
-      return InteractionResult.FAIL;
+    if (context.getLevel() instanceof ServerLevel server) {
+      if (context.getPlayer() == null) return InteractionResult.FAIL;
+      if (!TerminalLifecycle.canPlace(server)) {
+        context
+            .getPlayer()
+            .displayClientMessage(
+                net.minecraft.network.chat.Component.translatable(
+                    "message.economy.terminal_placement_unavailable"),
+                true);
+        return InteractionResult.FAIL;
+      }
+    }
     var state = getPlacementState(context);
     if (state == null || !placeBlock(context, state)) return InteractionResult.FAIL;
     var level = context.getLevel();

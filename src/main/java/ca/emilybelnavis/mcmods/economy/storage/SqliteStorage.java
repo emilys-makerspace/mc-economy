@@ -20,6 +20,7 @@ public final class SqliteStorage implements FoundationStore {
 
   private final ConnectionOpener opener;
   private final int lockTimeoutMillis;
+  private boolean serverUpgradeGate;
   private Path databasePath;
   // If disposal fails, keep the ownership lock alive until process exit or confirmed recovery.
   private static final Set<SqliteStorage> QUARANTINED =
@@ -42,6 +43,14 @@ public final class SqliteStorage implements FoundationStore {
                 create ? "jdbc:sqlite:" + path : "jdbc:sqlite:" + path.toUri() + "?mode=rw"),
         catalog,
         lockTimeoutMillis);
+  }
+
+  /** Production startup never performs a schema upgrade without the offline admin-approved tool. */
+  public static SqliteStorage serverStorage(
+      ca.emilybelnavis.mcmods.economy.recovery.RecordCatalog catalog, int lockTimeoutMillis) {
+    var store = new SqliteStorage(catalog, lockTimeoutMillis);
+    store.serverUpgradeGate = true;
+    return store;
   }
 
   SqliteStorage(ConnectionOpener opener) {
@@ -125,6 +134,11 @@ public final class SqliteStorage implements FoundationStore {
               "identity.pending",
               "upgrade-backup.properties")) StorageFiles.rejectLinks(directory.resolve(file));
       ownership = WorldOwnership.acquire(directory.resolve("owner.lock"));
+      StorageFiles.rejectLinks(directory.resolve(DatabaseUpgrade.INSTALL));
+      if (Files.exists(directory.resolve(DatabaseUpgrade.INSTALL)))
+        throw new StorageException(
+            StorageException.Kind.UPGRADE_REQUIRED,
+            "Database installation is incomplete; stop the server and rerun upgradeEconomyDatabase.");
       databasePath = directory.resolve("economy.sqlite");
       identityFile = directory.resolve("world-identity");
       pendingFile = directory.resolve("identity.pending");
@@ -156,12 +170,17 @@ public final class SqliteStorage implements FoundationStore {
       } else {
         if (scalarInt("PRAGMA application_id") != SchemaMigrations.APPLICATION_ID)
           throw new StorageException(
-              StorageException.Kind.SCHEMA, "Legacy or foreign database; no importer supported");
+              StorageException.Kind.SCHEMA,
+              "Legacy or unrecognized database; a logged-in administrator can inspect supported imports with /economy upgrade review.");
         initializingVersion = scalarInt("PRAGMA user_version");
         if (initializingVersion < SchemaMigrations.MINIMUM_SUPPORTED
             || initializingVersion > SchemaMigrations.CURRENT)
           throw new StorageException(
               StorageException.Kind.SCHEMA, "Unsupported schema " + initializingVersion);
+        if (serverUpgradeGate && initializingVersion < SchemaMigrations.CURRENT)
+          throw new StorageException(
+              StorageException.Kind.UPGRADE_REQUIRED,
+              "A logged-in administrator must run /economy upgrade review and confirm, then apply the upgrade offline.");
         initializingIdentity = readDatabaseIdentity(initializingVersion);
         if (identity == null && pending == null) throw identity("World-side identity missing");
         if (!initializingIdentity.equals(identity != null ? identity : pending))

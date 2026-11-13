@@ -21,6 +21,8 @@ Banking, physical cash and player shops for Minecraft, with credit, loans and a 
 - Optional automatic payments, transaction history and recovery of interrupted payments and item deliveries.
 - Reference item values derived from supported recipes, with operator-controlled activation for villager and wandering-trader pricing.
 
+Craft an ATM or kiosk in a crafting table with seven cobblestone, any bank note in the top-middle slot, and a dispenser (ATM) or book (kiosk) in the centre. The bank note is consumed. Combine any ATM with one dye to recolour it; all 16 dye colours are supported, including recolouring an already dyed ATM. Crafted machines start unbound; choose their bank in owner/operator settings after placement.
+
 New kiosks are two blocks wide and two blocks high. Existing narrow kiosks remain usable and offer a free **Upgrade kiosk** action in owner/operator settings when space and support are clear.
 
 New eligible vanilla villages use the same 17×15×17 bank design across plains, desert, savanna, snowy and taiga. Each branch has its bank’s colors, two ATMs for its native currency, one branded kiosk and a desk for one banker. Right-click an active kiosk and open **Branch Services** to see that bank’s account options. Choose **Open primary account** or **Open \<native currency\> account** when offered to submit the request. You can also ask the banker questions through private dialogue.
@@ -82,7 +84,7 @@ Placed agents stay where you put them and persist with the world. Right-click wi
 - [Changelog](CHANGELOG.md): completed features and notable fixes.
 - [Roadmap](ROADMAP.md) covers delivered milestones and planned features.
 
-**Upgrading an existing world?** Stop Minecraft and [prepare a complete-world upgrade backup](docs/SERVER_GUIDE.md#schema-upgrades) before opening it with a newer economy schema. Keep world and economy data together.
+**Upgrading an existing world?** A logged-in operator must review and confirm the database upgrade in-game. Then stop Minecraft and run the [offline upgrade tool](docs/SERVER_GUIDE.md#schema-upgrades), which backs up the complete world before conversion. Supported legacy databases retain account balances and archive their original tables. Keep world and economy data together.
 
 ## Build and run
 

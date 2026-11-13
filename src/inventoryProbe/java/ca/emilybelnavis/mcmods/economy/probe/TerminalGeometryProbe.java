@@ -37,6 +37,7 @@ public final class TerminalGeometryProbe {
   private TerminalGeometryProbe() {}
 
   public static boolean tick(MinecraftServer server) throws Exception {
+    if (Boolean.getBoolean("economy.atmPlacementProbe")) return tickAtmPlacement(server);
     if (stage == 0) {
       level = server.overworld();
       TerminalDataProbe.run(level);
@@ -189,6 +190,61 @@ public final class TerminalGeometryProbe {
     return false;
   }
 
+  /** Focused regression: real item placement, delayed integrity and genuine support loss. */
+  private static boolean tickAtmPlacement(MinecraftServer server) throws Exception {
+    if (stage == 0) {
+      level = server.overworld();
+      player = FakePlayerFactory.getMinecraft(level);
+      level.getChunkAt(ANCHOR);
+      level.getChunkAt(ANCHOR.offset(-4, 0, -4));
+      for (int x = 5; x <= 6; x++) for (int z = 5; z <= 6; z++) level.setChunkForced(x, z, true);
+      for (var entry : TerminalCatalog.all())
+        if (entry.kind() == TerminalPolicy.Kind.ATM)
+          for (var facing : FACINGS)
+            CASES.add(
+                () -> {
+                  clean();
+                  place(entry, facing);
+                  require(drops().isEmpty(), "placement must not drop the ATM");
+                });
+      stage = 1;
+    }
+    if (stage == 1 && completed < CASES.size()) {
+      if (!TerminalLifecycle.canPlace(level)) return false;
+      CASES.get(completed++).run();
+      return false;
+    }
+    if (stage == 1) {
+      clean();
+      place(TerminalCatalog.get("atm"), Direction.NORTH);
+      generation = entity().generation();
+      deadline = server.getTickCount() + 40;
+      stage = 2;
+    }
+    if (stage == 2) {
+      require(
+          TerminalGeometry.matches(level, ANCHOR, generation),
+          "ATM survives placement and scheduled integrity ticks");
+      require(drops().isEmpty(), "standing ATM has no item drop");
+      if (server.getTickCount() > deadline + 600)
+        throw new IllegalStateException("ATM policy admission timed out");
+      if (server.getTickCount() < deadline || !entity().policyReady()) return false;
+      level.destroyBlock(ANCHOR.below(), false);
+      for (var position : TerminalGeometry.cells(ANCHOR, Direction.NORTH))
+        require(level.isEmptyBlock(position), "support loss removes every ATM cell");
+      require(drops().size() == 1, "genuine support loss drops exactly one ATM");
+      Files.writeString(
+          server.getWorldPath(LevelResource.ROOT).resolve("terminal-probe-passed.txt"),
+          "PASS "
+              + completed
+              + " ATM variant/facing placements; 40-tick persistence; support-loss single drop\n");
+      System.out.println(
+          "ATM_PLACEMENT_PASS " + completed + " placements; delayed integrity; support loss");
+      return true;
+    }
+    return false;
+  }
+
   private static TerminalPolicy.Anchor policyAnchor() {
     return new TerminalPolicy.Anchor(
         level.dimension().location().toString(), ANCHOR.getX(), ANCHOR.getY(), ANCHOR.getZ());
@@ -219,6 +275,11 @@ public final class TerminalGeometryProbe {
     var hit =
         new BlockHitResult(
             Vec3.atCenterOf(ANCHOR.below()).add(0, .5, 0), Direction.UP, ANCHOR.below(), false);
+    if (Boolean.getBoolean("economy.atmPlacementProbe"))
+      return player
+          .gameMode
+          .useItemOn(player, level, stack, InteractionHand.MAIN_HAND, hit)
+          .consumesAction();
     return ((BlockItem) entry.item().get())
         .place(new BlockPlaceContext(player, InteractionHand.MAIN_HAND, stack, hit))
         .consumesAction();

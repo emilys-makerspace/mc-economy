@@ -24,10 +24,27 @@ public final class UpgradeBackup {
         ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration.core());
   }
 
+  static Path prepareApprovedDatabaseUpgrade(Path world) throws IOException {
+    return prepare(
+        world,
+        false,
+        ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration.core(),
+        true);
+  }
+
   static Path prepare(
       Path world,
       boolean requireClean,
       ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration configuration)
+      throws IOException {
+    return prepare(world, requireClean, configuration, false);
+  }
+
+  private static Path prepare(
+      Path world,
+      boolean requireClean,
+      ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration configuration,
+      boolean allowLegacy)
       throws IOException {
     world = world.toAbsolutePath().normalize();
     StorageFiles.rejectLinks(world);
@@ -42,7 +59,17 @@ public final class UpgradeBackup {
     // owners.
     try (WorldOwnership minecraft = WorldOwnership.acquire(world.resolve("session.lock"));
         WorldOwnership economy = WorldOwnership.acquire(directory.resolve("owner.lock"))) {
-      OfflineInspector.Metadata metadata = OfflineInspector.metadata(world);
+      OfflineInspector.Metadata metadata;
+      try {
+        metadata = OfflineInspector.metadata(world);
+      } catch (IOException invalid) {
+        if (!allowLegacy) throw invalid;
+        try {
+          metadata = DatabaseUpgrade.legacyBackupMetadata(world);
+        } catch (Exception legacy) {
+          throw new IOException("Database is not a supported upgrade source", legacy);
+        }
+      }
       if (requireClean) {
         if (!metadata.databaseClean()) throw new IOException("Economy did not close cleanly");
         WorldShutdown.requireClean(world, metadata.evidence());
@@ -88,7 +115,11 @@ public final class UpgradeBackup {
         throw new IOException("Storage changed during offline backup");
       StorageFiles.writeNew(backup.resolve("manifest.properties"), properties(manifest));
       Properties foundation = new Properties();
-      foundation.setProperty("format", "economy-world-backup-v1");
+      foundation.setProperty(
+          "format",
+          metadata.evidence().schema() == 0
+              ? "economy-legacy-backup-v1"
+              : "economy-world-backup-v1");
       foundation.setProperty("world-id", metadata.evidence().worldId());
       foundation.setProperty("mod-version", "0.1.0");
       foundation.setProperty("schema-version", Integer.toString(metadata.evidence().schema()));

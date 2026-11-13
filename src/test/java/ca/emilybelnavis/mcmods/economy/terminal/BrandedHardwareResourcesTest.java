@@ -150,21 +150,44 @@ class BrandedHardwareResourcesTest {
 
   @Test
   void acquisitionIsNeutralAndDyeCannotSelectABank() throws IOException {
-    var recipe = json(RESOURCES.resolve("data/economy/recipe/branch_kiosk.json"));
-    assertEquals("minecraft:crafting_shaped", recipe.get("type").getAsString());
-    assertEquals(JsonParser.parseString("[\"IGI\",\"IRI\",\"ICI\"]"), recipe.get("pattern"));
-    var ingredients = recipe.getAsJsonObject("key");
-    assertEquals(
-        "minecraft:iron_ingot", ingredients.getAsJsonObject("I").get("item").getAsString());
-    assertEquals("minecraft:glass", ingredients.getAsJsonObject("G").get("item").getAsString());
-    assertEquals("minecraft:redstone", ingredients.getAsJsonObject("R").get("item").getAsString());
-    assertEquals("minecraft:chest", ingredients.getAsJsonObject("C").get("item").getAsString());
-    assertEquals(
-        JsonParser.parseString("{\"id\":\"economy:branch_kiosk\",\"count\":1}"),
-        recipe.get("result"));
-    for (String dye : DYES)
-      assertFalse(Files.exists(RESOURCES.resolve("data/economy/recipe/" + dye + "_atm.json")), dye);
-    assertTrue(Files.isRegularFile(RESOURCES.resolve("data/economy/recipe/atm.json")));
+    for (String id : List.of("atm", "branch_kiosk")) {
+      var recipe = json(RESOURCES.resolve("data/economy/recipe/" + id + ".json"));
+      boolean atm = id.equals("atm");
+      assertEquals("minecraft:crafting_shaped", recipe.get("type").getAsString());
+      assertEquals(
+          JsonParser.parseString(atm ? "[\"CMC\",\"CDC\",\"CCC\"]" : "[\"CMC\",\"CBC\",\"CCC\"]"),
+          recipe.get("pattern"));
+      var ingredients = recipe.getAsJsonObject("key");
+      assertEquals(
+          "minecraft:cobblestone", ingredients.getAsJsonObject("C").get("item").getAsString());
+      assertEquals("economy:bank_notes", ingredients.getAsJsonObject("M").get("tag").getAsString());
+      assertEquals(
+          atm ? "minecraft:dispenser" : "minecraft:book",
+          ingredients.getAsJsonObject(atm ? "D" : "B").get("item").getAsString());
+      assertEquals(
+          JsonParser.parseString("{\"id\":\"economy:" + id + "\",\"count\":1}"),
+          recipe.get("result"));
+    }
+    var notes =
+        json(RESOURCES.resolve("data/economy/tags/item/bank_notes.json")).getAsJsonArray("values");
+    assertFalse(notes.isEmpty());
+    for (var note : notes) {
+      String id = note.getAsString();
+      assertTrue(id.startsWith("economy:") && id.contains("_bill_"), id);
+      assertTrue(
+          Files.isRegularFile(ASSETS.resolve("models/item/" + id.substring(8) + ".json")), id);
+    }
+    for (String dye : DYES) {
+      var recipe = json(RESOURCES.resolve("data/economy/recipe/" + dye + "_atm.json"));
+      assertEquals("minecraft:crafting_shapeless", recipe.get("type").getAsString());
+      assertEquals(
+          JsonParser.parseString(
+              "[{\"tag\":\"economy:atms\"},{\"item\":\"minecraft:" + dye + "_dye\"}]"),
+          recipe.get("ingredients"));
+      assertEquals(
+          JsonParser.parseString("{\"id\":\"economy:" + dye + "_atm\",\"count\":1}"),
+          recipe.get("result"));
+    }
     assertTrue(Files.isRegularFile(RESOURCES.resolve("data/economy/recipe/teller.json")));
     // Multiblock teardown owns the unique drop; vanilla loot must not create another.
     for (String id : List.of("atm", "teller", "branch_kiosk"))

@@ -4,6 +4,19 @@ Completed features, gameplay changes and notable fixes, grouped by date and phas
 
 ## 2026-11-12
 
+### Administrator-approved database upgrades
+
+- Added in-game upgrade review and confirmation restricted to a directly connected operator, followed by an offline upgrade tool with a verified complete-world backup.
+- Added import of the recognized legacy database’s account identities, primary flags, currencies and exact balances; all original tables remain as read-only archives.
+- Production startup now waits for approval and conversion of older schemas. Interrupted installations can resume without importing balances twice; unknown formats and newer schemas remain unchanged.
+
+### ATM and kiosk crafting
+
+- Terminal placement now explains when Economy is unavailable or busy instead of silently failing.
+
+- ATMs now use seven cobblestone, any bank note and a dispenser; kiosks use the same layout with a book instead of the dispenser.
+- Added all 16 ATM dye recipes, including recolouring an already dyed ATM.
+
 ### Overdraft protection and integration overrides
 
 - Added bank overdraft applications, credit-based 12–18% APR, a CAD 5 equivalent monthly protection fee, and kiosk review/cancellation.
