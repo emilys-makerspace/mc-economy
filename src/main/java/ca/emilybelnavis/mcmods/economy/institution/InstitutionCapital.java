@@ -18,7 +18,8 @@ public final class InstitutionCapital {
   public static final String MANIFEST = "economy:a6/capital-manifest";
   public static final String ALLOCATION_RECORD = "economy:a6/capital-allocation";
   public static final String ACCOUNT = "economy:a6/institution-account";
-  public static final long TOTAL_MAJOR = 28_000_000_000L;
+  public static final long TOTAL_MAJOR = 2_800_000_000_000L;
+  private static final long LEGACY_TOTAL_MAJOR = 28_000_000_000L;
   public static final InstitutionCatalog.InstitutionId TREASURY =
       new InstitutionCatalog.InstitutionId("economy:treasury/institution-capital");
   public static final Journal.Kind KIND =
@@ -96,6 +97,7 @@ public final class InstitutionCapital {
   private record Manifest(
       EconomyCurrency currency,
       long revision,
+      long totalMajor,
       FxFacts.Publication publication,
       int next,
       boolean active) {}
@@ -242,7 +244,8 @@ public final class InstitutionCapital {
     }
     if (current == null || current.active || current.next != step - 1)
       return retry("CAPITAL_CURSOR_CHANGED");
-    var allocation = allocation(world, current.next, current.currency, current.publication);
+    var allocation =
+        allocation(world, current.next, current.currency, current.publication, current.totalMajor);
     var financial = poster.allocate(reads, allocation);
     var records = new ArrayList<>(financial.records());
     records.add(new Journal.Record(ALLOCATION_RECORD, 1, allocationPayload(allocation)));
@@ -301,11 +304,19 @@ public final class InstitutionCapital {
    */
   public static Allocation allocation(
       WorldId world, int ordinal, EconomyCurrency serverCurrency, FxFacts.Publication publication) {
+    return allocation(world, ordinal, serverCurrency, publication, TOTAL_MAJOR);
+  }
+
+  private static Allocation allocation(
+      WorldId world,
+      int ordinal,
+      EconomyCurrency serverCurrency,
+      FxFacts.Publication publication,
+      long totalMajor) {
     if (ordinal < 0 || ordinal >= 25 || !publication.rates().containsKey(EconomyCurrency.CHF))
       throw new IllegalArgumentException("Capital allocation inputs");
     var institution = InstitutionCatalog.all(serverCurrency).get(ordinal);
-    long major =
-        institution.tier() == InstitutionCatalog.Tier.TIER2_ONLY ? 4_000_000_000L : 400_000_000L;
+    long major = allocationMajor(institution, totalMajor);
     long sourceMinor = Math.multiplyExact(major, serverCurrency.minorUnitsPerMajor());
     var numerator = BigDecimal.valueOf(major).multiply(publication.rates().get(serverCurrency));
     var exact =
@@ -360,7 +371,11 @@ public final class InstitutionCapital {
             if (entries.get(i).id().equals(institution))
               return Optional.of(
                   allocation(
-                      store.snapshot().worldId(), i, manifest.currency, manifest.publication));
+                      store.snapshot().worldId(),
+                      i,
+                      manifest.currency,
+                      manifest.publication,
+                      manifest.totalMajor));
           return Optional.empty();
         });
   }
@@ -426,6 +441,8 @@ public final class InstitutionCapital {
     return new Manifest(
         EconomyCurrency.valueOf(row.get("server_currency")),
         Long.parseLong(row.get("denomination_revision")),
+        Long.parseLong(row.get("total_server_minor"))
+            / EconomyCurrency.valueOf(row.get("server_currency")).minorUnitsPerMajor(),
         frozen,
         Integer.parseInt(row.get("next_allocation")),
         row.get("state").equals("ACTIVE"));
@@ -455,6 +472,15 @@ public final class InstitutionCapital {
 
   private static String manifestPayload(
       WorldId world, EconomyCurrency currency, long revision, FxFacts.Publication publication) {
+    return manifestPayload(world, currency, revision, publication, TOTAL_MAJOR);
+  }
+
+  private static String manifestPayload(
+      WorldId world,
+      EconomyCurrency currency,
+      long revision,
+      FxFacts.Publication publication,
+      long totalMajor) {
     return world.value()
         + "|"
         + currency
@@ -471,7 +497,7 @@ public final class InstitutionCapital {
         + "|"
         + rates(publication)
         + "|"
-        + TOTAL_MAJOR;
+        + totalMajor;
   }
 
   private static String allocationPayload(Allocation a) {
@@ -525,7 +551,7 @@ public final class InstitutionCapital {
 
   private static void validateManifest(String payload) {
     var p = payload.split("\\|", -1);
-    if (p.length != 9 || Long.parseLong(p[2]) < 0 || Long.parseLong(p[8]) != TOTAL_MAJOR)
+    if (p.length != 9 || Long.parseLong(p[2]) < 0 || !supportedTotal(Long.parseLong(p[8])))
       throw new IllegalArgumentException("Capital manifest");
     var row =
         Map.of(
@@ -544,8 +570,18 @@ public final class InstitutionCapital {
             new WorldId(UUID.fromString(p[0])),
             EconomyCurrency.valueOf(p[1]),
             Long.parseLong(p[2]),
-            publication)
+            publication,
+            Long.parseLong(p[8]))
         .equals(payload)) throw new IllegalArgumentException("Capital manifest encoding");
+  }
+
+  private static boolean supportedTotal(long totalMajor) {
+    return totalMajor == TOTAL_MAJOR || totalMajor == LEGACY_TOTAL_MAJOR;
+  }
+
+  private static long allocationMajor(InstitutionCatalog.Entry institution, long totalMajor) {
+    if (!supportedTotal(totalMajor)) throw new IllegalArgumentException("Capital total");
+    return totalMajor / (institution.tier() == InstitutionCatalog.Tier.TIER2_ONLY ? 7 : 70);
   }
 
   private static void validateAllocation(String payload) {
@@ -555,14 +591,15 @@ public final class InstitutionCapital {
     int ordinal = Integer.parseInt(p[1]);
     var server = EconomyCurrency.valueOf(p[3]);
     var institution = InstitutionCatalog.all(server).get(ordinal);
+    long serverMinor = Long.parseLong(p[4]);
     if (!institution.id().key().equals(p[2])
         || !institution.baseCurrency().name().equals(p[5])
-        || Long.parseLong(p[4])
-            != Math.multiplyExact(
-                institution.tier() == InstitutionCatalog.Tier.TIER2_ONLY
-                    ? 4_000_000_000L
-                    : 400_000_000L,
-                server.minorUnitsPerMajor()))
+        || (serverMinor
+                != Math.multiplyExact(
+                    allocationMajor(institution, TOTAL_MAJOR), server.minorUnitsPerMajor())
+            && serverMinor
+                != Math.multiplyExact(
+                    allocationMajor(institution, LEGACY_TOTAL_MAJOR), server.minorUnitsPerMajor())))
       throw new IllegalArgumentException("Capital allocation manifest");
     long minor = Long.parseLong(p[6]);
     var exact = new BigDecimal(p[7]);

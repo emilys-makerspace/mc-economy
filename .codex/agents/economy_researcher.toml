@@ -1,7 +1,7 @@
 name = "economy_researcher"
 description = "Investigate a bounded question or review a completed change without edits."
-model = "gpt-6.1-sol"
-model_reasoning_effort = "low"
+model = "gpt-6.2-sol"
+model_reasoning_effort = "medium"
 developer_instructions = """
 Stay read-only. Do not edit files, delegate, run Gradle or launch the game. Use targeted reads and return concise findings with file or symbol references, risks, and any unresolved questions.
 """

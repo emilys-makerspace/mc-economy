@@ -2,6 +2,10 @@
 
 Status: draft DESIGN prompt. Refine specifications and future prompts only. Do not implement code, scaffold, run Gradle/tests/game processes, generate assets, change dependencies, or migrate worlds. Edit planning files only when explicitly requested. Reading a roadmap or this file is not implementation authorization.
 
+## Design brief
+
+[First-pass design brief](DESIGN.md) · [B-series dependencies and shared contracts](../planning/B-SERIES-DESIGN.md). Drafts distinguish fixed requirements from proposed decisions; no implementation or policy approval is implied.
+
 ## Goal and dependencies
 
 Prepare a complete, reviewable specification for B6. Required upstream work: A6, B4. Do not treat existing code as completed redesign work. Supply approved upstream contracts explicitly; mark missing contracts unresolved.
@@ -30,7 +34,7 @@ For each subprompt define outcome, owner, prerequisites, persistence/entities, s
 
 Concurrent withdrawal/order cannot bypass limits; shocks and illiquidity leave explicitly tracked debt; interest posts once; liquidation respects finite liquidity and bounded server work; restart preserves deadlines.
 
-Include concrete numerical or state-transition examples where useful. Describe future unit, integration, restart/crash and performance checks appropriate to each subprompt. Distinguish proposed guarantees from verified behavior. Future runnable deliveries require configured runClient/runServer, mod registration, required development runtime dependencies, and runClient help/dry-run verification; run no checks during this planning task.
+Include concrete numerical or state-transition examples where useful. Select proportionate future checks under the project verification policy; unit, integration, restart/crash and performance categories are alternatives chosen for changed behavior, not cumulative gates. Distinguish proposed guarantees from verified behavior. Future runnable deliveries require configured runClient/runServer, mod registration, required development runtime dependencies, and runClient help/dry-run verification; run no checks during this planning task.
 
 ## Required planning response
 
@@ -41,3 +45,12 @@ Include concrete numerical or state-transition examples where useful. Describe f
 - Open questions and approved-versus-proposed rules.
 
 Stop at planning. Do not execute the prompts you draft or expand into later-phase implementation.
+
+
+## Individually selectable package drafts — 2026-11-13
+
+[Phase contract](CONTRACT.md) · [Ordered package queue](EXECUTION.md) · [Stage B shared contract](../planning/B-SHARED.md) · [Decision register](../planning/B-DECISIONS.md). These flesh out the original DESIGN brief without implementing it. All packages remain drafts awaiting their policy gates and separate explicit selection. The current shared verification policy controls every package/subtask; no automatic full-suite or per-package test gate is introduced. Corporation registration/accounts/API are separately proposed under B0; new corporate borrowing, short exposure and public listing are outside its initial scope.
+
+## Margin policy review — 2026-11-16
+
+[G01–G11](POLICY-REVIEW.md) record approved opt-in personal eligibility/debt cap, initial/maintenance/critical equity, collateral/FX/concentration haircuts, existing-lender funding, financial-calendar variable interest, calls, actual finite liquidation and residual debt, accepted 2026-11-16 with “this works”; no implementation selected.

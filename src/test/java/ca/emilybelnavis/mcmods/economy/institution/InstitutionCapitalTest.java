@@ -74,7 +74,7 @@ class InstitutionCapitalTest {
       if (allocation.institution().baseCurrency() == CHF)
         assertEquals(new BigDecimal("0.01000000000000"), allocation.residualNumerator());
     }
-    assertEquals(2_800_000_000_000L, total);
+    assertEquals(280_000_000_000_000L, total);
     var bank = InstitutionCatalog.banks().getFirst().id();
     assertNotEquals(
         FinancialAccounts.id(world, bank, FinancialAccounts.Role.CASH, CAD),
@@ -138,7 +138,7 @@ class InstitutionCapitalTest {
                               1)
                           .getFirst()
                           .get("amount")));
-      assertEquals(2_800_000_000_000L, allocated);
+      assertEquals(280_000_000_000_000L, allocated);
       LedgerProjection.rebuild(store);
       assertEquals(0, balance(store, treasury.treasuryCash()));
       for (var institution : InstitutionCatalog.all(CAD)) {

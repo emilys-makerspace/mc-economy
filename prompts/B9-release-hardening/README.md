@@ -2,6 +2,10 @@
 
 Status: draft DESIGN prompt. Refine specifications and future prompts only. Do not implement code, scaffold, run Gradle/tests/game processes, generate assets, change dependencies, or migrate worlds. Edit planning files only when explicitly requested. Reading a roadmap or this file is not implementation authorization.
 
+## Design brief
+
+[First-pass design brief](DESIGN.md) · [B-series dependencies and shared contracts](../planning/B-SERIES-DESIGN.md). Drafts distinguish fixed requirements from proposed decisions; no implementation or policy approval is implied.
+
 ## Goal and dependencies
 
 Prepare a complete, reviewable specification for B9. Required upstream work: B1–B8. Do not treat existing code as completed redesign work. Supply approved upstream contracts explicitly; mark missing contracts unresolved.
@@ -41,3 +45,7 @@ Include concrete numerical or state-transition examples where useful. Describe f
 - Open questions and approved-versus-proposed rules.
 
 Stop at planning. Do not execute the prompts you draft or expand into later-phase implementation.
+
+## Individual package drafts — 2026-11-13
+
+[Package contract](CONTRACT.md) · [Ordered selectable drafts](EXECUTION.md) · [Stage B shared contract](../planning/B-SHARED.md) · [decision register](../planning/B-DECISIONS.md). All packages remain unselected drafts. These refine the design brief and split oversized topics; existing explicit approvals stay in force. Product policies remain open where recorded. The shared project verification scope supersedes any broad earlier checklist: planning is diff/link review only; future checks are selected by changed behavior, with no automatic full-suite or test-per-package gate. Corporate ownership/API comes from B0; corporate borrowing remains excluded initially.

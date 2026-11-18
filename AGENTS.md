@@ -16,7 +16,7 @@
 
 ## Delegation
 
-- Main agent: `gpt-6.1-sol` medium, shared contracts, integration and final checks. Use `economy_researcher` (`gpt-6.1-terra` low) for researching and fleshing out ideas or bounded read-only review, and `economy_worker` (`gpt-6.1-sol` low) for implementation. For substantial independent work, delegate using these project profiles with a maximum concurrency of five subagent threads per session. Routine work stays with the main agent.
+- The main agent uses `gpt-6.2-sol` with high reasoning effort and owns shared contracts, integration and final checks. Use `economy_researcher` (`gpt-6.2-sol`, medium) for research or bounded read-only review and `economy_worker` (`gpt-6.2-sol`, low) for implementation. For substantial independent work, delegate using these project profiles with a maximum concurrency of five subagent threads per session. Routine work stays with the main agent.
 - Establish shared interfaces first. Assign narrow acceptance criteria, explicit disjoint write ownership or read-only boundaries, and allowed checks. Only the main agent delegates. One owner runs Gradle/game tasks sequentially.
 - Respect the user's settings and task-specific check limits. Do not silently substitute unavailable models.
 

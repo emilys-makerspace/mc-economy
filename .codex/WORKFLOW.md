@@ -10,7 +10,7 @@ Apply the project-wide [verification policy](VERIFICATION.md) to every module an
 
 ## Model and usage
 
-Use GPT-6.1 Sol medium for the main agent, Sol low for workers and the researcher. Sol low is a conservative initial choice for bounded research/review; it keeps all project roles on the chosen model. Consider higher effort only for demonstrated need. Profiles pin their own settings, so change the worker profile or choose another explicitly configured profile if an experiment needs higher effort. Project defaults apply in a trusted project and may not change an already open chat or supersede a user selection. Confirm the displayed model/effort in a fresh project chat and inspect spawned threads when trialing the roles. Report unavailable settings rather than silently switching models.
+Use `gpt-6.2-sol` with high reasoning effort for the main agent, medium for `economy_researcher` and low for `economy_worker`. Project defaults apply in trusted projects. An open chat or an explicit user selection may retain its existing settings. Confirm the displayed model and effort in a fresh project chat and inspect spawned threads when trialing the roles. Report unavailable settings before choosing a substitute.
 
 Use **A1-05-01** as the pilot on its next explicit invocation. In its evidence, record elapsed time, rough discovery/implementation/checks/debugging/documentation time (mark overlaps and unknowns), agents used, and actual usage from the dashboard when available. Prior user-reported elapsed times were 9:07, 17:40, 23:01 and 53:24 for A1-01–04; those packages differ in scope and their usage is unknown. Compare comparable work before increasing delegation. Never estimate credits from elapsed minutes alone.
 

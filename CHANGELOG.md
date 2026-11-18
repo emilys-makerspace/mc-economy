@@ -2,6 +2,10 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-13
+
+- Increased initial institutional seed capital from 28 billion to 2.8 trillion server-currency major units, keeping the allocation proportions. Existing funding manifests and balances are preserved without automatic top-ups.
+
 ## 2026-11-12
 
 ### Administrator-approved database upgrades

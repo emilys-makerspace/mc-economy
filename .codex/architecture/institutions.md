@@ -12,7 +12,7 @@ Financial account IDs bind world, institution, role and currency. Roles are CASH
 
 `InstitutionCapital` owns stable world/step operation IDs. It waits for denomination and a fresh eleven-currency publication (UTC day start through 48h), captures both once, then journals one issuance plus 25 allocation steps. Each step registers at most one party and three accounts. Production scheduling treats READY/ALLOCATING capital as bounded debt and withholds economic readiness until funded; missing denomination/FX remains dormant. Restart resumes the persisted allocation cursor. Once ACTIVE, replay resolves the final operation without reseeding.
 
-The seed is 28B server-major:18×400M Tier1/hybrid,5×4B specialists,400M Ironbridge,400M Waystone. `CapitalPosting` issues treasury CASH+seed/EQUITY−seed with explicit CAPITAL_ISSUE authority. Allocations transfer treasury cash through A4 clearing to native institution cash; matching equity recognition cancels clearing per currency. Treasury ends at zero. This is an approved new-money/equity seed, not a customer credit or receivable-backed spendable balance.
+New funding starts with 2.8T server-major: 18×40B Tier1/hybrid, 5×400B specialists, 40B Ironbridge and 40B Waystone. Existing manifests retain their captured total, including the legacy 28B seed, for restart, inspection and journal recovery; existing worlds receive no automatic top-up. `CapitalPosting` issues treasury CASH+seed/EQUITY−seed with explicit CAPITAL_ISSUE authority. Allocations transfer treasury cash through A4 clearing to native institution cash; matching equity recognition cancels clearing per currency. Treasury ends at zero. This is an approved new-money/equity seed, not a customer credit or receivable-backed spendable balance.
 
 Native base minor units use exact rational FLOOR. Captured rates, exact residual numerator/denominator,18-decimal display values and CEILING10% native-minor operating floors persist in the allocation. Residual never becomes spendable cash. Later lending/yield packages must enforce floors and commitments; this package does not originate credit.
 
@@ -43,7 +43,7 @@ V1 decoders: `economy:a6/catalog-publication`, `economy:a6/capital-manifest`, `e
 
 ## A6-05-01 live branch adapter
 
-[Branded kiosks](branch-hardware.md) now install live server-owned admission for opening, assignment, provider switching and protected closure. `BankProviders.CLOSE` is the composed closure kind. Generic lifecycle APIs remain gated; replacements and applications await their services. Schema is V22; capital remains the finite original 28B manifest.
+[Branded kiosks](branch-hardware.md) now install live server-owned admission for opening, assignment, provider switching and protected closure. `BankProviders.CLOSE` is the composed closure kind. Generic lifecycle APIs remain gated; replacements and applications await their services. Schema is V22; capital remains finite and bound to its original manifest (see the current seed policy above).
 
 ## A6-06 token revocation integration
 

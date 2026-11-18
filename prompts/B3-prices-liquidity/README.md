@@ -2,6 +2,10 @@
 
 Status: draft DESIGN prompt. Refine specifications and future prompts only. Do not implement code, scaffold, run Gradle/tests/game processes, generate assets, change dependencies, or migrate worlds. Edit planning files only when explicitly requested. Reading a roadmap or this file is not implementation authorization.
 
+## Design brief
+
+[First-pass design brief](DESIGN.md) · [B-series dependencies and shared contracts](../planning/B-SERIES-DESIGN.md). Drafts distinguish fixed requirements from proposed decisions; no implementation or policy approval is implied.
+
 ## Goal and dependencies
 
 Prepare a complete, reviewable specification for B3. Required upstream work: A8, B1; B2 participant custody contracts as needed. Do not treat existing code as completed redesign work. Supply approved upstream contracts explicitly; mark missing contracts unresolved.
@@ -30,7 +34,7 @@ For each subprompt define outcome, owner, prerequisites, persistence/entities, s
 
 All target listings evolve without players; deterministic recovery cannot reroll favorable prices; finite volume is consumed; session transitions/catch-up bounded; market simulation cost stays within approved budget independent of menu/player count where possible.
 
-Include concrete numerical or state-transition examples where useful. Describe future unit, integration, restart/crash and performance checks appropriate to each subprompt. Distinguish proposed guarantees from verified behavior. Future runnable deliveries require configured runClient/runServer, mod registration, required development runtime dependencies, and runClient help/dry-run verification; run no checks during this planning task.
+Include concrete numerical or state-transition examples where useful. Select proportionate future checks for meaningful changed behavior under the project verification policy; categories are options, not cumulative gates. Distinguish proposed guarantees from verified behavior. Future runnable deliveries require configured runClient/runServer, mod registration, required development runtime dependencies, and runClient help/dry-run verification; run no checks during this planning task.
 
 ## Required planning response
 
@@ -41,3 +45,15 @@ Include concrete numerical or state-transition examples where useful. Describe f
 - Open questions and approved-versus-proposed rules.
 
 Stop at planning. Do not execute the prompts you draft or expand into later-phase implementation.
+
+## Package drafts — 2026-11-13
+
+[Shared phase contract](CONTRACT.md) and [individually selectable package queue](EXECUTION.md) now refine this design brief. All packages remain draft/unselected; unresolved consequential policies are [recorded centrally](../planning/B-DECISIONS.md). Preserve the specific approvals already recorded in DESIGN.md. The shared [B-stage contract](../planning/B-SHARED.md) governs authority, corporate-owner boundaries, verification and handoffs. This drafting runs no Gradle, tests or game processes.
+
+## Funding and liquidity review — 2026-11-13
+
+[Approved M01–M08](LIQUIDITY-REVIEW.md) record accepted cash/share capitalization, participant allocation, 60s/5s cadence, spread/depth, risk and autonomous-activity limits, amended to CAD 2.8T initial cash (100×) with the separate up-to-CAD 28B share-value target unchanged; numeric price dynamics and financial-mark policy are now approved under P01–P07; exact formula/source feasibility remains for B3-01. No implementation selected.
+
+## Price-dynamics direction
+
+The user selected moderately active markets. [P01–P07](PRICE-DYNAMICS-REVIEW.md) record approved numeric volatility/correlation, macro response, temporary effects and financial-mark policies, accepted with “yeppers”. Exact deterministic formulas and source/interface feasibility remain for B3-01. No implementation selected.
