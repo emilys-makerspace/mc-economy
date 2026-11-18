@@ -206,7 +206,9 @@ public final class MacroModel {
         Rational created =
             sum(w.totals(), Kind.OPERATOR_CREATE, Kind.OPERATOR_CASH_CREATE, Kind.NPC_CREATE)
                 .multiply(unit);
-        Rational retired = sum(w.totals(), Kind.OPERATOR_RETIRE, Kind.NPC_RETIRE).multiply(unit);
+        Rational retired =
+            sum(w.totals(), Kind.OPERATOR_RETIRE, Kind.NPC_RETIRE, Kind.REGISTRATION_RETIRE)
+                .multiply(unit);
         money = created.subtract(retired).divide(created.add(retired).add(n.multiply(q)));
         Rational bought = value(w.totals(), Kind.FX_BUY).multiply(unit),
             sold = value(w.totals(), Kind.FX_SELL).multiply(unit);

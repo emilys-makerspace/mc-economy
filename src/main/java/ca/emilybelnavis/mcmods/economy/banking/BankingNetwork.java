@@ -58,6 +58,17 @@ public final class BankingNetwork {
           "price",
           "retry",
           "cancel",
+          "corp_list",
+          "corp_next",
+          "corp_select",
+          "corp_account",
+          "corp_open",
+          "corp_fund",
+          "corp_pay",
+          "corp_close",
+          "corp_history",
+          "corp_recover",
+          "corp_confirm",
           "branch_open",
           "branch_assign",
           "branch_switch",
@@ -349,7 +360,7 @@ public final class BankingNetwork {
   }
 
   private static void register(RegisterPayloadHandlersEvent event) {
-    var registrar = event.registrar("13");
+    var registrar = event.registrar("15");
     registrar.playToServer(
         Action.PAYLOAD_TYPE,
         Action.CODEC,

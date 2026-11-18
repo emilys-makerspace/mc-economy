@@ -255,8 +255,8 @@ public final class MerchantPayments {
       if (!granted(reads, intent.actor())
           || !authority.allows(action, intent.actor(), intent.actor(), terms, reads))
         return decline("PAYMENT_ACCESS");
-      if (!Settlement.openBank(reads, terms.source(), terms.amount().currency())
-          || !Settlement.openBank(reads, terms.target(), terms.amount().currency()))
+      if (!Settlement.openPersonalBank(reads, terms.source(), terms.amount().currency())
+          || !Settlement.openPersonalBank(reads, terms.target(), terms.amount().currency()))
         return reject("PAYMENT_ACCOUNT");
       return commit(
           action,

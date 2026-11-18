@@ -107,7 +107,17 @@ public final class EconomicClock {
   }
 
   public record Progress(
-      long completedSequence, long outstandingIntervals, boolean waitingForWall, boolean ready) {}
+      long completedSequence,
+      long outstandingIntervals,
+      boolean waitingForWall,
+      boolean ready,
+      Long nextDueMillis,
+      long targetMillis) {
+    public Progress(
+        long completedSequence, long outstandingIntervals, boolean waitingForWall, boolean ready) {
+      this(completedSequence, outstandingIntervals, waitingForWall, ready, null, 0);
+    }
+  }
 
   private record Input(
       Update update, Version implementation, long sequence, Calculation calculation) {
@@ -617,6 +627,8 @@ public final class EconomicClock {
     activateOpenedSystems(tx);
     var meta = tx.query("SELECT * FROM economic_metadata", List.of(), 1).getFirst();
     long debt = 0;
+    Long nextDue = null;
+    long latestTarget = 0;
     boolean waiting = false;
     for (var row : tx.query("SELECT * FROM economic_systems", List.of(), 64)) {
       long target =
@@ -624,12 +636,19 @@ public final class EconomicClock {
               tx::query, row.get("system_id"), Math.max(now, observedTarget(row, meta)));
       long frontier = num(row, "frontier_ms");
       long cadence = definitions.get(row.get("system_id")).cadenceMillis();
-      debt = Math.addExact(debt, Math.max(0, target - frontier) / cadence);
+      long intervals = Math.max(0, target - frontier) / cadence;
+      debt = Math.addExact(debt, intervals);
+      if (intervals > 0) {
+        long due = frontier + cadence;
+        if (nextDue == null || due < nextDue) nextDue = due;
+        latestTarget = Math.max(latestTarget, target);
+      }
       waiting |=
           (num(row, "last_sequence") > 0 && now < frontier)
               || (target > now && target - frontier >= cadence);
     }
-    return new Progress(num(meta, "global_sequence"), debt, waiting, debt == 0 && !waiting);
+    return new Progress(
+        num(meta, "global_sequence"), debt, waiting, debt == 0 && !waiting, nextDue, latestTarget);
   }
 
   private static long observedTarget(Map<String, String> system, Map<String, String> metadata) {

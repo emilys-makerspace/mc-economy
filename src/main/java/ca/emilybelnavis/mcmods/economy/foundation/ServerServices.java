@@ -104,6 +104,8 @@ public final class ServerServices {
       ca.emilybelnavis.mcmods.economy.clock.CalendarDiagnostics snapshot, String readFailure) {}
 
   private volatile CalendarSample calendarSample = new CalendarSample(null, null);
+  private final CatchUpEstimate catchUpEstimate = new CatchUpEstimate();
+  private long nextCatchUpSample;
   private long nextStartupDiagnosticsSample;
   private String economicRetry;
   private long nextDiagnosticsSample;
@@ -780,6 +782,7 @@ public final class ServerServices {
               CREDIT_REPLACE,
               LOAN_APPLY ->
               throw new IllegalArgumentException("Use issued-card service");
+          case CORPORATE_BANK -> throw new IllegalArgumentException("Use corporate banking");
           case CLOSE ->
               throw new IllegalArgumentException("Use protected funded closure composition");
         };
@@ -1098,12 +1101,33 @@ public final class ServerServices {
     return state;
   }
 
+  public long lastSampledJournalSequence() {
+    var sample = storageDetails;
+    return sample == null ? -1 : sample.lastCommittedSequence();
+  }
+
   public Throwable failure() {
     return failure;
   }
 
   public OperationDiagnostics operationDiagnostics() {
     return operationDiagnostics;
+  }
+
+  public List<String> status() {
+    return status(false);
+  }
+
+  public List<String> status(boolean privileged) {
+    checkOwner();
+    var estimate = catchUpEstimate.latest();
+    return DiagnosticsReport.status(
+        state,
+        metrics(),
+        failure == null ? null : failureCode(failure),
+        privileged,
+        estimate == null ? null : estimate.days(),
+        estimate == null ? null : estimate.recentSeconds(System.nanoTime()));
   }
 
   public List<String> diagnostics(boolean privileged, boolean detailed) {
@@ -1122,7 +1146,12 @@ public final class ServerServices {
     }
     var details = storageDetails;
     if (details != null && state != State.READY) {
-      String health = state == State.UNAVAILABLE ? "unavailable" : "closed";
+      String health =
+          switch (state) {
+            case INITIALIZING -> "initializing";
+            case UNAVAILABLE -> "unavailable";
+            default -> "closed";
+          };
       details =
           new DiagnosticsReport.StorageDetails(
               details.worldId(), details.schemaVersion(), details.lastCommittedSequence(), health);
@@ -1175,6 +1204,7 @@ public final class ServerServices {
 
   private StorageLifecycle.Progress startupStep() {
     var step = storage.startupStep();
+    sampleCatchUp(step.phase().equals("catch-up"));
     if (step.ready() && storage instanceof FoundationStore store) {
       if (!RegisterSales.reconcileBatch(store, RegisterSaleSettlement::returnOriginals))
         return new StorageLifecycle.Progress("register-reconciliation", 0, -1, false);
@@ -1197,6 +1227,23 @@ public final class ServerServices {
       sampleDiagnosticsOnWorker();
     }
     return step;
+  }
+
+  private void sampleCatchUp(boolean catchingUp) {
+    if (!catchingUp) {
+      if (nextCatchUpSample != 0) catchUpEstimate.reset();
+      nextCatchUpSample = 0;
+      return;
+    }
+    long now = System.nanoTime();
+    if (nextCatchUpSample != 0 && now - nextCatchUpSample < 0) return;
+    nextCatchUpSample = now + TimeUnit.SECONDS.toNanos(1);
+    try {
+      catchUpEstimate.observe(storage.catchUpCalendar(), now);
+    } catch (RuntimeException error) {
+      // A missed read-only sample must not interrupt financial processing.
+      catchUpEstimate.reset();
+    }
   }
 
   private void sampleStorage() {
@@ -1532,7 +1579,14 @@ public final class ServerServices {
     }
     if (nextEconomicProbe == 0 || System.nanoTime() - nextEconomicProbe >= 0) {
       nextEconomicProbe = 0;
-      prepared = runOn(storage::prepareEconomicStep, storageWorker);
+      prepared =
+          runOn(
+              () -> {
+                var step = storage.prepareEconomicStep();
+                sampleCatchUp(!step.progress().ready() && !step.progress().waitingForWall());
+                return step;
+              },
+              storageWorker);
     }
   }
 

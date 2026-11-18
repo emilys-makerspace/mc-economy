@@ -193,7 +193,7 @@ public final class TerminalMenus {
                               "terminal_cards",
                               "terminal_primary")
                           .contains(action))
-                return Optional.of(branch(reads, grant.target(), bank, action));
+                return Optional.of(branch(reads, grant.target(), bank, action, menu.access()));
               return Optional.of(
                   detail(
                       reads,
@@ -391,7 +391,11 @@ public final class TerminalMenus {
   }
 
   private static View branch(
-      JournalEngine.ReadView reads, PartyRef owner, String bank, String action) {
+      JournalEngine.ReadView reads,
+      PartyRef owner,
+      String bank,
+      String action,
+      BankingMenu.Access access) {
     var rows = new ArrayList<BankingNetwork.Choice>();
     var accounts = bankAccounts(reads, owner, bank);
     String page = "branch_services";
@@ -493,6 +497,10 @@ public final class TerminalMenus {
         rows.add(choice("claims", "", UiText.t("ui.terminal.cards.collect")));
       }
       default -> {
+        if (access == BankingMenu.Access.KIOSK
+            && !bank.isEmpty()
+            && InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(bank)).tier1())
+          rows.add(choice("corp_list", "", UiText.t("ui.bank.corporate.companies")));
         if (accounts.isEmpty())
           rows.add(choice("branch_open", "", UiText.t("ui.terminal.account.open")));
         if (!accounts.isEmpty() || AccountCatalog.primary(reads, owner).isPresent())

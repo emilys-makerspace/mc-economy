@@ -56,6 +56,8 @@ public final class PricingAdmission {
             InstitutionCatalog.find(new InstitutionCatalog.InstitutionId(row.get("bank_key")))
                 .orElse(null);
         if (bank == null || bank.tier1()) continue;
+        if (row.get("owner_id").startsWith("organization:"))
+          return new JournalEngine.Reject(new Journal.Result(1, "SERVICE_ACCOUNT_UNAVAILABLE", ""));
         var snapshot =
             valuation.snapshot(
                 reads, world, new PlayerId(UUID.fromString(row.get("owner_id"))), now);

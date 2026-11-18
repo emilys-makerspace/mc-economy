@@ -39,6 +39,27 @@ public final class ActivitySchema {
         immutable("activity_capacity_totals_history", "delete"));
   }
 
+  private static String registrationKinds(String declaration) {
+    return declaration.replace(
+        "'NPC_CREATE','NPC_RETIRE'", "'NPC_CREATE','NPC_RETIRE','REGISTRATION_RETIRE'");
+  }
+
+  /** Extend the checked kind set while preserving every observation and its original ID. */
+  public static List<String> registrationMigration() {
+    var sql = new ArrayList<String>();
+    sql.add("ALTER TABLE activity_observations RENAME TO activity_observations_v55");
+    for (String declaration : statements()) {
+      if (declaration.startsWith("CREATE TABLE activity_observations("))
+        sql.add(registrationKinds(declaration));
+    }
+    sql.add("INSERT INTO activity_observations SELECT * FROM activity_observations_v55");
+    sql.add("DROP TABLE activity_observations_v55");
+    for (String declaration : statements()) {
+      if (declaration.contains(" ON activity_observations")) sql.add(declaration);
+    }
+    return List.copyOf(sql);
+  }
+
   private static String immutable(String table, String action) {
     return "CREATE TRIGGER "
         + table
@@ -306,7 +327,10 @@ public final class ActivitySchema {
   private static void validateDeclarations(Connection c) throws SQLException {
     var pattern = Pattern.compile("CREATE (?:UNIQUE )?(?:TABLE|INDEX|TRIGGER) ([a-z0-9_]+)");
     try (var q = c.prepareStatement("SELECT sql FROM sqlite_schema WHERE name=?")) {
-      for (var expected : statements()) {
+      boolean registration =
+          count(c, "SELECT schema_version FROM foundation_metadata WHERE singleton=1") >= 56;
+      for (var original : statements()) {
+        var expected = registration ? registrationKinds(original) : original;
         var matcher = pattern.matcher(expected);
         if (!matcher.find()) throw invalid("Invalid activity schema declaration");
         q.setString(1, matcher.group(1));

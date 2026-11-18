@@ -29,7 +29,12 @@ public record AccountIdentity(
     Objects.requireNonNull(owner);
     Objects.requireNonNull(purpose);
     Objects.requireNonNull(status);
-    if (!(owner.owner() instanceof PartyRef.Player)
+    boolean supportedOwner =
+        owner.owner() instanceof PartyRef.Player
+            || owner.owner() instanceof PartyRef.Organization
+                && purpose == Purpose.BANK
+                && !primary;
+    if (!supportedOwner
         || revision < 1
         || (purpose == Purpose.BANK) != (currency != null)
         || primary && purpose != Purpose.BANK

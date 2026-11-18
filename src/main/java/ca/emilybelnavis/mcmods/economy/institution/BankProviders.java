@@ -522,7 +522,13 @@ public final class BankProviders {
       case SWITCH_SOURCE -> SWITCH_SOURCE;
       case SWITCH_TARGET -> SWITCH_TARGET;
       case CLOSE -> CLOSE;
-      case CARD_ISSUE, CARD_REPLACE, CREDIT_ISSUE, CREDIT_INCREASE, CREDIT_REPLACE, LOAN_APPLY ->
+      case CARD_ISSUE,
+          CARD_REPLACE,
+          CREDIT_ISSUE,
+          CREDIT_INCREASE,
+          CREDIT_REPLACE,
+          LOAN_APPLY,
+          CORPORATE_BANK ->
           throw new IllegalArgumentException("Use issued-card service");
     };
   }

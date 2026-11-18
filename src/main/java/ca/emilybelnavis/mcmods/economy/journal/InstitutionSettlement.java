@@ -2,6 +2,7 @@ package ca.emilybelnavis.mcmods.economy.journal;
 
 import ca.emilybelnavis.mcmods.economy.api.EconomyCurrency;
 import ca.emilybelnavis.mcmods.economy.institution.FinancialAccounts;
+import ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts;
 import ca.emilybelnavis.mcmods.economy.storage.LedgerProjection;
 import java.util.*;
 
@@ -15,11 +16,7 @@ public final class InstitutionSettlement {
       JournalEngine.ReadView reads,
       List<PostingBatch.Leg> legs,
       List<FinancialAccounts.Account> planned) {
-    return prepare(
-        reads,
-        legs,
-        planned,
-        ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.NORMAL);
+    return prepare(reads, legs, planned, Overdrafts.DebitKind.NORMAL);
   }
 
   /** Caller binds this trusted authority to the canonical domain operation. */
@@ -27,7 +24,29 @@ public final class InstitutionSettlement {
       JournalEngine.ReadView reads,
       List<PostingBatch.Leg> legs,
       List<FinancialAccounts.Account> planned,
-      ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind debitKind) {
+      Overdrafts.DebitKind debitKind) {
+    return prepare(reads, legs, planned, debitKind, false);
+  }
+
+  /** Trusted corporate payment composition after typed ownership, authority and cash checks. */
+  public static JournalEngine.Decision prepareCorporatePayment(
+      JournalEngine.ReadView reads, List<PostingBatch.Leg> legs) {
+    return prepare(reads, legs, List.of(), Overdrafts.DebitKind.NORMAL, true);
+  }
+
+  static JournalEngine.Decision prepareCorporateFee(
+      JournalEngine.ReadView reads,
+      List<PostingBatch.Leg> legs,
+      List<FinancialAccounts.Account> planned) {
+    return prepare(reads, legs, planned, Overdrafts.DebitKind.NORMAL, true);
+  }
+
+  private static JournalEngine.Decision prepare(
+      JournalEngine.ReadView reads,
+      List<PostingBatch.Leg> legs,
+      List<FinancialAccounts.Account> planned,
+      Overdrafts.DebitKind debitKind,
+      boolean corporatePayment) {
     var authority =
         legs.stream().anyMatch(l -> l.role() == PostingBatch.Role.CLEARING)
             ? PostingBatch.Authority.FX
@@ -45,8 +64,11 @@ public final class InstitutionSettlement {
       for (var leg : legs) {
         switch (leg.role()) {
           case ACCOUNT -> {
-            if (!Settlement.openBank(reads, leg.account(), leg.accountCurrency()))
-              return reject("POSTING_ACCOUNT");
+            boolean open =
+                corporatePayment
+                    ? Settlement.openBank(reads, leg.account(), leg.accountCurrency())
+                    : Settlement.openPersonalBank(reads, leg.account(), leg.accountCurrency());
+            if (!open) return reject("POSTING_ACCOUNT");
           }
           case CLEARING -> {
             if (!leg.account().equals(Settlement.clearingAccount(leg.accountCurrency())))
@@ -73,19 +95,18 @@ public final class InstitutionSettlement {
       var balances = new LinkedHashMap<Key, Long>();
       for (var entry : deltas.entrySet()) {
         var key = entry.getKey();
-        long next =
-            Math.addExact(Settlement.posted(reads, key.id(), key.currency()), entry.getValue());
+        long current = Settlement.posted(reads, key.id(), key.currency());
+        long next = Math.addExact(current, entry.getValue());
         var a = accounts.get(key.id());
-        if (a == null
-            && !key.id().equals(Settlement.clearingAccount(key.currency()))
-            && !ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.permits(
-                reads,
-                key.id(),
-                key.currency(),
-                Settlement.posted(reads, key.id(), key.currency()),
-                next,
-                Holds.reserved(reads, key.id(), key.currency()),
-                debitKind)) return reject("INSUFFICIENT_FUNDS");
+        if (a == null && !key.id().equals(Settlement.clearingAccount(key.currency()))) {
+          long reserved = Holds.reserved(reads, key.id(), key.currency());
+          boolean permitted =
+              corporatePayment
+                  ? next >= current || next >= reserved
+                  : Overdrafts.permits(
+                      reads, key.id(), key.currency(), current, next, reserved, debitKind);
+          if (!permitted) return reject("INSUFFICIENT_FUNDS");
+        }
         if (a != null) {
           boolean invalid =
               switch (a.role()) {

@@ -31,6 +31,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
       draft = "",
       reviewedDraft = "",
       currency = "CAD";
+  private String corporateAccount = "", counterparty = "", corporateAmount = "";
   private String chooser = "", submittedReview = "";
   private long revision = -1;
   private boolean wasBusy;
@@ -339,6 +340,42 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 send(
                     menu.access() == BankingMenu.Access.ADMIN ? "settings" : "manage_accounts",
                     ""));
+      }
+      case "corp_list" -> {
+        buildRows(choices("corp_select"), false);
+        button(
+            10,
+            188,
+            136,
+            UiTextClient.component(ui("ui.client.back_branch")),
+            () -> send("manage_accounts", ""));
+        if (!choices("corp_recover").isEmpty())
+          button(148, 188, 92, text("corp_receipt"), () -> send("corp_recover", ""));
+        for (var choice : choices("corp_next"))
+          button(
+              242,
+              188,
+              64,
+              UiTextClient.component(choice.label()),
+              () -> send(choice.action(), choice.value()));
+      }
+      case "corp_accounts" -> {
+        buildRows(menu.choices(), false);
+        corporateCompanies();
+      }
+      case "corp_account" -> corporateAccountForm();
+      case "corp_history", "corp_review", "corp_receipt" -> {
+        corporateCompanies();
+        for (var choice : choices("corp_confirm")) {
+          var confirm =
+              button(
+                  166,
+                  188,
+                  140,
+                  UiTextClient.component(choice.label()),
+                  () -> send(choice.action(), choice.value()));
+          confirm.active = !blocked() && reviewed();
+        }
       }
       case "credit_facilities" -> {
         buildRows(menu.choices(), false);
@@ -684,6 +721,70 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     };
   }
 
+  private void corporateCompanies() {
+    button(
+        10,
+        188,
+        136,
+        UiTextClient.component(ui("ui.bank.corporate.companies")),
+        () -> send("corp_list", ""));
+  }
+
+  private void corporateAccountForm() {
+    if (!corporateAccount.isEmpty())
+      button(
+          178,
+          188,
+          128,
+          text("corp_copy"),
+          () -> minecraft.keyboardHandler.setClipboard(corporateAccount));
+    corporateCompanies();
+    boolean writable =
+        menu.choices().stream()
+            .anyMatch(c -> Set.of("corp_fund", "corp_pay", "corp_close").contains(c.action()));
+    if (writable) {
+      corporateField(10, 182, 36, "corp_counterparty", counterparty, value -> counterparty = value);
+      corporateField(
+          198, 108, 19, "corp_amount", corporateAmount, value -> corporateAmount = value);
+    }
+    int x = 10;
+    for (var choice : menu.choices()) {
+      var action = choice.action();
+      if (!Set.of("corp_fund", "corp_pay", "corp_close", "corp_history").contains(action)) continue;
+      button(
+          x,
+          160,
+          72,
+          UiTextClient.component(choice.label()),
+          () ->
+              send(
+                  action,
+                  switch (action) {
+                    case "corp_history" -> "";
+                    case "corp_close" -> counterparty.trim();
+                    default -> counterparty.trim() + " " + corporateAmount.trim();
+                  }));
+      x += 75;
+    }
+  }
+
+  private void corporateField(
+      int x,
+      int width,
+      int limit,
+      String key,
+      String initial,
+      java.util.function.Consumer<String> change) {
+    var label = text(key);
+    var box = addRenderableWidget(new EditBox(font, leftPos + x, topPos + 132, width, 18, label));
+    box.setHint(label);
+    box.setTooltip(Tooltip.create(label));
+    box.setMaxLength(limit);
+    box.setValue(initial);
+    box.setResponder(change);
+    box.setEditable(!blocked());
+  }
+
   private void nextCurrency() {
     var values = EconomyCurrency.all();
     int index = 0;
@@ -724,7 +825,14 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 } else if (choice.action().equals("account_open")
                     && chooser.equals("account_open")) {
                   currency = choice.value();
-                } else send(choice.action(), choice.value());
+                } else {
+                  if (choice.action().equals("corp_account")) {
+                    corporateAccount = choice.value();
+                    counterparty = "";
+                    corporateAmount = "";
+                  }
+                  send(choice.action(), choice.value());
+                }
                 if (selection) {
                   chooser = "";
                   scroll = 0;
@@ -799,6 +907,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         }
       }
       if (revised) {
+        if (menu.page().equals("corp_list")) scroll = 0;
         var operation = menu.operation();
         UUID incoming = operation.reviewId();
         boolean newReview =
@@ -905,6 +1014,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 "history_filters",
                 "history",
                 "branch_services",
+                "corp_list",
                 "account_settings",
                 "credit_services",
                 "loan_services",
@@ -914,7 +1024,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                 "withdrawal_sources",
                 "card_services")
             .contains(menu.page());
-    if (rowPage && !menu.lines().isEmpty())
+    if (rowPage && !menu.lines().isEmpty() && !menu.page().equals("corp_list"))
       g.drawString(
           font, font.plainSubstrByWidth(menu.lines().getFirst(), 296), 10, 57, MUTED, false);
     boolean configurationForm = menu.page().equals("settings") && !choices("configure").isEmpty();
@@ -986,12 +1096,26 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             false);
       }
 
+    } else if (menu.page().equals("corp_list") || menu.page().equals("corp_accounts")) {
+      // The row list and the heading have independent scrolling.
+      if (!menu.lines().isEmpty())
+        g.drawString(
+            font, font.plainSubstrByWidth(menu.lines().getFirst(), 296), 10, 55, TEXT, false);
+      if (menu.choices().isEmpty())
+        drawLines(g, menu.lines().stream().skip(1).toList(), 10, 75, 296, 180);
+    } else if (menu.page().equals("corp_account")) {
+      drawLines(g, menu.lines(), 10, 55, 296, 125);
     } else if (!rowPage || menu.choices().isEmpty())
       drawLines(g, menu.lines(), x, y, 306 - x, bottom);
     if (rowPage)
       scrollbar(
           g,
-          menu.page().equals("history") ? choices("history_detail").size() : menu.choices().size());
+          switch (menu.page()) {
+            case "history" -> choices("history_detail").size();
+            case "corp_list" -> choices("corp_select").size();
+            case "corp_accounts" -> menu.choices().size();
+            default -> menu.choices().size();
+          });
     if (input != null) {
       String label = input.getMessage().getString();
       g.drawString(
@@ -1140,7 +1264,13 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
   private void drawLines(GuiGraphics g, List<String> lines, int x, int y, int width, int bottom) {
     var wrapped = new ArrayList<net.minecraft.util.FormattedCharSequence>();
     for (var line : lines)
-      wrapped.addAll(font.split(Component.literal(cleanText(UiTextClient.render(line))), width));
+      wrapped.addAll(
+          font.split(
+              Component.literal(
+                  menu.page().startsWith("corp_")
+                      ? UiTextClient.render(line)
+                      : cleanText(UiTextClient.render(line))),
+              width));
     int visible = Math.max(1, (bottom - y) / 10);
     boolean body = y != 212 && y != 144;
     int start = body ? Math.clamp(scroll, 0, Math.max(0, wrapped.size() - visible)) : 0;
@@ -1223,6 +1353,8 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
                   "history_filters",
                   "history",
                   "branch_services",
+                  "corp_list",
+                  "corp_accounts",
                   "account_settings",
                   "credit_services",
                   "loan_services",
@@ -1234,9 +1366,12 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
               .contains(menu.page())) {
         int count =
             chooser.isEmpty()
-                ? (menu.page().equals("history")
-                    ? choices("history_detail").size()
-                    : menu.choices().size())
+                ? switch (menu.page()) {
+                  case "history" -> choices("history_detail").size();
+                  case "corp_list" -> choices("corp_select").size();
+                  case "corp_accounts" -> menu.choices().size();
+                  default -> menu.choices().size();
+                }
                 : choices(chooser).size();
         scroll = Math.clamp(scroll - (int) vertical, 0, Math.max(0, count - 6));
         rebuild();

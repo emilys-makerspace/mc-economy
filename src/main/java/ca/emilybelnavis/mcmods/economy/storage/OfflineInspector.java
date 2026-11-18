@@ -82,6 +82,10 @@ final class OfflineInspector {
         ca.emilybelnavis.mcmods.economy.collection.CollectionPresenceSchema.validate(c);
       if (schema >= 35) ca.emilybelnavis.mcmods.economy.autopay.AutopaySchema.validate(c);
       if (schema >= 36) VillageBranchSchema.validate(c);
+      if (schema >= 56) CorporationSchema.validate(c);
+      if (schema >= 57) CorporationSchema.validateManagers(c);
+      if (schema >= 58) CorporationSchema.validateBanking(c);
+      if (schema >= 59) CorporationSchema.validateIntegrations(c);
       if (schema >= 37) ca.emilybelnavis.mcmods.economy.journal.KioskUpgrades.validate(c);
       if (schema >= 38) BranchPlacementSchema.validate(c);
       if (schema >= 39) BankStaffingSchema.validate(c);
@@ -302,7 +306,7 @@ final class OfflineInspector {
     }
   }
 
-  private record Inspection(Connection connection, Path scratch) implements AutoCloseable {
+  record Inspection(Connection connection, Path scratch) implements AutoCloseable {
     public void close() throws SQLException, IOException {
       try {
         connection.close();
@@ -312,7 +316,7 @@ final class OfflineInspector {
     }
   }
 
-  private static Inspection open(Path world) throws SQLException, IOException {
+  static Inspection open(Path world) throws SQLException, IOException {
     Path db = world.resolve("economy/economy.sqlite"),
         wal = db.resolveSibling("economy.sqlite-wal");
     StorageFiles.rejectLinks(db);

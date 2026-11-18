@@ -20,6 +20,46 @@ class DiagnosticsReportTest {
           4);
 
   @Test
+  void catchUpTimeUsesShrinkingCalendarLagAndExpiresAfterAPause() {
+    var estimate = new CatchUpEstimate();
+    // Six financial days remain initially. Each real second retires half a day's lag.
+    for (int second = 0; second <= 6; second++) {
+      estimate.observe(
+          new StorageLifecycle.CatchUpCalendar(
+              second * 601_000L, 7_200_000L + second * 1_000L, 1_200_000L),
+          java.util.concurrent.TimeUnit.SECONDS.toNanos(second));
+    }
+    var result = estimate.latest();
+    assertEquals(3L, result.days());
+    assertEquals(6L, result.recentSeconds(6_000_000_000L));
+    assertNull(result.recentSeconds(12_000_000_000L));
+    estimate.observe(null, 12_000_000_000L);
+    assertNull(estimate.latest());
+  }
+
+  @Test
+  void catchUpStatusShowsDaysAndMeasuredTimeForPlayersAndOperators() {
+    var metrics =
+        new SchedulingMetrics(
+            METRICS.storage(),
+            METRICS.calculation(),
+            METRICS.publication(),
+            new StorageLifecycle.Progress("catch-up", 1, 1, false),
+            METRICS.economy(),
+            true,
+            0);
+    for (boolean operator : new boolean[] {false, true}) {
+      assertEquals(
+          List.of("Banking is catching up. 591 financial days left. About 15 minutes remaining."),
+          DiagnosticsReport.status(
+              ServerServices.State.INITIALIZING, metrics, null, operator, 591L, 900L));
+      assertEquals(
+          List.of("Banking is catching up. 1 financial day left. Estimating time remaining."),
+          DiagnosticsReport.status(ServerServices.State.READY, metrics, null, operator, 1L, null));
+    }
+  }
+
+  @Test
   void playersSeeOnlySafeAvailabilityAndProgressForBothCommands() {
     for (boolean detailed : new boolean[] {false, true}) {
       assertEquals(

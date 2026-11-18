@@ -16,6 +16,67 @@ public final class DiagnosticsReport {
 
   private DiagnosticsReport() {}
 
+  /** Player-facing availability, based on the last completed storage-worker sample. */
+  public static List<String> status(
+      ServerServices.State state,
+      SchedulingMetrics metrics,
+      String failureCode,
+      boolean privileged,
+      Long remainingDays,
+      Long estimatedSeconds) {
+    String phase = metrics.recovery().phase();
+    boolean starting = state == ServerServices.State.INITIALIZING;
+    boolean catchingUp =
+        starting
+            ? "catch-up".equals(phase)
+            : state == ServerServices.State.READY && !metrics.economy().ready();
+    if ((starting && "waiting-for-wall-clock".equals(phase))
+        || (catchingUp && metrics.economy().waitingForWall())) {
+      return List.of(
+          "Banking is paused until the server clock catches up with this world's saved time.");
+    }
+    if (catchingUp) {
+      String time =
+          estimatedSeconds == null
+              ? "Estimating time remaining."
+              : "About " + duration(estimatedSeconds) + " remaining.";
+      String progress =
+          remainingDays == null
+              ? "Processing scheduled updates."
+              : remainingDays == 0
+                  ? "Finishing scheduled updates."
+                  : remainingDays
+                      + (remainingDays == 1 ? " financial day left." : " financial days left.");
+      return List.of("Banking is catching up. " + progress + " " + time);
+    }
+    return List.of(
+        switch (state) {
+          case INITIALIZING -> "Banking is starting. Checking this world's saved records.";
+          case READY -> "Banking is open.";
+          case UNAVAILABLE -> {
+            if ("STORAGE_UPGRADE_REQUIRED".equals(failureCode)) {
+              yield privileged
+                  ? "Banking needs a database upgrade. Run /economy upgrade review in-game as an operator."
+                  : "Banking needs a database upgrade. Ask a server operator to approve it.";
+            }
+            yield privileged
+                ? "Banking is unavailable. Run /economy diagnostics for details."
+                : "Banking is unavailable. Ask a server operator to check it.";
+          }
+          case STOPPING, STOPPED -> "Banking is closed while the world shuts down.";
+        });
+  }
+
+  private static String duration(long seconds) {
+    if (seconds < 60) return Math.max(1, seconds) + (seconds <= 1 ? " second" : " seconds");
+    if (seconds < 3600) {
+      long minutes = Math.round(seconds / 60.0);
+      return minutes + (minutes == 1 ? " minute" : " minutes");
+    }
+    long hours = Math.round(seconds / 3600.0);
+    return hours + (hours == 1 ? " hour" : " hours");
+  }
+
   public static List<String> render(
       boolean privileged,
       boolean detailed,

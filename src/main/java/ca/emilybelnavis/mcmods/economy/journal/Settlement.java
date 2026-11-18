@@ -258,6 +258,27 @@ public final class Settlement {
     };
   }
 
+  public static boolean organizationBank(JournalEngine.ReadView reads, UUID account) {
+    return !reads
+        .query(
+            "SELECT account_id FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id LIKE 'organization:%'",
+            List.of(account.toString()), 1)
+        .isEmpty();
+  }
+
+  static boolean openPersonalBank(
+      JournalEngine.ReadView reads, UUID account, EconomyCurrency currency) {
+    return !reads
+        .query(
+            """
+                SELECT account_id FROM account_catalog
+                WHERE account_id=? AND currency=? AND purpose='BANK' AND status='OPEN'
+                  AND owner_id NOT LIKE 'organization:%'
+                """,
+            List.of(account.toString(), currency.name()), 1)
+        .isEmpty();
+  }
+
   static boolean openBank(JournalEngine.ReadView reads, UUID account, EconomyCurrency currency) {
     return !reads
         .query(

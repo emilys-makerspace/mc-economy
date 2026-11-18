@@ -178,7 +178,7 @@ public final class NpcSettlement {
       case NPC_BRIDGE -> false;
       case ISSUANCE -> id.equals(Settlement.issuanceAccount(currency));
       case CLEARING -> id.equals(Settlement.clearingAccount(currency));
-      case ACCOUNT -> Settlement.openBank(reads, id, currency);
+      case ACCOUNT -> Settlement.openPersonalBank(reads, id, currency);
       case FEE -> false;
       case INSTITUTION_CASH, INSTITUTION_CLAIM -> {
         var account = financial.get(id);

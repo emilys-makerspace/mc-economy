@@ -244,6 +244,20 @@ class OwnerHistoryTest {
             || statement.startsWith("CREATE INDEX village_anchor_location "))
           sql.execute(statement);
       }
+      sql.execute("DROP TABLE activity_observations");
+      for (String declaration :
+          ca.emilybelnavis.mcmods.economy.simulation.activity.ActivitySchema.statements()) {
+        if (declaration.startsWith("CREATE TABLE activity_observations(")
+            || declaration.contains(" ON activity_observations")) sql.execute(declaration);
+      }
+      sql.execute("DROP TRIGGER corporation_integration_wind_down");
+      sql.execute("DROP TABLE corporation_integration_mandates");
+      sql.execute("DROP TABLE corporation_integration_epochs");
+      sql.execute("DROP TABLE corporation_integration_bindings");
+      sql.execute("DROP TABLE corporation_managers");
+      sql.execute("DROP TABLE corporation_claims");
+      sql.execute("DROP TABLE corporation_names");
+      sql.execute("DROP TABLE corporations");
       sql.execute("DELETE FROM migration_history WHERE version>52");
       sql.execute("UPDATE foundation_metadata SET schema_version=52 WHERE singleton=1");
       sql.execute("PRAGMA user_version=52");

@@ -154,6 +154,17 @@ public final class BankingMenu extends AbstractContainerMenu {
                         "history_next",
                         "bank_retry",
                         "cancel",
+                        "corp_list",
+                        "corp_next",
+                        "corp_select",
+                        "corp_account",
+                        "corp_open",
+                        "corp_fund",
+                        "corp_pay",
+                        "corp_close",
+                        "corp_history",
+                        "corp_recover",
+                        "corp_confirm",
                         "branch_open",
                         "branch_assign",
                         "branch_switch",
@@ -559,7 +570,11 @@ public final class BankingMenu extends AbstractContainerMenu {
         inventory.player instanceof ServerPlayer player
             && BankingController.services(player).debugGui();
     var visibleLines =
-        debug || history != null || page.equals("account_overview")
+        debug
+                || history != null
+                || page.equals("account_overview")
+                || Set.of("corp_account", "corp_review", "corp_history", "corp_receipt")
+                    .contains(page)
             ? List.copyOf(lines)
             : BankingPresentation.lines(lines);
     var visibleStatus = debug ? status : BankingPresentation.status(status);

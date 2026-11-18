@@ -56,7 +56,17 @@ public final class DeadlineDispatcher {
   }
 
   public record Progress(
-      long completedEffects, long outstandingEvents, boolean waitingForWall, boolean ready) {}
+      long completedEffects,
+      long outstandingEvents,
+      boolean waitingForWall,
+      boolean ready,
+      Long nextDueMillis,
+      long targetMillis) {
+    public Progress(
+        long completedEffects, long outstandingEvents, boolean waitingForWall, boolean ready) {
+      this(completedEffects, outstandingEvents, waitingForWall, ready, null, 0);
+    }
+  }
 
   private record State(Event event, String cursor, long completed, long globalCount) {}
 
@@ -525,7 +535,13 @@ public final class DeadlineDispatcher {
     long debt = next != null && next.effectiveMillis() <= target ? 1 : 0;
     boolean waiting =
         now < number(row, "last_effective_ms") || (debt > 0 && next.effectiveMillis() > now);
-    return new Progress(number(row, "completed_effects"), debt, waiting, debt == 0 && !waiting);
+    return new Progress(
+        number(row, "completed_effects"),
+        debt,
+        waiting,
+        debt == 0 && !waiting,
+        debt == 0 ? null : next.effectiveMillis(),
+        target);
   }
 
   private void observe(FoundationStore.Transaction tx, long now) {

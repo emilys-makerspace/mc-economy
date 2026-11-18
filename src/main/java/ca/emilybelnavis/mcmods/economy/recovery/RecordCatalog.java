@@ -70,6 +70,29 @@ public final class RecordCatalog {
             ca.emilybelnavis.mcmods.economy.pricing.ServicePricing.register(
                 ca.emilybelnavis.mcmods.economy.interest.DepositYield.register(catalog)));
     catalog = ca.emilybelnavis.mcmods.economy.autopay.Autopay.register(catalog);
+    catalog =
+        catalog.with(
+            new Key(ca.emilybelnavis.mcmods.economy.corporation.Corporations.FACT, 1),
+            ca.emilybelnavis.mcmods.economy.corporation.Corporations::validateFact);
+    catalog =
+        catalog.with(
+            new Key(ca.emilybelnavis.mcmods.economy.corporation.Managers.FACT, 1),
+            ca.emilybelnavis.mcmods.economy.corporation.Managers::validateFact);
+    catalog =
+        catalog
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.corporation.CorporateAccounts.FACT, 1),
+                ca.emilybelnavis.mcmods.economy.corporation.CorporateAccounts::validateFact)
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.corporation.CorporatePayments.FACT, 1),
+                ca.emilybelnavis.mcmods.economy.corporation.CorporatePayments::validateFact)
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.corporation.CorporatePayments.FACT, 2),
+                ca.emilybelnavis.mcmods.economy.corporation.CorporatePayments
+                    ::validateIntegrationFact)
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.corporation.IntegrationBindings.FACT, 1),
+                ca.emilybelnavis.mcmods.economy.corporation.IntegrationBindings::validateFact);
     catalog = ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.register(catalog);
     catalog = ca.emilybelnavis.mcmods.economy.overdraft.OverdraftCollections.register(catalog);
     catalog =

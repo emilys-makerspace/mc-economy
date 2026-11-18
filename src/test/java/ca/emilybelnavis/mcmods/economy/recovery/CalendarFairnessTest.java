@@ -111,7 +111,8 @@ class CalendarFairnessTest {
             temporary.toRealPath(), runtime, new SchedulingConfig(1, 4, 1, 5, 1000, 3));
     try {
       pump(services, () -> services.state() == ServerServices.State.READY);
-      wall.now.set(124);
+      long catchUpTarget = event.effectiveMillis() + 3 * FinancialCalendar.DAY_MILLIS;
+      wall.now.set(catchUpTarget);
       pump(services, () -> entered.getCount() == 0);
       // The child is deliberately held on the storage worker. Tick still returns without joining
       // it.
@@ -121,6 +122,12 @@ class CalendarFairnessTest {
           services
               .storage(
                   () -> {
+                    assertEquals(
+                        new StorageLifecycle.CatchUpCalendar(
+                            event.effectiveMillis() - 1,
+                            catchUpTarget,
+                            FinancialCalendar.DAY_MILLIS),
+                        runtime.catchUpCalendar());
                     try {
                       runtime.requireEconomicCurrent();
                       return false;
@@ -144,6 +151,7 @@ class CalendarFairnessTest {
               .storage(
                   () -> {
                     runtime.requireEconomicCurrent();
+                    assertNull(runtime.catchUpCalendar());
                     return runtime.readCalendarDiagnostics();
                   })
               .toCompletableFuture();

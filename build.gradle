@@ -527,7 +527,8 @@ if (providers.gradleProperty('referenceTraderProbe').isPresent()) {
 }
 
 // Opt-in fresh-world dashboard/state witness, excluded from release jars.
-if (providers.gradleProperty('bankingDashboardProbe').isPresent()) {
+def corporateWorkflowProbe = providers.gradleProperty('corporateWorkflowProbe').isPresent()
+if (providers.gradleProperty('bankingDashboardProbe').isPresent() || corporateWorkflowProbe) {
     neoForge.mods {
         economy_inventory_probe {
             sourceSet sourceSets.inventoryProbe
@@ -535,9 +536,11 @@ if (providers.gradleProperty('bankingDashboardProbe').isPresent()) {
     }
     tasks.named('runClient') {
         systemProperty 'economy.bankingDashboardProbe', 'true'
+        systemProperty 'economy.corporateWorkflowProbe', corporateWorkflowProbe.toString()
         doLast {
             def root = file(providers.gradleProperty('economyRunRoot').get() + '/client')
-            if (new File(root, 'banking-dashboard-failed.txt').exists() || !new File(root, 'banking-dashboard-passed.txt').exists())
+            def marker = corporateWorkflowProbe ? 'corporate-workflow' : 'banking-dashboard'
+            if (new File(root, marker + '-failed.txt').exists() || !new File(root, marker + '-passed.txt').exists())
                 throw new GradleException('Banking dashboard/state witness did not pass')
         }
     }

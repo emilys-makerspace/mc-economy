@@ -4,6 +4,9 @@ import static ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityFacts.
 
 import ca.emilybelnavis.mcmods.economy.api.EconomyCurrency;
 import ca.emilybelnavis.mcmods.economy.cash.CashCatalog;
+import ca.emilybelnavis.mcmods.economy.corporation.CorporatePayments;
+import ca.emilybelnavis.mcmods.economy.corporation.Corporations;
+import ca.emilybelnavis.mcmods.economy.corporation.IntegrationBindings;
 import ca.emilybelnavis.mcmods.economy.credit.CreditAuditFacts;
 import ca.emilybelnavis.mcmods.economy.credit.CreditFacilities;
 import ca.emilybelnavis.mcmods.economy.debt.DebtFinance;
@@ -207,6 +210,7 @@ public final class ActivityClassifier {
         case CreditAuditFacts.PAYMENT -> cardPayment(fact);
         case DebtFinance.ACCOUNTING_FACT -> collection(fact);
         case FxSettlement.FACT -> fx(fact);
+        case CorporatePayments.FACT -> corporateFx(fact);
         case LoanDisbursementFx.FACT -> loanFx(fact);
         case Deposits.FACT -> deposit(fact);
         case Withdrawals.FACT -> withdrawal(fact);
@@ -231,7 +235,8 @@ public final class ActivityClassifier {
       if (!npcCashAdapter) {
         var rows =
             reads.query(
-                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT 1",
+                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT"
+                    + " 1",
                 List.of(NpcCashFacts.ADAPTER),
                 1);
         if (rows.isEmpty()
@@ -309,7 +314,8 @@ public final class ActivityClassifier {
       if (!npcAdapter) {
         var rows =
             reads.query(
-                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT 1",
+                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT"
+                    + " 1",
                 List.of(NpcFacts.ADAPTER),
                 1);
         if (rows.isEmpty()
@@ -377,7 +383,8 @@ public final class ActivityClassifier {
       if (!npcCashAdapter) {
         var rows =
             reads.query(
-                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT 1",
+                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT"
+                    + " 1",
                 List.of(ReferenceCashFacts.ADAPTER),
                 1);
         if (rows.isEmpty()
@@ -455,7 +462,8 @@ public final class ActivityClassifier {
       if (!npcAdapter) {
         var rows =
             reads.query(
-                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT 1",
+                "SELECT payload FROM journal_records WHERE record_type=? AND record_version=1 LIMIT"
+                    + " 1",
                 List.of(ReferenceNpcFacts.ADAPTER),
                 1);
         if (rows.isEmpty()
@@ -681,6 +689,39 @@ public final class ActivityClassifier {
           ordinaryEffective);
     }
 
+    private void corporateFx(Journal.Record fact) {
+      version(fact, 1, 2);
+      CorporatePayments.Receipt receipt;
+      if (fact.version() == 1) {
+        receipt = CorporatePayments.decodeFact(fact.payload());
+      } else {
+        var integration = CorporatePayments.decodeIntegrationFact(fact.payload());
+        if (!intent
+            .request()
+            .fields()
+            .entrySet()
+            .containsAll(integration.access().fields().entrySet()))
+          throw invalid("Corporate activity integration identity");
+        receipt = integration.receipt();
+      }
+      var payment = receipt.payment();
+      if (!receipt.actor().equals(intent.actor())
+          || !intent.request().fields().entrySet().containsAll(payment.fields().entrySet()))
+        throw invalid("Corporate activity original identity");
+      var terms = payment.terms();
+      if (terms.publication() == null) return;
+      exchange(
+          "fx",
+          fact.version(),
+          intent.operationId().value(),
+          terms.publication(),
+          receipt.sourceCurrency(),
+          terms.principal(),
+          receipt.targetCurrency(),
+          terms.credit(),
+          ordinaryEffective);
+    }
+
     private void loanFx(Journal.Record fact) {
       version(fact, 1, 2);
       var fields = fields(fact.payload(), 15);
@@ -783,6 +824,23 @@ public final class ActivityClassifier {
     }
 
     private void operator(Journal.Record fact) {
+      if (intent.kind().equals(Corporations.KIND) || IntegrationBindings.isRegistration(intent)) {
+        version(fact, 2);
+        var leg = fields(fact.payload(), 5);
+        if (leg[1].equals("ACCOUNT") && leg[4].equals("REDEEM")) {
+          add(
+              "registration-fee",
+              1,
+              REGISTRATION_RETIRE,
+              currency(leg[2]),
+              Math.negateExact(signedNumber(leg[3])),
+              uuid(leg[0]),
+              ordinaryEffective,
+              null,
+              null);
+        }
+        return;
+      }
       if (!intent.kind().equals(SameCurrency.CREDIT) && !intent.kind().equals(SameCurrency.DEBIT))
         return;
       version(fact, 1, 2, 3);

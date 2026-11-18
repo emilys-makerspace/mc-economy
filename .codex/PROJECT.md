@@ -1,5 +1,17 @@
 # Current project state
 
+2026-11-18 — [B0-06 native corporate workflows](B0/B0-06.md) completes the B0 corporation foundation. Founder commands and bound kiosks support company registration, manager permissions, banking and receipt recovery. Schema 59, banking wire 15 and corporation API 1.
+
+2026-11-18 — [B0-05 corporation integration API](B0/B0-05.md) delivered version 1 of the founder-approved Java facade. Current schema 59 and banking wire 14. B0-06 awaits selection.
+
+2026-11-18 — [B0-04 corporate banking](B0/B0-04.md) delivered company kiosk selection and server-side atomic account/payment services. Current schema 58 and banking wire 14. B0-05 awaits selection.
+
+2026-11-18 — [B0-03 manager capabilities](B0/B0-03.md) delivered schema 57, founder-managed account scopes and commit-time delegated authorization. B0-04 awaits selection.
+
+2026-11-18 — [B0-02 corporation registration and lifecycle](B0/B0-02.md) delivered the founder service and schema 56. Banking wire 13, BankingIntegration 3 and AccountFunds 2 continue to apply. B0-03 awaits selection.
+
+2026-11-18 — [B0-01 corporate source and authority checkpoint](B0/B0-01.md) completed by source review. B0-02 awaits selection.
+
 2026-11-12 — Administrator-reviewed legacy imports and supported schema upgrades are implemented through connected-operator confirmation and the stopped-world `upgradeEconomyDatabase` tool. Production startup gates older schemas; source tables/backups are preserved and interrupted installations resume explicitly. [Contract](architecture/database-upgrades.md), [verification](verification/database-upgrades.md). Target remains schema 55; existing player worlds were not converted during development.
 
 2026-11-12 — Bank overdraft applications, tolerance/PAD fees, time-weighted interest, 90-day closure/collections and trusted bank/card overrides are implemented. Current schema 55, banking wire 13, BankingIntegration 3 and AccountFunds 2 supersede earlier current-version inventory. [Contract](architecture/overdrafts.md), [verification](verification/overdrafts.md). Existing worlds/backups preserved; no compatibility module selected.

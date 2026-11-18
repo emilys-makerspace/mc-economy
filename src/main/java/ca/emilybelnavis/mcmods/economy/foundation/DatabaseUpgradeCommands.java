@@ -3,6 +3,7 @@ package ca.emilybelnavis.mcmods.economy.foundation;
 import ca.emilybelnavis.mcmods.economy.storage.DatabaseUpgrade;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.logging.LogUtils;
 import java.nio.file.Path;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -14,15 +15,19 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
+import org.slf4j.Logger;
 
-/** Connected operators approve exact database reviews; conversion remains an offline operation. */
+/** Connected operators approve a reviewed database upgrade for the next world startup. */
 public final class DatabaseUpgradeCommands {
+  private static final Logger LOGGER = LogUtils.getLogger();
   private static final long REVIEW_NANOS = TimeUnit.MINUTES.toNanos(2);
   private static final int SESSION_LIMIT = 8;
   private static final Map<MinecraftServer, State> STATES = new IdentityHashMap<>();
@@ -72,7 +77,7 @@ public final class DatabaseUpgradeCommands {
         Commands.literal("economy")
             .then(
                 Commands.literal("upgrade")
-                    .requires(DatabaseUpgradeCommands::connectedOperator)
+                    .requires(DatabaseUpgradeCommands::directOperator)
                     .then(Commands.literal("review").executes(c -> review(c.getSource(), sessions)))
                     .then(
                         Commands.literal("confirm")
@@ -86,18 +91,20 @@ public final class DatabaseUpgradeCommands {
                                                 StringArgumentType.getString(c, "token")))))));
   }
 
-  private static boolean connectedOperator(CommandSourceStack source) {
+  // Minecraft sends the command tree before adding a joining player to the live player list.
+  private static boolean directOperator(CommandSourceStack source) {
     var player = source.getPlayer();
     return source.hasPermission(2)
         && player != null
         && player.hasPermissions(2)
-        && source.source == player
-        && source.getServer().getPlayerList().getPlayer(player.getUUID()) == player;
+        && source.source == player;
   }
 
   private static ServerServices requireUnavailable(
       CommandSourceStack source, Function<MinecraftServer, ServerServices> lookup) {
-    if (!connectedOperator(source))
+    var player = source.getPlayer();
+    if (!directOperator(source)
+        || source.getServer().getPlayerList().getPlayer(player.getUUID()) != player)
       throw new IllegalStateException("A directly connected operator must review and confirm.");
     var services = lookup.apply(source.getServer());
     if (services == null || services.state() != ServerServices.State.UNAVAILABLE)
@@ -148,6 +155,10 @@ public final class DatabaseUpgradeCommands {
                       return;
                     }
                     session.review = reviewed;
+                    LOGGER.info(
+                        "Database upgrade review completed for schema {} to {}.",
+                        reviewed.sourceSchema(),
+                        reviewed.targetSchema());
                     send(
                         source,
                         "Database "
@@ -160,13 +171,15 @@ public final class DatabaseUpgradeCommands {
                             + reviewed.accountCount()
                             + ".");
                     send(source, reviewed.summary());
+                    source.sendSuccess(
+                        () ->
+                            Component.literal("Within two minutes, click ")
+                                .append(confirmAction(reviewed.token()))
+                                .append(" and press Enter."),
+                        false);
                     send(
                         source,
-                        "Confirm this review within two minutes: /economy upgrade confirm "
-                            + reviewed.token());
-                    send(
-                        source,
-                        "After confirmation, stop the server normally, run ./gradlew upgradeEconomyDatabase -PeconomyWorld=/absolute/world, then restart.");
+                        "After approval, the next world startup will back up the world and upgrade its database.");
                   });
             });
       } catch (RejectedExecutionException error) {
@@ -206,6 +219,10 @@ public final class DatabaseUpgradeCommands {
               try {
                 if (!session.live.get()) return;
                 DatabaseUpgrade.approve(world, reviewed, administrator, session.live::get);
+                LOGGER.info(
+                    "Database upgrade approval saved for schema {} to {} on the next world startup.",
+                    reviewed.sourceSchema(),
+                    reviewed.targetSchema());
               } catch (Exception error) {
                 failure = error;
               }
@@ -224,7 +241,9 @@ public final class DatabaseUpgradeCommands {
                         "Database upgrade approved for the exact reviewed source and target schema.");
                     send(
                         source,
-                        "Stop the server normally, run ./gradlew upgradeEconomyDatabase -PeconomyWorld=/absolute/world, then restart. The tool backs up the world before conversion.");
+                        server.isDedicatedServer()
+                            ? "Restart the server normally to back up the world and apply the upgrade."
+                            : "Save and quit to title, then reopen this world to back it up and apply the upgrade.");
                   });
             });
       } catch (RejectedExecutionException error) {
@@ -287,6 +306,19 @@ public final class DatabaseUpgradeCommands {
 
   private static void send(CommandSourceStack source, String text) {
     source.sendSuccess(() -> Component.literal(text), false);
+  }
+
+  private static Component confirmAction(String token) {
+    return Component.literal("Confirm upgrade")
+        .withStyle(
+            style ->
+                style
+                    .withColor(ChatFormatting.AQUA)
+                    .withUnderlined(true)
+                    .withClickEvent(
+                        new ClickEvent(
+                            ClickEvent.Action.SUGGEST_COMMAND,
+                            "/economy upgrade confirm " + token)));
   }
 
   private static String safe(Exception error) {

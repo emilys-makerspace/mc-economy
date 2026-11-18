@@ -24,27 +24,10 @@ public final class UpgradeBackup {
         ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration.core());
   }
 
-  static Path prepareApprovedDatabaseUpgrade(Path world) throws IOException {
-    return prepare(
-        world,
-        false,
-        ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration.core(),
-        true);
-  }
-
   static Path prepare(
       Path world,
       boolean requireClean,
       ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration configuration)
-      throws IOException {
-    return prepare(world, requireClean, configuration, false);
-  }
-
-  private static Path prepare(
-      Path world,
-      boolean requireClean,
-      ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration configuration,
-      boolean allowLegacy)
       throws IOException {
     world = world.toAbsolutePath().normalize();
     StorageFiles.rejectLinks(world);
@@ -54,100 +37,114 @@ public final class UpgradeBackup {
     Path directory = world.resolve("economy");
     StorageFiles.rejectLinks(world.resolve("session.lock"));
     StorageFiles.rejectLinks(directory.resolve("owner.lock"));
-    StorageFiles.rejectLinks(directory.resolve("upgrade-backup.properties"));
     // Minecraft's own lock establishes stopped state; economy lock excludes maintenance/other
     // owners.
     try (WorldOwnership minecraft = WorldOwnership.acquire(world.resolve("session.lock"));
         WorldOwnership economy = WorldOwnership.acquire(directory.resolve("owner.lock"))) {
-      OfflineInspector.Metadata metadata;
-      try {
-        metadata = OfflineInspector.metadata(world);
-      } catch (IOException invalid) {
-        if (!allowLegacy) throw invalid;
-        try {
-          metadata = DatabaseUpgrade.legacyBackupMetadata(world);
-        } catch (Exception legacy) {
-          throw new IOException("Database is not a supported upgrade source", legacy);
-        }
-      }
-      if (requireClean) {
-        if (!metadata.databaseClean()) throw new IOException("Economy did not close cleanly");
-        WorldShutdown.requireClean(world, metadata.evidence());
-        OfflineInspector.validate(world, configuration);
-      }
-      String source = fingerprint(directory);
-      Path backupRoot = world.resolveSibling(world.getFileName() + "-economy-upgrade-backups");
-      StorageFiles.rejectLinks(backupRoot);
-      Files.createDirectories(backupRoot);
-      Path backup = Files.createDirectory(backupRoot.resolve(UUID.randomUUID().toString()));
-      Path contents = Files.createDirectory(backup.resolve("world"));
-      Properties manifest = new Properties();
-      try (var paths = Files.walk(world)) {
-        for (var iterator = paths.iterator(); iterator.hasNext(); ) {
-          Path path = iterator.next();
-          if (Thread.currentThread().isInterrupted())
-            throw new java.io.InterruptedIOException("Backup interrupted");
-          StorageFiles.rejectLinks(path);
-          Path relative = world.relativize(path);
-          if (excluded(relative)) continue;
-          Path destination = contents.resolve(relative);
-          if (Files.isDirectory(path)) Files.createDirectories(destination);
-          else if (Files.isRegularFile(path)) {
-            Files.copy(path, destination);
-            try (var channel =
-                java.nio.channels.FileChannel.open(destination, StandardOpenOption.WRITE)) {
-              channel.force(true);
-            }
-            String hash = StorageFiles.hash(path);
-            if (!hash.equals(StorageFiles.hash(destination)))
-              throw new IOException("Backup copy mismatch: " + relative);
-            manifest.setProperty(relative.toString(), hash);
-          } else throw new IOException("Unsupported world file: " + path);
-        }
-      }
-      try (var copied = Files.walk(contents)) {
-        for (Path path :
-            copied.filter(Files::isDirectory).sorted(Comparator.reverseOrder()).toList())
-          StorageFiles.forceDirectory(path);
-      }
-      StorageFiles.forceDirectory(backupRoot);
-      if (!source.equals(fingerprint(directory)))
-        throw new IOException("Storage changed during offline backup");
-      StorageFiles.writeNew(backup.resolve("manifest.properties"), properties(manifest));
-      Properties foundation = new Properties();
-      foundation.setProperty(
-          "format",
-          metadata.evidence().schema() == 0
-              ? "economy-legacy-backup-v1"
-              : "economy-world-backup-v1");
-      foundation.setProperty("world-id", metadata.evidence().worldId());
-      foundation.setProperty("mod-version", "0.1.0");
-      foundation.setProperty("schema-version", Integer.toString(metadata.evidence().schema()));
-      foundation.setProperty("journal-version", metadata.evidence().schema() >= 3 ? "1" : "0");
-      foundation.setProperty(
-          "last-journal-sequence", Long.toString(metadata.evidence().lastJournal()));
-      foundation.setProperty(
-          "economic-checkpoint", Long.toString(metadata.evidence().economicSequence()));
-      foundation.setProperty("clean-shutdown", Boolean.toString(requireClean));
-      foundation.setProperty("backup-utc", Instant.now().toString());
-      StorageFiles.writeNew(
-          backup.resolve("foundation-manifest.properties"), properties(foundation));
-      Properties receipt = new Properties();
-      receipt.setProperty("format", "economy-upgrade-backup-v1");
-      receipt.setProperty("backup", backup.toString());
-      receipt.setProperty("storage-fingerprint", source);
-      receipt.setProperty(
-          "manifest-hash", StorageFiles.hash(backup.resolve("manifest.properties")));
-      receipt.setProperty("created-at-utc", Instant.now().toString());
-      receipt.setProperty(
-          "foundation-manifest-hash",
-          StorageFiles.hash(backup.resolve("foundation-manifest.properties")));
-      StorageFiles.writeNew(backup.resolve("receipt.properties"), properties(receipt));
-      validateBackup(backup, receipt);
-      // Publish receipt last; an interrupted/incomplete backup can never authorize migration.
-      StorageFiles.replace(directory.resolve("upgrade-backup.properties"), properties(receipt));
-      return backup;
+      return prepareUnderLocks(world, requireClean, configuration, false);
     }
+  }
+
+  /** Caller holds both the Minecraft session and Economy ownership locks through installation. */
+  static Path prepareApprovedUpgradeUnderLocks(Path world) throws IOException {
+    return prepareUnderLocks(
+        world,
+        false,
+        ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration.core(),
+        true);
+  }
+
+  private static Path prepareUnderLocks(
+      Path world,
+      boolean requireClean,
+      ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration configuration,
+      boolean allowLegacy)
+      throws IOException {
+    Path directory = world.resolve("economy");
+    StorageFiles.rejectLinks(directory.resolve("upgrade-backup.properties"));
+    OfflineInspector.Metadata metadata;
+    try {
+      metadata = OfflineInspector.metadata(world);
+    } catch (IOException invalid) {
+      if (!allowLegacy) throw invalid;
+      try {
+        metadata = DatabaseUpgrade.legacyBackupMetadata(world);
+      } catch (Exception legacy) {
+        throw new IOException("Database is not a supported upgrade source", legacy);
+      }
+    }
+    if (requireClean) {
+      if (!metadata.databaseClean()) throw new IOException("Economy did not close cleanly");
+      WorldShutdown.requireClean(world, metadata.evidence());
+      OfflineInspector.validate(world, configuration);
+    }
+    String source = fingerprint(directory);
+    Path backupRoot = world.resolveSibling(world.getFileName() + "-economy-upgrade-backups");
+    StorageFiles.rejectLinks(backupRoot);
+    Files.createDirectories(backupRoot);
+    Path backup = Files.createDirectory(backupRoot.resolve(UUID.randomUUID().toString()));
+    Path contents = Files.createDirectory(backup.resolve("world"));
+    Properties manifest = new Properties();
+    try (var paths = Files.walk(world)) {
+      for (var iterator = paths.iterator(); iterator.hasNext(); ) {
+        Path path = iterator.next();
+        if (Thread.currentThread().isInterrupted())
+          throw new java.io.InterruptedIOException("Backup interrupted");
+        StorageFiles.rejectLinks(path);
+        Path relative = world.relativize(path);
+        if (excluded(relative)) continue;
+        Path destination = contents.resolve(relative);
+        if (Files.isDirectory(path)) Files.createDirectories(destination);
+        else if (Files.isRegularFile(path)) {
+          Files.copy(path, destination);
+          try (var channel =
+              java.nio.channels.FileChannel.open(destination, StandardOpenOption.WRITE)) {
+            channel.force(true);
+          }
+          String hash = StorageFiles.hash(path);
+          if (!hash.equals(StorageFiles.hash(destination)))
+            throw new IOException("Backup copy mismatch: " + relative);
+          manifest.setProperty(relative.toString(), hash);
+        } else throw new IOException("Unsupported world file: " + path);
+      }
+    }
+    try (var copied = Files.walk(contents)) {
+      for (Path path : copied.filter(Files::isDirectory).sorted(Comparator.reverseOrder()).toList())
+        StorageFiles.forceDirectory(path);
+    }
+    StorageFiles.forceDirectory(backupRoot);
+    if (!source.equals(fingerprint(directory)))
+      throw new IOException("Storage changed during offline backup");
+    StorageFiles.writeNew(backup.resolve("manifest.properties"), properties(manifest));
+    Properties foundation = new Properties();
+    foundation.setProperty(
+        "format",
+        metadata.evidence().schema() == 0 ? "economy-legacy-backup-v1" : "economy-world-backup-v1");
+    foundation.setProperty("world-id", metadata.evidence().worldId());
+    foundation.setProperty("mod-version", "0.1.0");
+    foundation.setProperty("schema-version", Integer.toString(metadata.evidence().schema()));
+    foundation.setProperty("journal-version", metadata.evidence().schema() >= 3 ? "1" : "0");
+    foundation.setProperty(
+        "last-journal-sequence", Long.toString(metadata.evidence().lastJournal()));
+    foundation.setProperty(
+        "economic-checkpoint", Long.toString(metadata.evidence().economicSequence()));
+    foundation.setProperty("clean-shutdown", Boolean.toString(requireClean));
+    foundation.setProperty("backup-utc", Instant.now().toString());
+    StorageFiles.writeNew(backup.resolve("foundation-manifest.properties"), properties(foundation));
+    Properties receipt = new Properties();
+    receipt.setProperty("format", "economy-upgrade-backup-v1");
+    receipt.setProperty("backup", backup.toString());
+    receipt.setProperty("storage-fingerprint", source);
+    receipt.setProperty("manifest-hash", StorageFiles.hash(backup.resolve("manifest.properties")));
+    receipt.setProperty("created-at-utc", Instant.now().toString());
+    receipt.setProperty(
+        "foundation-manifest-hash",
+        StorageFiles.hash(backup.resolve("foundation-manifest.properties")));
+    StorageFiles.writeNew(backup.resolve("receipt.properties"), properties(receipt));
+    validateBackup(backup, receipt);
+    // Publish receipt last; an interrupted/incomplete backup can never authorize migration.
+    StorageFiles.replace(directory.resolve("upgrade-backup.properties"), properties(receipt));
+    return backup;
   }
 
   private static boolean excluded(Path relative) {

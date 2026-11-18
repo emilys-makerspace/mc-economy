@@ -1,5 +1,6 @@
 package ca.emilybelnavis.mcmods.economy.storage;
 
+import com.mojang.logging.LogUtils;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -11,13 +12,16 @@ import java.sql.*;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.BooleanSupplier;
+import org.slf4j.Logger;
 
 /**
  * Logged-in admin approval, stopped-world backup, staged conversion and recoverable installation.
  */
 public final class DatabaseUpgrade {
+  private static final Logger LOGGER = LogUtils.getLogger();
   private static final String APPROVAL = "database-upgrade-approved.properties";
   static final String INSTALL = "database-upgrade-install.properties";
+  private static final String COMPLETED = "database-upgrade-completed.properties";
   private static final String LEGACY = "legacy-minor-units-v0";
   private static final String CURRENT = "economy-foundation";
 
@@ -36,7 +40,7 @@ public final class DatabaseUpgrade {
     try (var ownership = WorldOwnership.acquire(world.resolve("economy/owner.lock"))) {
       if (Files.exists(world.resolve("economy/" + INSTALL)))
         throw new IOException(
-            "Installation was interrupted; stop the server and rerun upgradeEconomyDatabase.");
+            "Installation was interrupted. Reopen the world or restart the server to resume.");
       return inspect(world);
     }
   }
@@ -48,7 +52,8 @@ public final class DatabaseUpgrade {
     String format;
     long accounts;
     String summary;
-    try (var connection = readOnly(directory.resolve("economy.sqlite"))) {
+    try (var opened = OfflineInspector.open(world)) {
+      var connection = opened.connection();
       int application = integer(connection, "PRAGMA application_id");
       version = integer(connection, "PRAGMA user_version");
       if (application == 0 && version == 0) {
@@ -82,7 +87,7 @@ public final class DatabaseUpgrade {
                 + "Old stock holdings/orders/trades and transaction/FX history remain archived, not active modern facilities. "
                 + "World currency "
                 + legacy.denomination()
-                + "; current opening FX defaults. A complete stopped-world backup is required.";
+                + "; current opening FX defaults. A complete world backup will be made before conversion.";
       } else if (application == SchemaMigrations.APPLICATION_ID
           && version >= SchemaMigrations.MINIMUM_SUPPORTED
           && version < SchemaMigrations.CURRENT) {
@@ -90,7 +95,7 @@ public final class DatabaseUpgrade {
         accounts = version >= 6 ? count(connection, "account_catalog") : 0;
         summary =
             "Apply the registered schema migrations; preserve current identities and journal history. "
-                + "A complete stopped-world backup is required.";
+                + "A complete world backup will be made before conversion.";
       } else if (application == SchemaMigrations.APPLICATION_ID
           && version == SchemaMigrations.CURRENT) {
         throw new IOException(
@@ -144,24 +149,57 @@ public final class DatabaseUpgrade {
   /** The callback is a narrow fault boundary for exercising interrupted installation recovery. */
   static String apply(Path world, Runnable afterDatabaseInstall) throws Exception {
     world = checkedWorld(world);
+    try (var minecraft = WorldOwnership.acquire(world.resolve("session.lock"))) {
+      return applyWithSessionLock(world, afterDatabaseInstall, false);
+    }
+  }
+
+  /**
+   * Called synchronously before levels start, while Minecraft owns this world's session lock. A new
+   * world or a save without pending maintenance follows ordinary storage initialization.
+   */
+  public static String applyApprovedAtStartup(Path world) throws Exception {
+    Path directory = world.resolve("economy");
+    if (Files.notExists(directory.resolve(APPROVAL), LinkOption.NOFOLLOW_LINKS)
+        && Files.notExists(directory.resolve(INSTALL), LinkOption.NOFOLLOW_LINKS)) return null;
+    return applyWithSessionLock(checkedWorld(world), () -> {}, true);
+  }
+
+  private static String applyWithSessionLock(
+      Path world, Runnable afterDatabaseInstall, boolean atStartup) throws Exception {
     Path directory = world.resolve("economy");
     Path intent = directory.resolve(INSTALL);
     StorageFiles.rejectLinks(intent);
-    if (Files.exists(intent)) {
-      try (var minecraft = WorldOwnership.acquire(world.resolve("session.lock"));
-          var ownership = WorldOwnership.acquire(directory.resolve("owner.lock"))) {
+    try (var ownership = WorldOwnership.acquire(directory.resolve("owner.lock"))) {
+      if (Files.exists(intent)) {
+        LOGGER.info("Resuming the previously approved database installation.");
         install(world, UpgradeBackup.load(intent), afterDatabaseInstall);
         return "Completed previously approved database upgrade to schema "
             + SchemaMigrations.CURRENT
             + ".";
       }
-    }
-    Review reviewed = review(world);
-    requireApproval(world, reviewed);
-    // This utility takes both world locks and publishes its receipt only after all hashes validate.
-    Path backup = UpgradeBackup.prepareApprovedDatabaseUpgrade(world);
-    try (var minecraft = WorldOwnership.acquire(world.resolve("session.lock"));
-        var ownership = WorldOwnership.acquire(directory.resolve("owner.lock"))) {
+      if (atStartup) {
+        // Earlier releases retained the approval after successfully installing it.
+        Path approval = directory.resolve(APPROVAL);
+        Path completed = directory.resolve(COMPLETED);
+        StorageFiles.rejectLinks(approval);
+        StorageFiles.rejectLinks(completed);
+        if (Files.isRegularFile(approval) && Files.isRegularFile(completed)) {
+          String token = UpgradeBackup.load(approval).getProperty("token");
+          if (token != null && token.equals(UpgradeBackup.load(completed).getProperty("token"))) {
+            Files.delete(approval);
+            StorageFiles.forceDirectory(directory);
+            return null;
+          }
+        }
+      }
+      Review reviewed = inspect(world);
+      requireApproval(world, reviewed);
+      LOGGER.info(
+          "Backing up the world before upgrading the database from schema {} to {}.",
+          reviewed.sourceSchema(),
+          reviewed.targetSchema());
+      Path backup = UpgradeBackup.prepareApprovedUpgradeUnderLocks(world);
       if (!reviewed.equals(inspect(world)))
         throw new IOException("Source changed after backup; review again.");
       Properties approval = requireApproval(world, reviewed);
@@ -193,9 +231,12 @@ public final class DatabaseUpgrade {
           store.initialize(stage);
           // The unchanged archived source supplies the exact opening amounts, never a fabricated
           // history.
-          try (var connection = readOnly(backup.resolve("world/economy/economy.sqlite"))) {
+          try (var opened = OfflineInspector.open(backup.resolve("world"))) {
             LegacyImportFacts.importAccounts(
-                store, LegacyDatabase.inspect(connection), reviewed.token(), administrator);
+                store,
+                LegacyDatabase.inspect(opened.connection()),
+                reviewed.token(),
+                administrator);
           }
         } finally {
           store.close();
@@ -311,8 +352,8 @@ public final class DatabaseUpgrade {
     StorageFiles.replace(directory.resolve("world-identity"), identity);
     Files.deleteIfExists(directory.resolve("identity.pending"));
     p.setProperty("completed-at-utc", Instant.now().toString());
-    StorageFiles.replace(
-        directory.resolve("database-upgrade-completed.properties"), UpgradeBackup.properties(p));
+    StorageFiles.replace(directory.resolve(COMPLETED), UpgradeBackup.properties(p));
+    Files.deleteIfExists(directory.resolve(APPROVAL));
     Files.delete(directory.resolve(INSTALL));
     StorageFiles.forceDirectory(directory);
   }
@@ -334,8 +375,8 @@ public final class DatabaseUpgrade {
   }
 
   static OfflineInspector.Metadata legacyBackupMetadata(Path world) throws Exception {
-    try (var c = readOnly(world.resolve("economy/economy.sqlite"))) {
-      LegacyDatabase.inspect(c);
+    try (var opened = OfflineInspector.open(world)) {
+      LegacyDatabase.inspect(opened.connection());
     }
     UUID identity =
         UUID.nameUUIDFromBytes(
@@ -354,17 +395,6 @@ public final class DatabaseUpgrade {
     if (!Files.isRegularFile(world.resolve("economy/economy.sqlite")))
       throw new IOException("Existing economy database required.");
     return world;
-  }
-
-  private static Connection readOnly(Path path) throws SQLException, IOException {
-    StorageFiles.rejectLinks(path);
-    SqliteStorage.verifyDriver();
-    Connection connection = DriverManager.getConnection("jdbc:sqlite:" + path.toUri() + "?mode=ro");
-    try (var statement = connection.createStatement()) {
-      statement.execute("PRAGMA query_only=ON");
-      statement.execute("PRAGMA busy_timeout=5000");
-    }
-    return connection;
   }
 
   private static void checkpoint(Path path) throws SQLException {

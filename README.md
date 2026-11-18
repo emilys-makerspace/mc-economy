@@ -42,6 +42,15 @@ Securities trading, variable-rate loans and collateral-backed loans are future w
 3. Right-click an active branch kiosk and review its bank and native currency on Home. Open **Branch Services**. Select **Open primary account** or **Open \<native currency\> account** when offered to submit the request. You can do this directly without speaking to a banker. Machine owners bind their own terminals to a bank through **sneak + empty-hand right-click** and enable cash services separately.
 4. Use an ATM or teller to deposit, withdraw or exchange funds. An active issued card provides remote banking access.
 
+### Run a company
+
+1. Type `/economy corporation funding` to see your personal bank accounts. Click an account to start `/economy corporation register <account> <company name>`. Check the account and exact CAD 500-equivalent fee, then run the suggested approval command within two minutes. Use `/economy corporation list` to find your company ID.
+2. To appoint a read-only manager, use `/economy corporation appoint <company> <player-uuid>` and approve the review. Use `/economy corporation managers <company>` for the membership revision. To grant payments on one account, use `/economy corporation permissions <company> <player-uuid> <revision> "view,pay" <account-uuid>`. Payment authority lets the manager pay themselves. Use `remove <company> <player-uuid> <revision>` under the same command to revoke access.
+3. At a bound Tier 1 or hybrid kiosk, open **Branch Services → Companies**, select the company, then open the bank’s native-currency account. Each company can have four accounts across its banks. Select an account to copy its ID or view its eight latest postings.
+4. To contribute, enter your personal source account ID. To pay or transfer, enter the recipient’s account ID. Enter the amount in the **source currency’s minor units** (for example, `1000` for CAD 10.00 or JPY 1,000). Review the owners, amounts and fee before confirming. To close a funded account, enter the settlement destination and review the payout.
+
+For an interrupted kiosk operation, choose **Look up original**. Under **Companies**, **Last receipt** retrieves your most recent resolved company banking operation. For founder commands use `/economy corporation receipt <operation>`. Founders can also rename a company, begin wind-down, resume operations, or dissolve a settled company using the corresponding command suggestions.
+
 Credit cash advances have a base fee of **3.00 CAD**. ATMs also charge a base fee of **2.50 CAD** when the card/account belongs to another bank or has no bank provider; tellers have no ATM surcharge. Both fees convert from CAD using the current published exchange rate into the card or funding-account currency, then round to the nearest **0.25** (**25 JPY** for yen); exact halfway values round up. Review shows the converted fees before confirmation. Advance fees are added to the card balance and count toward the 20% advance cap; withdrawing physical cash is a separate transaction.
 
 FX rates display eight decimal places. New conversions use an eight-place pair rate and truncate the calculated amount to eight places before settlement: received amounts truncate to cents, while yen rounds to the nearest whole unit. A requested exact payout charges the nearest account cent or yen. Interest accruals retain eight decimal places and settle to the nearest cent or yen; exact halfway settlements round up.
@@ -84,7 +93,7 @@ Placed agents stay where you put them and persist with the world. Right-click wi
 - [Changelog](CHANGELOG.md): completed features and notable fixes.
 - [Roadmap](ROADMAP.md) covers delivered milestones and planned features.
 
-**Upgrading an existing world?** A logged-in operator must review and confirm the database upgrade in-game. Then stop Minecraft and run the [offline upgrade tool](docs/SERVER_GUIDE.md#schema-upgrades), which backs up the complete world before conversion. Supported legacy databases retain account balances and archive their original tables. Keep world and economy data together.
+**Upgrading an existing world?** Run `/economy upgrade review` with cheats enabled in singleplayer or as a server operator. Click **Confirm upgrade**, press Enter and wait for approval. Reopen the world or restart the server. Economy backs up the world and applies the approved upgrade before loading the levels. [Server guide](docs/SERVER_GUIDE.md#schema-upgrades)
 
 ## Build and run
 

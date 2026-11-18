@@ -18,6 +18,14 @@ public interface StorageLifecycle {
   record EconomicProgress(
       long completedSequence, long outstandingIntervals, boolean waitingForWall, boolean ready) {}
 
+  /** Time covered by the scheduler and its observed wall-clock target during catch-up. */
+  record CatchUpCalendar(long processedThroughMillis, long targetMillis, long dayMillis) {}
+
+  /** Latest sample from the storage worker, or null when no dated work is overdue. */
+  default CatchUpCalendar catchUpCalendar() {
+    return null;
+  }
+
   /**
    * The supplier captures detached inputs only. The commit callback stays off the calculation
    * worker.

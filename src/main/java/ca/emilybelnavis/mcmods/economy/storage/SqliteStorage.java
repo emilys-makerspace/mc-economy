@@ -138,7 +138,7 @@ public final class SqliteStorage implements FoundationStore {
       if (Files.exists(directory.resolve(DatabaseUpgrade.INSTALL)))
         throw new StorageException(
             StorageException.Kind.UPGRADE_REQUIRED,
-            "Database installation is incomplete; stop the server and rerun upgradeEconomyDatabase.");
+            "Database installation is incomplete. Reopen the world or restart the server to resume.");
       databasePath = directory.resolve("economy.sqlite");
       identityFile = directory.resolve("world-identity");
       pendingFile = directory.resolve("identity.pending");
@@ -180,7 +180,7 @@ public final class SqliteStorage implements FoundationStore {
         if (serverUpgradeGate && initializingVersion < SchemaMigrations.CURRENT)
           throw new StorageException(
               StorageException.Kind.UPGRADE_REQUIRED,
-              "A logged-in administrator must run /economy upgrade review and confirm, then apply the upgrade offline.");
+              "A logged-in administrator must run /economy upgrade review and confirm, then reopen the world or restart the server.");
         initializingIdentity = readDatabaseIdentity(initializingVersion);
         if (identity == null && pending == null) throw identity("World-side identity missing");
         if (!initializingIdentity.equals(identity != null ? identity : pending))
@@ -244,6 +244,10 @@ public final class SqliteStorage implements FoundationStore {
       JournalSchema.validate(connection);
       RecoverySchema.validate(connection);
       FxSchema.validate(connection);
+      CorporationSchema.validate(connection);
+      CorporationSchema.validateManagers(connection);
+      CorporationSchema.validateBanking(connection);
+      CorporationSchema.validateIntegrations(connection);
       AccountSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.institution.InstitutionSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.pricing.PricingSchema.validate(connection);
@@ -616,6 +620,10 @@ public final class SqliteStorage implements FoundationStore {
       JournalSchema.validate(connection);
       RecoverySchema.validate(connection);
       FxSchema.validate(connection);
+      CorporationSchema.validate(connection);
+      CorporationSchema.validateManagers(connection);
+      CorporationSchema.validateBanking(connection);
+      CorporationSchema.validateIntegrations(connection);
       AccountSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.institution.InstitutionSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.pricing.PricingSchema.validate(connection);

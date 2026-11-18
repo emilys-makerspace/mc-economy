@@ -22,7 +22,8 @@ public final class BranchAdmission {
     CREDIT_ISSUE,
     CREDIT_INCREASE,
     CREDIT_REPLACE,
-    LOAN_APPLY
+    LOAN_APPLY,
+    CORPORATE_BANK
   }
 
   public record Context(

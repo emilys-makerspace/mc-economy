@@ -95,9 +95,8 @@ public final class YieldPosting {
       }
       var destinations =
           reads.query(
-              "SELECT currency FROM account_catalog WHERE account_id=? AND purpose='BANK' AND status='OPEN'",
-              List.of(destination.value().toString()),
-              1);
+              "SELECT currency FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%' AND status='OPEN'",
+              List.of(destination.value().toString()), 1);
       if (destinations.isEmpty()) return null;
       var destinationCurrency = EconomyCurrency.valueOf(destinations.getFirst().get("currency"));
       long credited = pay;

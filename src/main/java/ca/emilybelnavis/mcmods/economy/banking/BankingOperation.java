@@ -166,6 +166,7 @@ public final class BankingOperation {
   public static boolean confirmation(String action) {
     return Set.of(
             "configure_confirm",
+            "corp_confirm",
             "deposit_confirm",
             "withdraw_confirm",
             "exchange_confirm",

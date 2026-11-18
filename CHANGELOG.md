@@ -2,6 +2,22 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-18
+
+- `/economy status` now tells players when banking is open, how many financial days remain during catch-up, and the estimated wait. Operators can follow progress in the server log.
+
+- Approve a database upgrade in chat, then reopen the world or restart the server. Economy backs up the world and applies the upgrade during startup. Authorized players can use the review command immediately after joining, including in singleplayer with cheats enabled.
+
+- Players can register companies, appoint managers, and use branch kiosks to open, fund, pay from and close company accounts. Kiosks show the account owners and fees before confirmation and can recover the original payment receipt.
+
+- Integration mods can request founder-approved corporation creation, account access and payments. Founders can review the incorporation charge in chat and revoke a provider’s access.
+
+- Bank kiosks now offer a company selector and scoped corporate balances. Corporate banking supports four native-currency accounts per company and atomic contributions, payments, FX and funded closure through the server service.
+
+- Schema 57 adds server-side manager appointments, account-scoped permissions and revocation. New managers begin with view access.
+
+- Schema 56 adds server-side corporation registration, permanent name reservations and founder-controlled wind-down. Incorporation retires CAD 500 or its equivalent from the selected personal bank account.
+
 ## 2026-11-13
 
 - Increased initial institutional seed capital from 28 billion to 2.8 trillion server-currency major units, keeping the allocation proportions. Existing funding manifests and balances are preserved without automatic top-ups.

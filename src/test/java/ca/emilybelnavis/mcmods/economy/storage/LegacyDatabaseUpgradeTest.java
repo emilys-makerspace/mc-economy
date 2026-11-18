@@ -150,7 +150,7 @@ class LegacyDatabaseUpgradeTest {
     }
     String changed = StorageFiles.hash(database(world));
     assertNotEquals(original, changed);
-    assertThrows(IOException.class, () -> DatabaseUpgrade.apply(world));
+    assertThrows(IOException.class, () -> DatabaseUpgrade.applyApprovedAtStartup(world));
     assertThrows(
         IOException.class, () -> DatabaseUpgrade.approve(world, review, ADMIN, () -> true));
     assertEquals(changed, StorageFiles.hash(database(world)));
@@ -213,6 +213,7 @@ class LegacyDatabaseUpgradeTest {
     }
     StorageFiles.writeNew(
         world.resolve("economy/world-identity"), SqliteStorage.encodeIdentity(identity));
+    assertNull(DatabaseUpgrade.applyApprovedAtStartup(world));
     assertUpgradeRequired(world);
     UpgradeBackup.prepare(world);
     assertUpgradeRequired(world);
@@ -220,7 +221,10 @@ class LegacyDatabaseUpgradeTest {
     var review = DatabaseUpgrade.review(world);
     assertEquals(sourceVersion, review.sourceSchema());
     DatabaseUpgrade.approve(world, review, ADMIN, () -> true);
-    DatabaseUpgrade.apply(world);
+    try (var minecraft = WorldOwnership.acquire(world.resolve("session.lock"))) {
+      assertNotNull(DatabaseUpgrade.applyApprovedAtStartup(world));
+      assertNull(DatabaseUpgrade.applyApprovedAtStartup(world));
+    }
     var store = SqliteStorage.serverStorage(RecordCatalog.core(), 5000);
     try {
       store.initialize(world);
@@ -252,7 +256,9 @@ class LegacyDatabaseUpgradeTest {
                 }));
     assertTrue(Files.exists(world.resolve("economy/" + DatabaseUpgrade.INSTALL)));
     assertUpgradeRequired(world);
-    DatabaseUpgrade.apply(world);
+    try (var minecraft = WorldOwnership.acquire(world.resolve("session.lock"))) {
+      assertNotNull(DatabaseUpgrade.applyApprovedAtStartup(world));
+    }
     assertFalse(Files.exists(world.resolve("economy/" + DatabaseUpgrade.INSTALL)));
     reopen(world);
     try (var connection = connect(world)) {

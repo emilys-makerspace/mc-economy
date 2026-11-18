@@ -20,9 +20,8 @@ public final class OverdraftCollections {
       JournalEngine.ReadView reads, UUID accountId, long now) {
     var rows =
         reads.query(
-            "SELECT owner_id,currency,status,revision FROM account_catalog WHERE account_id=? AND purpose='BANK'",
-            List.of(accountId.toString()),
-            1);
+            "SELECT owner_id,currency,status,revision FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%'",
+            List.of(accountId.toString()), 1);
     if (rows.isEmpty() || !rows.getFirst().get("status").equals("OPEN") || now < 0)
       return reject("OVERDRAFT_DEFAULT_STALE");
     if (DebtLifecycle.facilityCase(reads, DebtRecords.Kind.OVERDRAFT, accountId).isPresent())

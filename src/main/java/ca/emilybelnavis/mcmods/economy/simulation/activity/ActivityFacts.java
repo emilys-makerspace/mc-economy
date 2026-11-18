@@ -29,7 +29,8 @@ public final class ActivityFacts {
     OPERATOR_RETIRE,
     OPERATOR_CASH_CREATE,
     NPC_CREATE,
-    NPC_RETIRE
+    NPC_RETIRE,
+    REGISTRATION_RETIRE
   }
 
   public record Draft(

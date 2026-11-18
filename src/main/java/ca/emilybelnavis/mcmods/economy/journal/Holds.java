@@ -63,7 +63,7 @@ public final class Holds {
             return reject("HOLD_REQUEST");
           }
           if (!authority.allows(intent, account, null, reads)) return reject("HOLD_ACCESS");
-          if (!Settlement.openBank(reads, account, amount.currency()))
+          if (!Settlement.openPersonalBank(reads, account, amount.currency()))
             return reject("HOLD_ACCOUNT");
           long balance = Settlement.posted(reads, account, amount.currency());
           if (!ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.permits(
@@ -124,7 +124,8 @@ public final class Holds {
 
           var next = new Hold(id, hold.account(), hold.amount(), state);
           if (target == null) return commit(next, List.of(), tx -> update(tx, next));
-          if (target.equals(hold.account())) return reject("HOLD_DESTINATION");
+          if (target.equals(hold.account()) || Settlement.organizationBank(reads, target))
+            return reject("HOLD_DESTINATION");
           var amount = hold.amount();
           var legs =
               List.of(
@@ -146,7 +147,8 @@ public final class Holds {
   static JournalEngine.Decision checkout(
       Journal.Intent intent, UUID source, UUID target, Money amount, JournalEngine.ReadView reads)
       throws Exception {
-    if (source.equals(target)) return reject("HOLD_DESTINATION");
+    if (source.equals(target) || Settlement.organizationBank(reads, target))
+      return reject("HOLD_DESTINATION");
     var reservationIntent =
         new Journal.Intent(
             intent.operationId(),

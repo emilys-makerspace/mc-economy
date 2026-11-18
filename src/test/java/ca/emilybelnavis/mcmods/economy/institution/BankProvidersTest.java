@@ -93,6 +93,7 @@ class BankProvidersTest {
             case ASSIGN -> BankProviders.ASSIGN;
             case SWITCH_SOURCE -> BankProviders.SWITCH_SOURCE;
             case SWITCH_TARGET -> BankProviders.SWITCH_TARGET;
+            case CORPORATE_BANK -> throw new IllegalArgumentException("Use corporate banking");
             case CLOSE -> BankProviders.CLOSE;
             case CARD_ISSUE,
                 CARD_REPLACE,

@@ -250,6 +250,7 @@ public final class Overdrafts {
       DebitKind kind) {
     if (nextBalance >= oldBalance) return true;
     if (nextBalance >= reserved) return true;
+    if (Settlement.organizationBank(reads, account)) return false;
     if (kind == DebitKind.BANK_CHARGE || kind == DebitKind.INTEGRATION_OVERRIDE) return true;
     var state = find(reads, account).orElse(null);
     if (state != null && state.closed()) return false;
@@ -474,9 +475,8 @@ public final class Overdrafts {
               || account.currency() != amount.currency()) return reject("OVERDRAFT_ACCOUNT");
           if (reads
               .query(
-                  "SELECT account_id FROM account_catalog WHERE account_id=? AND purpose='BANK' AND status='OPEN' AND currency=?",
-                  List.of(target.toString(), amount.currency().name()),
-                  1)
+                  "SELECT account_id FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%' AND status='OPEN' AND currency=?",
+                  List.of(target.toString(), amount.currency().name()), 1)
               .isEmpty()) return reject("OVERDRAFT_DESTINATION");
           long before = Settlement.posted(reads, source, amount.currency());
           long next = Math.subtractExact(before, amount.minorUnits());
@@ -572,9 +572,8 @@ public final class Overdrafts {
       if (planned.containsKey(accountId) && e.getValue() == prefix) continue;
       var accountRows =
           reads.query(
-              "SELECT owner_id,status,currency FROM account_catalog WHERE account_id=? AND purpose='BANK'",
-              List.of(accountId.toString()),
-              1);
+              "SELECT owner_id,status,currency FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%'",
+              List.of(accountId.toString()), 1);
       if (accountRows.isEmpty()
           || !accountRows.getFirst().get("status").equals("OPEN")
           || !accountRows.getFirst().get("currency").equals(currency.name())) continue;

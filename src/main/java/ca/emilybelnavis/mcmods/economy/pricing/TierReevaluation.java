@@ -86,9 +86,8 @@ public final class TierReevaluation {
         if (rows.isEmpty()) return null;
         if (reads
             .query(
-                "SELECT account_id FROM account_catalog WHERE purpose='BANK' AND status='OPEN' LIMIT 1",
-                List.of(),
-                1)
+                "SELECT account_id FROM account_catalog WHERE purpose='BANK' AND owner_id NOT LIKE 'organization:%' AND status='OPEN' LIMIT 1",
+                List.of(), 1)
             .isEmpty()) return null;
         long start = Long.parseLong(rows.getFirst().get("start_ms"));
         if (completed == null) {
@@ -124,9 +123,8 @@ public final class TierReevaluation {
         if (limit < 1 || limit > 16) throw new IllegalArgumentException("Tier page bound");
         return reads
             .query(
-                "SELECT owner_id FROM account_catalog WHERE purpose='BANK' AND status='OPEN' AND owner_id>? GROUP BY owner_id ORDER BY owner_id LIMIT ?",
-                List.of(cursor, Integer.toString(limit)),
-                limit)
+                "SELECT owner_id FROM account_catalog WHERE purpose='BANK' AND owner_id NOT LIKE 'organization:%' AND status='OPEN' AND owner_id>? GROUP BY owner_id ORDER BY owner_id LIMIT ?",
+                List.of(cursor, Integer.toString(limit)), limit)
             .stream()
             .map(r -> r.get("owner_id"))
             .toList();

@@ -140,6 +140,7 @@ public final class FoundationRuntime implements FoundationStore {
   private ProjectionManager projections;
   private EconomicClock clock;
   private DeadlineDispatcher deadlines;
+  private CatchUpCalendar catchUpCalendar;
   private InstitutionCapital capital;
   private ca.emilybelnavis.mcmods.economy.interest.DepositYield depositYield;
   private ca.emilybelnavis.mcmods.economy.simulation.activity.ActivityRuntime activity;
@@ -154,6 +155,7 @@ public final class FoundationRuntime implements FoundationStore {
   private boolean valuationSourcesReady;
   private boolean economicProjectionsPending;
   private Path world;
+  private StorageException upgradeFailure;
   private volatile WorldShutdown.Evidence closedEvidence;
   private final AtomicLong observedDeadlineTurns = new AtomicLong();
 
@@ -205,7 +207,19 @@ public final class FoundationRuntime implements FoundationStore {
     this(Configuration.core());
   }
 
+  /** Run synchronously while Minecraft holds the session lock, before it loads the levels. */
+  public String applyApprovedUpgrade(Path world) {
+    try {
+      return DatabaseUpgrade.applyApprovedAtStartup(world);
+    } catch (Exception failure) {
+      upgradeFailure =
+          new StorageException(StorageException.Kind.MIGRATION, "Approved upgrade failed", failure);
+      throw upgradeFailure;
+    }
+  }
+
   public void initialize(Path world) {
+    if (upgradeFailure != null) throw upgradeFailure;
     this.world = world.toAbsolutePath().normalize();
     store.beginInitialization(world);
     try {
@@ -389,6 +403,11 @@ public final class FoundationRuntime implements FoundationStore {
   }
 
   @Override
+  public CatchUpCalendar catchUpCalendar() {
+    return catchUpCalendar;
+  }
+
+  @Override
   public void requireEconomicCurrent() {
     if (schedulesEconomy() && (!scheduledProgress(true).ready() || economicProjectionsPending)) {
       throw new StorageException(
@@ -461,12 +480,25 @@ public final class FoundationRuntime implements FoundationStore {
 
   private EconomicClock.Progress baseScheduledProgress(boolean observe) {
     var fixed = observe ? clock.observeCurrentDebt() : clock.currentProgress();
-    if (deadlines == null) return fixed;
-    var domain = observe ? deadlines.observeCurrentDebt() : deadlines.progress();
+    var domain =
+        deadlines == null ? null : observe ? deadlines.observeCurrentDebt() : deadlines.progress();
+    Long nextDue = fixed.nextDueMillis();
+    long target = fixed.targetMillis();
+    if (domain != null && domain.nextDueMillis() != null) {
+      if (nextDue == null || domain.nextDueMillis() < nextDue) nextDue = domain.nextDueMillis();
+      target = Math.max(target, domain.targetMillis());
+    }
+    boolean waiting = fixed.waitingForWall() || (domain != null && domain.waitingForWall());
+    // Multiple providers and accounts can still have work at exactly the same instant.
+    catchUpCalendar =
+        nextDue == null || waiting
+            ? null
+            : new CatchUpCalendar(Math.max(0, nextDue - 1), target, FinancialCalendar.DAY_MILLIS);
+    if (domain == null) return fixed;
     return new EconomicClock.Progress(
         fixed.completedSequence(),
         Math.addExact(fixed.outstandingIntervals(), domain.outstandingEvents()),
-        fixed.waitingForWall() || domain.waitingForWall(),
+        waiting,
         fixed.ready() && domain.ready());
   }
 

@@ -61,10 +61,39 @@ public final class FeeSettlement {
       InstitutionCatalog.InstitutionId bank,
       Money fee,
       UUID payer) {
+    return charge(reads, world, "economy:depositor/" + owner.value(), bank, fee, payer, false);
+  }
+
+  /** Corporate fees recognize the organization expense independently of its acting player. */
+  public static JournalEngine.Decision chargeCorporate(
+      JournalEngine.ReadView reads,
+      ca.emilybelnavis.mcmods.economy.api.Identifiers.WorldId world,
+      ca.emilybelnavis.mcmods.economy.api.Identifiers.OrganizationId owner,
+      InstitutionCatalog.InstitutionId bank,
+      Money fee,
+      UUID payer) {
+    return charge(
+        reads,
+        world,
+        "economy:corporate-depositor/" + owner.value(),
+        bank,
+        fee,
+        Objects.requireNonNull(payer),
+        true);
+  }
+
+  private static JournalEngine.Decision charge(
+      JournalEngine.ReadView reads,
+      ca.emilybelnavis.mcmods.economy.api.Identifiers.WorldId world,
+      String depositorKey,
+      InstitutionCatalog.InstitutionId bank,
+      Money fee,
+      UUID payer,
+      boolean corporate) {
     long amount = fee.minorUnits();
     if (amount <= 0) throw new IllegalArgumentException("Positive fee required");
     var currency = fee.currency();
-    var depositor = new InstitutionCatalog.InstitutionId("economy:depositor/" + owner.value());
+    var depositor = new InstitutionCatalog.InstitutionId(depositorKey);
     var cash = FinancialAccounts.account(world, bank, FinancialAccounts.Role.CASH, currency);
     var income = FinancialAccounts.account(world, bank, FinancialAccounts.Role.INCOME, currency);
     var expense =
@@ -99,11 +128,13 @@ public final class FeeSettlement {
       }
     } else
       money =
-          InstitutionSettlement.prepare(
-              reads,
-              legs,
-              accounts,
-              ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.BANK_CHARGE);
+          corporate
+              ? InstitutionSettlement.prepareCorporateFee(reads, legs, accounts)
+              : InstitutionSettlement.prepare(
+                  reads,
+                  legs,
+                  accounts,
+                  ca.emilybelnavis.mcmods.economy.overdraft.Overdrafts.DebitKind.BANK_CHARGE);
     if (!(money instanceof JournalEngine.Commit transfer)) return money;
     var recognition =
         InstitutionSettlement.prepare(

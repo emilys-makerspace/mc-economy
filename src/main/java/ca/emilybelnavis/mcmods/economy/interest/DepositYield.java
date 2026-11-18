@@ -198,11 +198,10 @@ public final class DepositYield {
                       UNION
                       SELECT a.account_id||'/'||p.bank_key||'/'||a.currency AS target
                         FROM account_catalog a JOIN bank_account_providers p ON p.account_id=a.account_id
-                        WHERE a.purpose='BANK' AND a.status='OPEN' AND p.bank_key<>'economy:unassigned-provider'
+                        WHERE a.purpose='BANK' AND a.owner_id NOT LIKE 'organization:%' AND a.status='OPEN' AND p.bank_key<>'economy:unassigned-provider'
                     ) WHERE target>? ORDER BY target LIMIT ?
                     """,
-                List.of(cursor, Integer.toString(limit)),
-                limit)
+                List.of(cursor, Integer.toString(limit)), limit)
             .stream()
             .map(r -> r.get("target"))
             .toList();
@@ -343,9 +342,8 @@ public final class DepositYield {
     }
     var untracked =
         reads.query(
-            "SELECT a.account_id FROM bank_account_providers p JOIN account_catalog a ON a.account_id=p.account_id WHERE p.bank_key<>'economy:unassigned-provider' AND a.purpose='BANK' AND a.status='OPEN' AND NOT EXISTS(SELECT 1 FROM deposit_yield_claims y WHERE y.account_id=a.account_id AND y.bank_key=p.bank_key AND y.currency=a.currency AND y.active=1) LIMIT 1",
-            List.of(),
-            1);
+            "SELECT a.account_id FROM bank_account_providers p JOIN account_catalog a ON a.account_id=p.account_id WHERE p.bank_key<>'economy:unassigned-provider' AND a.purpose='BANK' AND a.owner_id NOT LIKE 'organization:%' AND a.status='OPEN' AND NOT EXISTS(SELECT 1 FROM deposit_yield_claims y WHERE y.account_id=a.account_id AND y.bank_key=p.bank_key AND y.currency=a.currency AND y.active=1) LIMIT 1",
+            List.of(), 1);
     if (!untracked.isEmpty())
       earliest = earliest == null ? activated : Math.min(earliest, activated);
     if (earliest == null) return null;
@@ -443,18 +441,16 @@ public final class DepositYield {
             !newOwners.containsKey(id)
                 && reads
                     .query(
-                        "SELECT account_id FROM account_catalog WHERE account_id=? AND purpose='BANK'",
-                        List.of(id.toString()),
-                        1)
+                        "SELECT account_id FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%'",
+                        List.of(id.toString()), 1)
                     .isEmpty());
     if (affected.size() > 16)
       return new JournalEngine.Retry(new Journal.Result(1, "YIELD_WRITE_BOUND", ""));
     for (var id : affected) {
       var accountRows =
           reads.query(
-              "SELECT * FROM account_catalog WHERE account_id=? AND purpose='BANK'",
-              List.of(id.toString()),
-              1);
+              "SELECT * FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%'",
+              List.of(id.toString()), 1);
       Map<String, String> account = accountRows.isEmpty() ? null : accountRows.getFirst();
       PlayerId owner =
           account == null
@@ -835,9 +831,8 @@ public final class DepositYield {
     if (existing.isPresent()) return existing.orElseThrow();
     var row =
         reads.query(
-            "SELECT owner_id,status,currency FROM account_catalog WHERE account_id=? AND purpose='BANK'",
-            List.of(account.value().toString()),
-            1);
+            "SELECT owner_id,status,currency FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%'",
+            List.of(account.value().toString()), 1);
     if (row.isEmpty()) throw new IllegalArgumentException("Yield account missing");
     var a = row.getFirst();
     var owner = new PlayerId(UUID.fromString(a.get("owner_id")));
@@ -1028,9 +1023,8 @@ public final class DepositYield {
         throw new IllegalStateException("Yield due amount exceeds claim");
       var dest =
           reads.query(
-              "SELECT owner_id,currency,status FROM account_catalog WHERE account_id=? AND purpose='BANK'",
-              List.of(destination.value().toString()),
-              1);
+              "SELECT owner_id,currency,status FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%'",
+              List.of(destination.value().toString()), 1);
       if (dest.isEmpty()
           || !dest.getFirst().get("owner_id").equals(s.owner().value().toString())
           || !dest.getFirst().get("status").equals("OPEN")) return distress(s, now);

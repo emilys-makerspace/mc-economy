@@ -36,6 +36,13 @@ public final class BankingDashboardClient {
   private static final BlockPos KIOSK = new BlockPos(520, 110, 520),
       TELLER = new BlockPos(528, 110, 520);
   private static final String BANK = "economy:bank/crownstone";
+  private final boolean corporateMode = Boolean.getBoolean("economy.corporateWorkflowProbe");
+  private String approveCommand, companyKey, personalAccount;
+  private boolean commandCommitted;
+  private final String witnessManager = UUID.randomUUID().toString();
+  private int corporateTransfers;
+  private UUID lastCorporateOperation;
+  private final String witnessName = "Cedar Field Studio";
   private final boolean historyMode = Boolean.getBoolean("economy.bankingHistoryProbe");
   private final long started = System.nanoTime();
   private final ArrayDeque<String> captures = new ArrayDeque<>();
@@ -63,6 +70,7 @@ public final class BankingDashboardClient {
   public BankingDashboardClient() {
     if (!Boolean.getBoolean("economy.bankingDashboardProbe") && !historyMode)
       throw new IllegalStateException("Explicit banking fixture required");
+    if (corporateMode) NeoForge.EVENT_BUS.addListener(this::corporateMessage);
     NeoForge.EVENT_BUS.addListener(this::tick);
     NeoForge.EVENT_BUS.addListener(this::captureFrame);
   }
@@ -77,7 +85,9 @@ public final class BankingDashboardClient {
         Path root =
             DisposableProbeWorld.requireClientDirectory(
                 client.gameDirectory.toPath(),
-                historyMode ? "economy-a10-02-02-" : "economy-a10-02-01-");
+                corporateMode
+                    ? "economy-b0-06-"
+                    : historyMode ? "economy-a10-02-02-" : "economy-a10-02-01-");
         fixtureRoot = root;
         String name =
             (historyMode ? "economy-banking-history-" : "economy-banking-dashboard-")
@@ -166,6 +176,10 @@ public final class BankingDashboardClient {
           || menu.worldSetup()
           || menu.busy()
           || ticks % 10 != 0) return;
+      if (corporateMode && step >= 8) {
+        corporateStep(client, menu);
+        return;
+      }
       switch (step) {
         case 0 -> {
           if (menu.access() == BankingMenu.Access.ADMIN && offered(menu, "brand_preview", "")) {
@@ -690,6 +704,145 @@ public final class BankingDashboardClient {
     }
   }
 
+  private void corporateMessage(
+      net.neoforged.neoforge.client.event.ClientChatReceivedEvent.System event) {
+    String line = event.getMessage().getString();
+    String prefix = "/economy corporation approve ";
+    int at = line.indexOf(prefix);
+    if (at >= 0) approveCommand = line.substring(at + 1, at + prefix.length() + 36);
+    if (line.contains("COMMITTED")) commandCommitted = true;
+  }
+
+  private void corporateStep(Minecraft client, BankingMenu menu) {
+    switch (step) {
+      case 8 -> {
+        if (!fresh(menu) || menu.dashboard() == null) return;
+        personalAccount = menu.dashboard().accounts().rows().getFirst().id().toString();
+        client.player.connection.sendCommand(
+            "economy corporation register " + personalAccount + " " + witnessName);
+        next(40);
+      }
+      case 40, 44 -> {
+        if (approveCommand == null) return;
+        client.player.connection.sendCommand(approveCommand);
+        approveCommand = null;
+        commandCommitted = false;
+        next(step + 1);
+      }
+      case 41 -> {
+        if (!commandCommitted) return;
+        send(menu, "manage_accounts", "");
+        next(42);
+      }
+      case 42 -> {
+        if (!offered(menu, "corp_list", "")) return;
+        pressOffered(client, menu, "corp_list", "");
+        next(43);
+      }
+      case 43 -> {
+        var company =
+            menu.choices().stream()
+                .filter(c -> c.action().equals("corp_select") && c.label().equals(witnessName))
+                .findFirst();
+        if (company.isEmpty()) return;
+        companyKey = company.get().value();
+        client.player.connection.sendCommand(
+            "economy corporation appoint " + companyKey + " " + witnessManager);
+        next(44);
+      }
+      case 45 -> {
+        if (!commandCommitted) return;
+        send(menu, "corp_list", "");
+        next(46);
+      }
+      case 46 -> {
+        if (!fresh(menu) || !offered(menu, "corp_select", companyKey)) return;
+        pressOffered(client, menu, "corp_select", companyKey);
+        next(47);
+      }
+      case 47 -> {
+        if (!fresh(menu)) return;
+        if (offered(menu, "corp_open", "CAD")) {
+          pressOffered(client, menu, "corp_open", "CAD");
+          next(48);
+        } else {
+          var account =
+              menu.choices().stream()
+                  .filter(c -> c.action().equals("corp_account"))
+                  .findFirst()
+                  .orElseThrow();
+          pressOffered(client, menu, "corp_account", account.value());
+          next(50);
+        }
+      }
+      case 48 -> {
+        if (!fresh(menu) || menu.operation().state() != BankingOperation.State.REVIEW) return;
+        require(
+            menu.lines().stream().anyMatch(l -> l.contains(witnessName)),
+            "Review displays company owner");
+        pressOffered(client, menu, "corp_confirm", "");
+        next(49);
+      }
+      case 49 -> {
+        if (!fresh(menu)) return;
+        require(
+            menu.operation().state() == BankingOperation.State.COMPLETED,
+            "Company transaction committed: " + menu.lines());
+        lastCorporateOperation = menu.operation().operationId();
+        send(menu, "corp_list", "");
+        next(46);
+      }
+      case 50 -> {
+        if (!fresh(menu)) return;
+        if (corporateTransfers == 2) {
+          pressOffered(client, menu, "corp_history", "");
+          next(51);
+        } else {
+          var boxes =
+              client.screen.children().stream()
+                  .filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
+                  .map(net.minecraft.client.gui.components.EditBox.class::cast)
+                  .toList();
+          require(boxes.size() == 2, "Account and amount fields available");
+          boxes.getFirst().setValue(personalAccount);
+          boxes.getLast().setValue(corporateTransfers == 0 ? "1000" : "400");
+          pressOffered(client, menu, corporateTransfers++ == 0 ? "corp_fund" : "corp_pay", "");
+          next(48);
+        }
+      }
+      case 51 -> {
+        if (!fresh(menu)) return;
+        String statement = String.join(" ", menu.lines());
+        require(
+            menu.page().equals("corp_history")
+                && statement.contains("10.00")
+                && statement.contains("4.00"),
+            "Both company postings visible: " + statement);
+        send(menu, "corp_list", "");
+        next(52);
+      }
+      case 52 -> {
+        if (!fresh(menu) || !offered(menu, "corp_recover", "")) return;
+        var label =
+            net.minecraft.network.chat.Component.translatable("screen.economy.corp_receipt")
+                .getString();
+        button((BankingScreen) client.screen, label).orElseThrow().onPress();
+        sentRevision = menu.revision();
+        next(53);
+      }
+      case 53 -> {
+        if (!fresh(menu)) return;
+        require(
+            lastCorporateOperation.equals(menu.operation().operationId())
+                && menu.lines().stream()
+                    .anyMatch(l -> l.contains(lastCorporateOperation.toString())),
+            "Recovered same corporate operation");
+        finish(client, true);
+      }
+      default -> throw new IllegalStateException("Corporate witness stage " + step);
+    }
+  }
+
   private static void press(BankingScreen screen, String action) {
     var label =
         net.minecraft.network.chat.Component.translatable("screen.economy.action." + action)
@@ -862,7 +1015,7 @@ public final class BankingDashboardClient {
                   new SameCurrency.Adjustment(
                       actor,
                       new SameCurrency.Revision(account.id(), account.revision()),
-                      new Money(account.currency(), 10_000));
+                      new Money(account.currency(), corporateMode ? 100_000 : 10_000));
               var intent =
                   new Journal.Intent(
                       new OperationId(fundingOperation),
@@ -1056,7 +1209,13 @@ public final class BankingDashboardClient {
                 + " retained; CAD80 bank and independently observed CAD20 cash. Explicit fixture CAD100 funding "
                 + fundingOperation
                 + ". Three post-render History screenshots plus reused setup captures, GUI scale2. Local single-client evidence only; no latency/multiplayer/restart/debt claim.\n";
-      String prefix = historyMode ? "banking-history" : "banking-dashboard";
+      if (success && corporateMode)
+        evidence =
+            "PASS founder registration, manager appointment, company selection, CAD account opening, CAD 10 contribution, CAD 4 payment, corporate statement showing both original postings and lookup of the original payment receipt. Fresh singleplayer kiosk.\n";
+      String prefix =
+          corporateMode
+              ? "corporate-workflow"
+              : historyMode ? "banking-history" : "banking-dashboard";
       if (fixtureRoot != null)
         Files.writeString(
             fixtureRoot.resolve(prefix + (success ? "-passed.txt" : "-failed.txt")), evidence);

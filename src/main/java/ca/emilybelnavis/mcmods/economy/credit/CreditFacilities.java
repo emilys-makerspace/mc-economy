@@ -2018,9 +2018,8 @@ public final class CreditFacilities {
   private static Destination account(ReadView reads, AccountId account) {
     return reads
         .query(
-            "SELECT currency,revision FROM account_catalog WHERE account_id=? AND purpose='BANK' AND status='OPEN'",
-            List.of(account.value().toString()),
-            1)
+            "SELECT currency,revision FROM account_catalog WHERE account_id=? AND purpose='BANK' AND owner_id NOT LIKE 'organization:%' AND status='OPEN'",
+            List.of(account.value().toString()), 1)
         .stream()
         .map(
             r ->

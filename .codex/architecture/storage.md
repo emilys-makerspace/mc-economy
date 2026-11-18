@@ -4,7 +4,7 @@ A10-02-02 installs schema53 [owner history projection](owner-history.md): bounde
 
 ## Administrator-approved upgrades
 
-Production `FoundationRuntime` now uses `SqliteStorage.serverStorage`: existing older foundation schemas stop with `STORAGE_UPGRADE_REQUIRED` before migration. Fresh creation and already current schemas retain their usual startup. Known legacy/unknown application IDs remain unavailable for inspection rather than being overwritten. `/economy upgrade review` and `confirm <token>` require the actual directly connected permission-level 2 player; the offline `upgradeEconomyDatabase` task applies the approved source/target after taking both world locks and making a verified complete-world backup. [Current full contract](database-upgrades.md) and [verification](../verification/database-upgrades.md) supersede earlier descriptions of production startup applying pending migrations solely after a backup receipt.
+Production `FoundationRuntime` now uses `SqliteStorage.serverStorage`: existing older foundation schemas stop with `STORAGE_UPGRADE_REQUIRED` before migration. Fresh creation and already current schemas retain their usual startup. Known legacy/unknown application IDs remain unavailable for inspection rather than being overwritten. `/economy upgrade review` and `confirm <token>` require the actual directly connected permission-level 2 player; the next world startup applies the approved source/target under Minecraft and Economy ownership after making a verified complete-world backup. [Current full contract](database-upgrades.md) and [verification](../verification/database-upgrades.md) supersede earlier descriptions of production startup applying pending migrations solely after a backup receipt.
 
 ## Storage ownership and API
 

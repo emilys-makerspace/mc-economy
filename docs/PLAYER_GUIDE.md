@@ -8,6 +8,8 @@ Covered financial reviews, filtered history and banker/collection explanations s
 
 ## Banking and shops
 
+If a kiosk is unavailable, run `/economy status`. After time away, Economy processes missed financial days before banking opens. The command shows how many financial days are left and, once it measures progress, about how much real time remains.
+
 Right-click an active teller, ATM or branch kiosk, or use an active issued card for its offered remote services. Debit cards provide banking access without borrowing. ATM login requires an owned usable held card; credit cards and cards from another bank restrict ATM Home to withdrawals. Terminal Home offers **My Accounts**, **Deposit**, **Withdrawal** and **Bill Payments** as permitted. Kiosks also offer **Branch Services**, grouping account settings, credit, loans, cards and currency exchange. A banker is an optional guide; you can use an active kiosk directly.
 
 **My Accounts** shows accounts at the terminal's bank and their paged activity. Remote credit-card account views are scoped to that facility. Viewing a page never opens an account, borrows money or makes a payment. Follow the offered controls for the current card or terminal; unavailable services do not silently choose another account or payment rail.

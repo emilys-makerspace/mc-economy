@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.fml.common.Mod;
@@ -58,6 +59,7 @@ public final class Economy {
   private final Map<MinecraftServer, ca.emilybelnavis.mcmods.economy.recovery.ShutdownErrors>
       shutdownErrors = new IdentityHashMap<>();
   private final Map<MinecraftServer, Boolean> drained = new IdentityHashMap<>();
+  private final Map<MinecraftServer, ActivityLog> activityLogs = new IdentityHashMap<>();
 
   public Economy(net.neoforged.bus.api.IEventBus modBus) {
     ca.emilybelnavis.mcmods.economy.cash.CashCatalog.initialize(modBus);
@@ -168,6 +170,8 @@ public final class Economy {
   }
 
   private void commands(RegisterCommandsEvent event) {
+    ca.emilybelnavis.mcmods.economy.foundation.CorporationCommands.register(event.getDispatcher());
+    ca.emilybelnavis.mcmods.economy.foundation.CorporationConsent.register(event.getDispatcher());
     ca.emilybelnavis.mcmods.economy.foundation.DatabaseUpgradeCommands.register(
         event.getDispatcher(), servers::get);
     DenominationChooser.register(event.getDispatcher(), choosers::get);
@@ -195,11 +199,21 @@ public final class Economy {
         (source, view) -> {
           var server = source.getServer();
           var services = servers.get(server);
+          String reason = invalidConfiguration.contains(server) ? "CONFIGURATION_INVALID" : null;
+          if (!view.detailed())
+            return services != null
+                ? services.status(view.privileged())
+                : DiagnosticsReport.status(
+                    ServerServices.State.UNAVAILABLE,
+                    NO_METRICS,
+                    reason,
+                    view.privileged(),
+                    null,
+                    null);
           if (services != null)
             return view.calendarAfter() == null
                 ? services.diagnostics(view.privileged(), view.detailed())
                 : services.calendarDiagnostics(view.calendarAfter());
-          String reason = invalidConfiguration.contains(server) ? "CONFIGURATION_INVALID" : null;
           if (view.calendarAfter() != null)
             return ca.emilybelnavis.mcmods.economy.foundation.CalendarReport.render(
                 null, ServerServices.State.UNAVAILABLE, reason, NO_METRICS, view.calendarAfter());
@@ -213,7 +227,7 @@ public final class Economy {
                   reason,
                   null,
                   null);
-          if (!view.privileged() || !view.detailed()) return report;
+          if (!view.privileged()) return report;
           var detailed =
               new java.util.ArrayList<>(
                   DiagnosticsReport.withFx(report, ServerServices.State.UNAVAILABLE, null, reason));
@@ -259,10 +273,16 @@ public final class Economy {
             FoundationRuntime.Configuration.production(financialClock, calendar),
             scheduling.sqliteLockTimeoutMillis(),
             simulation);
-    servers.put(
-        server,
-        new ServerServices(
-            server.getWorldPath(LevelResource.ROOT), runtime, scheduling, financialClock));
+    Path world = server.getWorldPath(LevelResource.ROOT);
+    try {
+      String result = runtime.applyApprovedUpgrade(world);
+      if (result != null) LOGGER.info("{}", result);
+    } catch (StorageException failure) {
+      // Keep Minecraft available for diagnosis or a fresh review. This runtime refuses to open.
+      LOGGER.error("Approved database upgrade could not finish before world load", failure);
+    }
+    servers.put(server, new ServerServices(world, runtime, scheduling, financialClock));
+    activityLogs.put(server, new ActivityLog());
     servers
         .get(server)
         .onDenominationChange(
@@ -281,7 +301,6 @@ public final class Economy {
     ca.emilybelnavis.mcmods.economy.foundation.DatabaseUpgradeCommands.tick(event.getServer());
     ServerServices services = servers.get(event.getServer());
     if (services != null) {
-      var previous = services.state();
       var previousPhase = services.progress().phase();
       ca.emilybelnavis.mcmods.economy.institution.KioskAdmission.tick(event.getServer());
       ca.emilybelnavis.mcmods.economy.foundation.BranchCommands.tick(event.getServer());
@@ -305,22 +324,60 @@ public final class Economy {
       ca.emilybelnavis.mcmods.economy.terminal.TerminalLifecycle.tick(event.getServer());
       ca.emilybelnavis.mcmods.economy.terminal.BranchBootstrap.tick(event.getServer());
       choosers.get(event.getServer()).tick(event.getServer());
-      if (!services.progress().phase().equals(previousPhase))
-        LOGGER.info(
-            "Economy startup progress: {} ({}/{})",
-            DiagnosticsReport.recoveryPhase(services.progress().phase()),
-            services.progress().completed(),
-            services.progress().target());
-      if (services.state() != previous) {
-        LOGGER.info("Economy foundation state: {}", services.state());
-        if (services.failure() != null)
+      activityLogs.get(event.getServer()).observe(services, previousPhase);
+    }
+  }
+
+  /**
+   * Samples detached server-thread state. Ordinary player activity is reported only in aggregate.
+   */
+  private static final class ActivityLog {
+    private ServerServices.State state = ServerServices.State.INITIALIZING;
+    private long nextReport = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+    private long sequence = -1;
+    private boolean catchingUp;
+
+    void observe(ServerServices services, String previousPhase) {
+      String phase = services.progress().phase();
+      boolean phaseChanged = !phase.equals(previousPhase);
+      if (phaseChanged)
+        LOGGER.debug("Economy startup phase changed to {}", DiagnosticsReport.recoveryPhase(phase));
+      boolean stateChanged = state != services.state();
+      state = services.state();
+      long now = System.nanoTime();
+      boolean enteredCatchUp = phaseChanged && phase.equals("catch-up") && !catchingUp;
+      if (!stateChanged && !enteredCatchUp && now - nextReport < 0) return;
+
+      if (stateChanged) LOGGER.info("Economy foundation state: {}", state);
+      if (state == ServerServices.State.UNAVAILABLE) {
+        if (stateChanged)
           LOGGER.error(
-              "event={} lifecycle=unavailable", ServerServices.failureCode(services.failure()));
+              "event={} lifecycle=unavailable phase={} {}",
+              ServerServices.failureCode(services.failure()),
+              DiagnosticsReport.recoveryPhase(phase),
+              String.join(" ", services.status(true)));
+        nextReport = now + TimeUnit.MINUTES.toNanos(1);
+        return;
       }
+
+      boolean pending =
+          state == ServerServices.State.INITIALIZING || !services.metrics().economy().ready();
+      if (pending || catchingUp || stateChanged)
+        LOGGER.info("{}", String.join(" ", services.status(true)));
+      long currentSequence = services.lastSampledJournalSequence();
+      if (!pending && !catchingUp && sequence >= 0 && currentSequence > sequence)
+        LOGGER.info(
+            "Economy saved {} journal transactions since the previous activity report (latest sequence {}).",
+            currentSequence - sequence,
+            currentSequence);
+      sequence = currentSequence;
+      catchingUp = pending;
+      nextReport = now + TimeUnit.SECONDS.toNanos(pending ? 30 : 60);
     }
   }
 
   private void stopping(ServerStoppingEvent event) {
+    ca.emilybelnavis.mcmods.economy.foundation.CorporationProviders.stop(event.getServer());
     ca.emilybelnavis.mcmods.economy.foundation.DatabaseUpgradeCommands.stopped(event.getServer());
     fixtureClocks.remove(event.getServer());
     ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
@@ -348,6 +405,9 @@ public final class Economy {
     activeChoosers.remove(event.getServer());
     if (services != null) {
       boolean wasReady = services.state() == ServerServices.State.READY;
+      if (services.state() == ServerServices.State.INITIALIZING
+          || (wasReady && !services.metrics().economy().ready()))
+        LOGGER.info("Economy status at shutdown: {}", String.join(" ", services.status(true)));
       boolean clean = services.stop();
       drained.put(event.getServer(), wasReady && clean);
       LOGGER.info("Economy foundation stopped; drained={}", clean);
@@ -360,6 +420,7 @@ public final class Economy {
   }
 
   private void stopped(ServerStoppedEvent event) {
+    activityLogs.remove(event.getServer());
     fixtureClocks.remove(event.getServer());
     ca.emilybelnavis.mcmods.economy.valuation.ValuationRuntime.stop(event.getServer());
     invalidConfiguration.remove(event.getServer());
