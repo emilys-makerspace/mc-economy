@@ -333,7 +333,8 @@ public final class Economy {
    */
   private static final class ActivityLog {
     private ServerServices.State state = ServerServices.State.INITIALIZING;
-    private long nextReport = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+    private static final long PROGRESS_INTERVAL = TimeUnit.SECONDS.toNanos(5);
+    private long nextReport = System.nanoTime() + PROGRESS_INTERVAL;
     private long sequence = -1;
     private boolean catchingUp;
 
@@ -345,8 +346,12 @@ public final class Economy {
       boolean stateChanged = state != services.state();
       state = services.state();
       long now = System.nanoTime();
-      boolean enteredCatchUp = phaseChanged && phase.equals("catch-up") && !catchingUp;
-      if (!stateChanged && !enteredCatchUp && now - nextReport < 0) return;
+      boolean enteredCatchUp = phaseChanged && phase.equals("catch-up");
+      boolean pending =
+          state == ServerServices.State.INITIALIZING
+              || state == ServerServices.State.READY && services.financialWorkPending();
+      boolean availabilityChanged = state == ServerServices.State.READY && pending != catchingUp;
+      if (!stateChanged && !enteredCatchUp && !availabilityChanged && now - nextReport < 0) return;
 
       if (stateChanged) LOGGER.info("Economy foundation state: {}", state);
       if (state == ServerServices.State.UNAVAILABLE) {
@@ -360,9 +365,14 @@ public final class Economy {
         return;
       }
 
-      boolean pending =
-          state == ServerServices.State.INITIALIZING || !services.metrics().economy().ready();
-      if (pending || catchingUp || stateChanged)
+      if (state == ServerServices.State.INITIALIZING && !phase.equals("catch-up")) {
+        var progress = services.progress();
+        LOGGER.info(
+            "Economy startup phase={} completed={} target={}",
+            phase,
+            progress.completed(),
+            progress.target() < 0 ? "unknown" : progress.target());
+      } else if (pending || catchingUp || stateChanged)
         LOGGER.info("{}", String.join(" ", services.status(true)));
       long currentSequence = services.lastSampledJournalSequence();
       if (!pending && !catchingUp && sequence >= 0 && currentSequence > sequence)
@@ -372,7 +382,7 @@ public final class Economy {
             currentSequence);
       sequence = currentSequence;
       catchingUp = pending;
-      nextReport = now + TimeUnit.SECONDS.toNanos(pending ? 30 : 60);
+      nextReport = now + (pending ? PROGRESS_INTERVAL : TimeUnit.MINUTES.toNanos(1));
     }
   }
 

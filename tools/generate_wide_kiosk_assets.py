@@ -15,7 +15,8 @@ ASSETS = ROOT / 'src/main/resources/assets/economy'
 SOURCE = ROOT / 'tools/banking-assets/sources/hardware/wide-kiosk'
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(ROOT / 'tools/banking-assets'))
-from art import BANKS, Canvas, INK, PAPER, contrast, mark, shade
+from art import BANKS, Canvas, INK, PAPER, contrast, lettering_width, mark, shade
+from hardware import enamel
 
 FACINGS = {'north': 0, 'east': 90, 'south': 180, 'west': 270}
 # Match existing world geometry: NORTH cell1 is WEST of its anchor. The model's
@@ -104,21 +105,24 @@ def output(path, value):
 def header(bank=None):
     background = bank['primary'] if bank else '#263B50'
     accent = bank['accent'] if bank else '#77C9B1'
-    c = Canvas(64, 16, background)
-    c.rect(0, 0, 64, 1, accent)
-    c.rect(0, 15, 64, 16, shade(background, -30))
+    c = enamel(128, 32, background)
+    c.rect(0, 0, 128, 1, accent)
+    c.rect(0, 31, 128, 32, shade(background, -30))
+    fg = contrast(background)
     if bank:
-        c.blit(mark(bank['key'], accent), 1, 2, 12, 12)
-        fg = contrast(background)
-        for i, line in enumerate(bank['label']):
-            assert len(line) <= 8, (bank['key'], line)
-            c.text(line, 16, 2 + i * 7, fg)
-        c.rect(49, 2, 50, 14, accent)
-        c.text(bank['currency'], 51, 9, fg)
+        # Stack the currency below the crest to give long names a full-width column.
+        c.blit(mark(bank['key'], accent), 5, 1, 18, 18)
+        c.rect(2, 20, 26, 30, accent)
+        currency = bank['currency']
+        c.lettering(currency, (28 - lettering_width(currency)) // 2, 21, contrast(accent))
+        lines = bank['label']
+        top = 1 if len(lines) > 1 else 9
+        for i, line in enumerate(lines):
+            c.lettering(line, 30, top + i * 16, fg, scale=2)
     else:
-        c.text('ECONOMY', 5, 2, PAPER)
-        c.text('KIOSK', 5, 9, PAPER)
-        c.text('INFO', 43, 9, accent)
+        c.lettering('ECONOMY', 4, 2, fg, scale=2)
+        c.lettering('KIOSK', 4, 17, fg, scale=2)
+        c.lettering('INFO', 94, 19, accent)
     return c
 
 
@@ -166,64 +170,72 @@ def console_surfaces():
     """Original pixel surfaces. Drawn with the project's CC0 Canvas primitives."""
     directory = ASSETS / 'textures/block/banking/console'
     surfaces = {}
-    metal = Canvas(64, 64, '#AAB4B3')
-    for y in range(64):
-        metal.rect(0, y, 64, y + 1, shade('#AAB4B3', (y % 4) * 3 - 5))
+    metal = enamel(64, 64, '#AAB4B3')
+    for i in range(18):
+        y = (7 * i + 3) % 60 + 2
+        x = (19 * i + 7) % 39
+        metal.rect(x, y, x + 9 + i % 13, y + 1, shade('#AAB4B3', 12 + i % 3 * 5))
     metal.rect(0, 0, 64, 2, '#E3E8DC')
     metal.rect(0, 62, 64, 64, '#62736F')
     surfaces['metal'] = metal
-    ivory = Canvas(64, 64, '#DCD9C7')
-    for y in range(0, 64, 8):
-        for x in range(y % 3, 64, 11):
-            ivory.pixel(x, y, '#C4C6B5')
+    ivory = enamel(64, 64, '#DCD9C7')
+    # Small mineral flecks are deliberately irregular on the laminate.
+    for i in range(44):
+        x, y = (i * 13 + i // 3 * 5) % 60 + 2, (i * 17 + i // 5 * 7) % 60 + 2
+        ivory.rect(x, y, x + 1 + i % 3, y + 1, '#C9C7B5')
+        if i % 4 == 0:
+            ivory.pixel(x + 1, y + 1, '#F1ECD7')
     ivory.rect(0, 0, 64, 1, '#F4EEDB')
     ivory.rect(0, 63, 64, 64, '#A0A595')
     surfaces['ivory'] = ivory
     wood = Canvas(64, 64, '#775138')
-    for x in range(64):
-        for y in range(64):
-            grain = ((x * 17 + y // 16) % 13) - 6
-            wood.pixel(x, y, shade('#775138', grain * 2))
+    for y in range(64):
+        for x in range(64):
+            # Bookmatched walnut veneer with a stepped cathedral grain.
+            arch = abs(2 * (x % 32) - 31)
+            vein = (y // 3 + arch * arch // 36) % 17
+            tone = -19 if vein < 2 else 10 if vein < 5 else 2 if vein < 10 else -4
+            wood.pixel(x, y, shade('#775138', tone))
     for x in (3, 30, 59):
         wood.rect(x, 0, x + 1, 64, '#513C2D')
         wood.rect(x + 1, 0, x + 2, 64, '#95704A')
     surfaces['wood'] = wood
-    bezel = Canvas(64, 64, '#273C3B')
+    bezel = enamel(64, 64, '#273C3B')
     bezel.rect(0, 0, 64, 2, '#627975')
     bezel.rect(0, 2, 2, 64, '#425B58')
     bezel.rect(0, 62, 64, 64, '#142727')
     surfaces['bezel'] = bezel
-    surfaces['dark'] = Canvas(16, 16, '#17282B')
-    screen = Canvas(128, 32, '#183B36')
+    surfaces['dark'] = enamel(16, 16, '#17282B')
+    screen = enamel(128, 32, '#183B36')
     for y in range(2, 31, 3):
         screen.rect(2, y, 126, y + 1, '#1D453E')
     screen.rect(1, 1, 127, 2, '#678F7D')
     screen.rect(2, 2, 3, 30, '#416C5D')
-    screen.text('BANKING', 8, 5, '#D5E5B2')
-    screen.text('SELECT SERVICE', 8, 16, '#8DBFA6')
-    for x in (85, 103):
+    screen.lettering('BANKING', 8, 5, '#D5E5B2')
+    screen.lettering('SELECT SERVICE', 6, 16, '#B1D5BA')
+    for x in (92, 109):
         screen.rect(x, 5, x + 13, 11, '#376757')
         screen.rect(x + 2, 7, x + 10, 8, '#A6CBB0')
         screen.rect(x, 15, x + 13, 21, '#376757')
         screen.rect(x + 2, 17, x + 10, 18, '#A6CBB0')
     screen.rect(8, 26, 119, 27, '#436F5A')
     surfaces['screen'] = screen
-    cash = Canvas(64, 16, '#142324')
+    cash = enamel(64, 16, '#142324')
     cash.rect(2, 2, 62, 3, '#687A71')
     cash.rect(4, 5, 60, 11, '#080F12')
     cash.rect(4, 11, 60, 13, '#425C51')
     surfaces['cash'] = cash
-    reader = Canvas(64, 16, '#50645F')
-    reader.text('CARD', 3, 3, '#E1E4CE')
-    reader.rect(23, 4, 58, 7, '#132626')
-    reader.rect(23, 8, 58, 9, '#A4B8A4')
+    reader = enamel(64, 16, '#50645F')
+    reader.lettering('CARD', 3, 4, '#F3F1DD')
+    reader.rect(29, 4, 58, 7, '#132626')
+    reader.rect(29, 8, 58, 9, '#A4B8A4')
     surfaces['reader'] = reader
-    vent = Canvas(32, 32, '#34453E')
+    vent = enamel(32, 32, '#34453E')
     for y in range(3, 30, 5):
         vent.rect(3, y, 29, y + 2, '#102423')
         vent.rect(3, y + 2, 29, y + 3, '#687A63')
     surfaces['vent'] = vent
-    service = Canvas(64, 64, '#516359')
+    service = enamel(64, 64, '#516359')
     service.rect(1, 1, 63, 2, '#90A18A')
     service.rect(1, 2, 2, 63, '#768C75')
     service.rect(2, 62, 63, 63, '#2E433A')
@@ -231,50 +243,51 @@ def console_surfaces():
         for y in (4, 59):
             service.rect(x - 1, y - 1, x + 2, y + 2, '#A3ADA0')
             service.rect(x - 1, y, x + 2, y + 1, '#304339')
-    service.rect(12, 10, 52, 22, '#273F38')
-    service.text('SERVICE', 18, 13, '#BAC7AD')
+    service.rect(8, 10, 56, 22, '#273F38')
+    service.lettering('SERVICE', (64 - lettering_width('SERVICE')) // 2, 12, '#D2DCC7')
     for y in range(37, 55, 4):
         service.rect(10, y, 54, y + 1, '#263C34')
         service.rect(10, y + 1, 54, y + 2, '#7F927A')
     surfaces['service'] = service
-    lock = Canvas(16, 16, '#B5BAA7')
+    lock = enamel(16, 16, '#B5BAA7')
     lock.rect(6, 3, 10, 10, '#233730')
     lock.rect(7, 9, 9, 13, '#233730')
     surfaces['lock'] = lock
-    indicator = Canvas(16, 16, '#6FBB95')
+    indicator = enamel(16, 16, '#6FBB95')
     indicator.rect(2, 2, 14, 5, '#C4ECD1')
     indicator.rect(0, 14, 16, 16, '#2D7155')
     surfaces['indicator'] = indicator
     for label in [str(n) for n in range(10)] + ['cancel', 'enter']:
         background = '#B5BEA8' if label.isdigit() else '#9A6056' if label == 'cancel' else '#63896B'
-        key = Canvas(16, 16, background)
+        key = enamel(16, 16, background)
         key.rect(0, 0, 16, 2, shade(background, 25))
         key.rect(0, 2, 2, 14, shade(background, 12))
         key.rect(0, 14, 16, 16, shade(background, -35))
         key.rect(14, 2, 16, 14, shade(background, -20))
-        key.text(label if label.isdigit() else 'X' if label == 'cancel' else 'O', 6, 5, '#20332D')
+        glyph = label if label.isdigit() else 'X' if label == 'cancel' else 'O'
+        key.lettering(glyph, (16 - lettering_width(glyph)) // 2, 4, '#14261F')
         surfaces['key_' + label] = key
     for name, art in surfaces.items():
         art.save(directory / (name + '.png'))
-    return {name: 'economy:block/banking/console/' + name for name in surfaces}
+    return surfaces
 
 
 def material_map(shared, bank=None):
-    textures = dict(shared)
+    textures = {name: 'economy:block/banking/console/' + name for name in shared}
     primary = bank['primary'] if bank else '#263B50'
     accent = bank['accent'] if bank else '#77C9B1'
     stem = bank['key'] if bank else 'generic'
-    shell = Canvas(64, 64, primary)
+    shell = enamel(64, 64, primary)
     # Enamel seams, subtle vertical changes and screw heads finish every cabinet face.
-    for x in range(0, 64, 8):
-        shell.rect(x, 0, x + 1, 64, shade(primary, 5))
+    shell.rect(8, 54, 56, 55, shade(primary, -17))
+    shell.rect(8, 55, 56, 56, shade(primary, 10))
     for y in (2, 61):
         shell.rect(2, y, 62, y + 1, shade(primary, -22))
     for x in (3, 60):
         for y in (4, 59):
             shell.pixel(x, y, shade(primary, 55))
             shell.pixel(x + 1, y, shade(primary, -35))
-    trim = Canvas(64, 16, accent)
+    trim = enamel(64, 16, accent)
     trim.rect(0, 0, 64, 2, shade(accent, 26))
     trim.rect(0, 13, 64, 16, shade(accent, -32))
     directory = ASSETS / 'textures/block/banking/console'
@@ -285,20 +298,21 @@ def material_map(shared, bank=None):
     textures['particle'] = textures['shell']
     textures['header'] = ('economy:block/banking/' + bank['key'] + '_kiosk_wide_header'
                           if bank else 'economy:block/terminal_wide_kiosk_header')
-    return textures
+    return textures, shell, trim
 
 
-def generate():
+def generate(textures_only=False):
     shared = console_surfaces()
-    # Geometry-only sources are separate from every legacy narrow model.
-    for cell in range(4):
-        elements = [part for start, end, texture in ELEMENTS
-                    if (part := clipped_box(start, end, texture, cell)) is not None]
-        model = {'parent': 'minecraft:block/block', 'render_type': 'minecraft:cutout', 'elements': elements}
-        output(ASSETS / f'models/block/branch_kiosk_wide_shape_{cell}.json', model)
-    output(SOURCE / 'geometry.json', {'version': 2, 'license': 'CC0-1.0',
-            'cell_origins': CELL_ORIGINS, 'elements': ELEMENTS,
-            'notes': 'Original mid-century 2x2 console with walnut cheeks, enamel cabinet, recessed monitor, raised keys, card reader, cash tray and rear service door. North front, cell0 right and cell1 left.'})
+    if not textures_only:
+        # Geometry-only sources are separate from every legacy narrow model.
+        for cell in range(4):
+            elements = [part for start, end, texture in ELEMENTS
+                        if (part := clipped_box(start, end, texture, cell)) is not None]
+            model = {'parent': 'minecraft:block/block', 'render_type': 'minecraft:cutout', 'elements': elements}
+            output(ASSETS / f'models/block/branch_kiosk_wide_shape_{cell}.json', model)
+        output(SOURCE / 'geometry.json', {'version': 2, 'license': 'CC0-1.0',
+                'cell_origins': CELL_ORIGINS, 'elements': ELEMENTS,
+                'notes': 'Original mid-century 2x2 console with walnut cheeks, enamel cabinet, recessed monitor, raised keys, card reader, cash tray and rear service door. North front, cell0 right and cell1 left.'})
     preview = Canvas(6 * 104, 4 * 116, '#D8D4C9')
     for appearance_index, bank in enumerate([None] + BANKS):
         stem = bank['key'] + '_kiosk_wide' if bank else 'branch_kiosk_wide'
@@ -308,19 +322,23 @@ def generate():
                                   if bank else 'textures/block/terminal_wide_kiosk_header.png'))
         header_art.svg(SOURCE / f'{stem}_header.svg')
         px, py = (appearance_index % 6) * 104 + 4, (appearance_index // 6) * 116 + 4
-        primary = bank['primary'] if bank else '#263B50'
-        accent = bank['accent'] if bank else '#77C9B1'
-        preview.rect(px + 6, py + 92, px + 90, py + 98, '#A7ADB3')
-        preview.rect(px, py + 8, px + 6, py + 92, accent)
-        preview.rect(px + 90, py + 8, px + 96, py + 92, accent)
-        preview.rect(px + 6, py + 8, px + 90, py + 92, primary)
-        preview.rect(px + 6, py + 22, px + 90, py + 46, INK)
-        preview.rect(px + 9, py + 25, px + 87, py + 43, '#427C7B')
-        preview.rect(px + 2, py + 48, px + 94, py + 58, '#A7ADB3')
-        preview.rect(px + 2, py + 48, px + 94, py + 52, accent)
+        textures, shell, trim = material_map(shared, bank)
+        # Assemble a front elevation from the actual painted materials.
+        preview.blit(shared['metal'], px + 6, py + 92, 84, 5)
+        preview.blit(shell, px + 3, py + 7, 90, 85)
+        for offset in (0, 90):
+            preview.blit(shared['wood'], px + offset, py + 7, 6, 85)
+        preview.blit(shared['bezel'], px + 8, py + 23, 80, 27)
+        preview.blit(shared['screen'], px + 11, py + 25, 74, 22)
+        preview.blit(shared['ivory'], px + 2, py + 51, 92, 6)
+        preview.blit(trim, px + 2, py + 57, 92, 3)
+        preview.blit(shared['cash'], px + 12, py + 67, 48, 12)
+        preview.blit(shared['vent'], px + 66, py + 66, 16, 18)
+        preview.blit(shared['reader'], px + 62, py + 49, 20, 5)
         preview.blit(header_art, px + 6, py + 8, 84, 14)
-        preview.text(bank['currency'] if bank else 'INFO', px + 4, py + 104, INK)
-        textures = material_map(shared, bank)
+        preview.lettering(bank['currency'] if bank else 'INFO', px + 4, py + 104, INK)
+        if textures_only:
+            continue
         for cell in range(4):
             output(ASSETS / f'models/block/{prefix}{stem}_{cell}.json', {
                 'parent': f'economy:block/branch_kiosk_wide_shape_{cell}', 'textures': textures,
@@ -337,6 +355,8 @@ def generate():
             output(ASSETS / f'models/item/banking/{bank["key"]}_kiosk.json', {
                 'parent': f'economy:block/banking/{stem}_inventory'})
     preview.save(ROOT / 'tools/banking-assets/previews/wide-kiosk-fronts.png')
+    if textures_only:
+        return
     variants = {}
     for index, bank in enumerate([None] + BANKS):
         old = ('banking/' + bank['key'] + '_kiosk') if bank else 'branch_kiosk'

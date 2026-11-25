@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "economy:item/banking/corporate_newhaven_debit"
+  }
+}

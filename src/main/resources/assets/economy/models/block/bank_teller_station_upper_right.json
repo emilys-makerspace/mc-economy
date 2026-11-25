@@ -1,5 +1,6 @@
 {
   "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
   "textures": {
     "dark": "economy:block/terminal_dark",
     "metal": "economy:block/terminal_metal",

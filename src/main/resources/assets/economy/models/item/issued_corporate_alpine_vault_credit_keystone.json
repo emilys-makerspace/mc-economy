@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "economy:item/banking/corporate_alpine_vault_credit_keystone"
+  }
+}

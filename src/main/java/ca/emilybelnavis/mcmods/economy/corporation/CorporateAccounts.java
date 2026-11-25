@@ -143,6 +143,12 @@ public final class CorporateAccounts {
     if (!FxService.availableCurrencies(reads).contains(command.currency()))
       return reject("CURRENCY_UNAVAILABLE");
     var accounts = list(reads, world, command.company());
+    var capital = CorporateCapital.profile(reads, command.company()).orElseThrow();
+    if (!capital.funded()) {
+      if (capital.required() == null) return reject("CORPORATION_ISSUE_SHARES_FIRST");
+      if (capital.required().currency() != command.currency())
+        return reject("CORPORATION_CAPITAL_CURRENCY");
+    }
     if (accounts.size() >= AccountIdentity.MAX_OPEN_BANK_ACCOUNTS)
       return reject("BANK_CAP_REACHED");
     if (accounts.stream().anyMatch(account -> account.currency() == command.currency()))
@@ -150,36 +156,39 @@ public final class CorporateAccounts {
 
     var account = new AccountId(UUID.randomUUID());
     String id = account.value().toString();
-    return new JournalEngine.Commit(
-        List.of(
-            fact(
-                Status.OPEN,
-                world,
-                command.company(),
-                actor,
-                account,
-                command.bank(),
-                command.currency(),
-                1,
-                1,
-                0,
-                command.companyRevision(),
-                command.membershipRevision())),
-        new Journal.Result(1, "CORPORATE_BANK_OPENED", id),
-        tx -> {
-          tx.execute(
-              """
+    var opening =
+        new JournalEngine.Commit(
+            List.of(
+                fact(
+                    Status.OPEN,
+                    world,
+                    command.company(),
+                    actor,
+                    account,
+                    command.bank(),
+                    command.currency(),
+                    1,
+                    1,
+                    0,
+                    command.companyRevision(),
+                    command.membershipRevision())),
+            new Journal.Result(1, "CORPORATE_BANK_OPENED", id),
+            tx -> {
+              tx.execute(
+                  """
               INSERT INTO account_catalog(account_id,owner_id,purpose,currency,status,revision,is_primary)
               VALUES(?,?,'BANK',?,'OPEN',1,0)
               """,
-              List.of(id, ownerKey(command.company()), command.currency().code()));
-          tx.execute(
-              "INSERT INTO bank_account_providers VALUES(?,?,0,1,0)",
-              List.of(id, command.bank().key()));
-          tx.execute(
-              "INSERT INTO corporation_claims(company,domain,claim_id,kind) VALUES(?,?,?,'ACCOUNT')",
-              List.of(command.company().toString(), CLAIM_DOMAIN, id));
-        });
+                  List.of(id, ownerKey(command.company()), command.currency().code()));
+              tx.execute(
+                  "INSERT INTO bank_account_providers VALUES(?,?,0,1,0)",
+                  List.of(id, command.bank().key()));
+              tx.execute(
+                  "INSERT INTO corporation_claims(company,domain,claim_id,kind) VALUES(?,?,?,'ACCOUNT')",
+                  List.of(command.company().toString(), CLAIM_DOMAIN, id));
+            });
+    return ca.emilybelnavis.mcmods.economy.card.CorporateCards.issue(
+        intent, reads, world, command.company(), account, command.bank(), actor, opening);
   }
 
   public static JournalEngine.Decision prepare(
@@ -324,7 +333,6 @@ public final class CorporateAccounts {
   static Optional<InstitutionCatalog.Entry> ordinaryBank(
       JournalEngine.ReadView reads, WorldId world, InstitutionId id) {
     return InstitutionCatalog.find(id)
-        .filter(InstitutionCatalog.Entry::tier1)
         .filter(InstitutionCatalog.Entry::enabled)
         .filter(
             bank ->

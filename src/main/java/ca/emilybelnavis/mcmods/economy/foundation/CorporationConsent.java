@@ -6,6 +6,10 @@ import ca.emilybelnavis.mcmods.economy.api.Identifiers.PlayerId;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.RequestId;
 import ca.emilybelnavis.mcmods.economy.api.Money;
 import ca.emilybelnavis.mcmods.economy.api.PartyRef;
+import ca.emilybelnavis.mcmods.economy.banking.BankingMenu;
+import ca.emilybelnavis.mcmods.economy.banking.BankingNetwork;
+import ca.emilybelnavis.mcmods.economy.corporation.CorporateAccounts;
+import ca.emilybelnavis.mcmods.economy.corporation.Corporations;
 import ca.emilybelnavis.mcmods.economy.corporation.IntegrationBindings;
 import ca.emilybelnavis.mcmods.economy.journal.Journal;
 import ca.emilybelnavis.mcmods.economy.journal.JournalEngine;
@@ -14,12 +18,15 @@ import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.function.BooleanSupplier;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -39,6 +46,8 @@ public final class CorporationConsent {
   private static final int MAX_PER_SERVER = 128;
   private static final Map<MinecraftServer, Map<UUID, Review>> REVIEWS =
       Collections.synchronizedMap(new IdentityHashMap<>());
+
+  private static final Map<BankingMenu, UUID> DISPLAYED = new WeakHashMap<>();
 
   private CorporationConsent() {}
 
@@ -102,58 +111,80 @@ public final class CorporationConsent {
             System.nanoTime() + REVIEW_LIFETIME,
             false);
     reviews.put(founder.getUUID(), review);
+    var company = company(command);
+    if (company == null) announce(review);
+    else
+      new CorporationService(founder)
+          .profile(company)
+          .thenAccept(
+              profile -> {
+                if (reviews(founder.server).get(founder.getUUID()) == review && profile.isPresent())
+                  announce(review);
+              });
+    return true;
+  }
+
+  private static void announce(Review review) {
+    message(
+        review.player(),
+        review.command().key().provider()
+            + " requested access. Open /economy corp gui, then More options → Connected mods, to review it.");
+  }
+
+  private static UUID company(IntegrationBindings.Command command) {
+    return switch (command) {
+      case IntegrationBindings.Bind bind -> bind.company();
+      case IntegrationBindings.Approve approve -> approve.company();
+      case IntegrationBindings.Revoke revoke -> revoke.company();
+      case IntegrationBindings.Create ignored -> null;
+    };
+  }
+
+  private static List<String> details(
+      IntegrationBindings.Command command, String company, List<String> accounts) {
+    var lines = new ArrayList<String>();
     var key = command.key();
-    message(founder, "Integration " + key.provider() + " · External key " + key.externalKey());
+    lines.add("Requested by " + key.provider());
     switch (command) {
       case IntegrationBindings.Create create -> {
         var registration = create.registration();
         var fee = registration.fee();
-        var exactDebit = new Money(fee.currency(), fee.minor()).majorUnits().toPlainString();
-        message(founder, "Create company “" + registration.name() + "” with you as founder.");
-        message(
-            founder,
-            "Debit "
-                + fee.currency().code()
+        lines.add("Register " + registration.name() + " with you as owner.");
+        lines.add(
+            "Registration fee: "
+                + fee.currency()
                 + " "
-                + exactDebit
-                + " from account "
-                + fee.account().value()
-                + " at revision "
-                + fee.revision()
-                + ".");
-        if (fee.publication() != null)
-          message(founder, "CAD 500.00 equivalent using FX publication " + fee.publication() + ".");
+                + new Money(fee.currency(), fee.minor()).majorUnits().toPlainString()
+                + " from your "
+                + fee.currency()
+                + " account.");
+        if (registration.issue() != null)
+          lines.add(CorporationOffice.shareTerms(registration.issue()));
+        else lines.add("Issue and fund shares before the company starts trading.");
       }
       case IntegrationBindings.Bind bind ->
-          message(
-              founder,
-              "Bind this key to company "
-                  + bind.company()
-                  + " at revision "
-                  + bind.companyRevision()
-                  + ".");
+          lines.add("Connect " + company + " to " + key.externalKey() + "?");
       case IntegrationBindings.Approve approve -> {
-        message(
-            founder,
-            "Approve "
-                + approve.fields().get("capabilities")
-                + " for company "
-                + approve.company()
-                + " at revision "
-                + approve.companyRevision()
-                + ", replacing mandate revision "
-                + approve.mandateRevision()
-                + ".");
-        if (!approve.accounts().isEmpty())
-          message(founder, "Selected accounts " + approve.fields().get("accounts") + ".");
+        lines.add("Allow access to " + company + " for " + key.externalKey() + "?");
+        lines.add(
+            "Permissions: "
+                + approve.capabilities().stream()
+                    .sorted()
+                    .map(
+                        capability ->
+                            switch (capability) {
+                              case FIND -> "find company";
+                              case ACCOUNTS -> "view accounts";
+                              case PAYMENTS -> "make payments";
+                              case CREATE -> "create company";
+                            })
+                    .collect(java.util.stream.Collectors.joining(", ")));
+        if (!accounts.isEmpty()) lines.add("Accounts: " + String.join(", ", accounts));
       }
-      case IntegrationBindings.Revoke ignored ->
-          throw new AssertionError("Unexpected revoke review");
+      case IntegrationBindings.Revoke revoke ->
+          lines.add("Remove access to " + company + " for " + key.externalKey() + "?");
     }
-    message(
-        founder,
-        "To approve within two minutes, enter /economy corporation confirm " + review.token());
-    return true;
+    return lines;
   }
 
   public static void stop(MinecraftServer server) {
@@ -168,7 +199,7 @@ public final class CorporationConsent {
                     .then(
                         Commands.argument("external-key", StringArgumentType.string())
                             .then(
-                                Commands.argument("company", UuidArgument.uuid())
+                                Commands.argument("company", StringArgumentType.string())
                                     .then(
                                         Commands.argument(
                                                 "company-revision", LongArgumentType.longArg(1))
@@ -180,7 +211,7 @@ public final class CorporationConsent {
     dispatcher.register(
         Commands.literal("economy")
             .then(
-                Commands.literal("corporation")
+                Commands.literal("corp")
                     .requires(CorporationConsent::direct)
                     .then(
                         Commands.literal("confirm")
@@ -211,38 +242,302 @@ public final class CorporationConsent {
     var player = source.getPlayer();
     var services = Economy.serverServices(source.getServer());
     if (!direct(source) || grant(player, services) == null) return unavailable(source);
-    try {
-      var key =
-          new IntegrationBindings.Key(
-              ResourceLocationArgument.getId(context, "provider").toString(),
-              StringArgumentType.getString(context, "external-key"));
-      var command =
-          new IntegrationBindings.Revoke(
-              key,
-              UuidArgument.getUuid(context, "company"),
-              LongArgumentType.getLong(context, "company-revision"),
-              LongArgumentType.getLong(context, "mandate-revision"));
-      var reviews = reviews(player.server);
-      if (!reviews.containsKey(player.getUUID()) && reviews.size() >= MAX_PER_SERVER)
-        return unavailable(source);
-      return submit(
-          source,
-          new Review(
-              UUID.randomUUID(),
-              player,
-              player.connection,
-              services,
-              new OperationId(UUID.randomUUID()),
-              command,
-              () -> true,
-              System.nanoTime() + REVIEW_LIFETIME,
-              false));
-    } catch (IllegalArgumentException invalid) {
-      return unavailable(source);
+    String[] fields = {
+      ResourceLocationArgument.getId(context, "provider").toString(),
+      StringArgumentType.getString(context, "external-key"),
+      StringArgumentType.getString(context, "company"),
+      Long.toString(LongArgumentType.getLong(context, "company-revision")),
+      Long.toString(LongArgumentType.getLong(context, "mandate-revision"))
+    };
+    prepareRevoke(player, null, fields);
+    return 1;
+  }
+
+  private record GrantRow(
+      IntegrationBindings.Key key,
+      String identifier,
+      String companyName,
+      String capabilities,
+      String companyRevision,
+      String mandateRevision) {}
+
+  private static final Map<BankingMenu, List<GrantRow>> GRANTS = new WeakHashMap<>();
+  private static final int GRANTS_PER_PAGE = 8;
+
+  static void grants(ServerPlayer player, BankingMenu menu, String action) {
+    if (!officeLive(player, menu)) return;
+    var services = Economy.serverServices(player.server);
+    var owner = grant(player, services);
+    if (owner == null) {
+      notify(player, menu, "Corporation office unavailable.");
+      return;
     }
+    var previous = GRANTS.getOrDefault(menu, List.of());
+    var after =
+        action.equals("grants_next") && !previous.isEmpty() ? previous.getLast().key() : null;
+    String founder = player.getUUID().toString();
+    long revision = menu.revision();
+    menu.setBusy(true);
+    services
+        .readAccounts(
+            owner,
+            false,
+            reads ->
+                java.util.Optional.of(
+                    reads
+                        .query(
+                            """
+        SELECT m.provider,m.external_key,m.capabilities,m.revision AS mandate_revision,
+               c.name,r.identifier,c.revision AS company_revision
+        FROM corporations c
+        JOIN corporation_registry r ON r.party=c.id
+        JOIN corporation_integration_bindings b ON b.company=c.id
+        JOIN corporation_integration_mandates m ON m.provider=b.provider AND m.external_key=b.external_key
+        LEFT JOIN corporation_integration_epochs e ON e.company=c.id
+        WHERE c.founder=? AND c.state='ACTIVE' AND m.active=1 AND m.epoch=COALESCE(e.epoch,0)
+          AND (m.provider,m.external_key)>(?,?)
+        ORDER BY m.provider,m.external_key LIMIT ?
+        """,
+                            List.of(
+                                founder,
+                                after == null ? "" : after.provider(),
+                                after == null ? "" : after.externalKey(),
+                                Integer.toString(GRANTS_PER_PAGE + 1)),
+                            GRANTS_PER_PAGE + 1)
+                        .stream()
+                        .map(
+                            row ->
+                                new GrantRow(
+                                    new IntegrationBindings.Key(
+                                        row.get("provider"), row.get("external_key")),
+                                    row.get("identifier"),
+                                    row.get("name"),
+                                    row.get("capabilities"),
+                                    row.get("company_revision"),
+                                    row.get("mandate_revision")))
+                        .toList()))
+        .whenCompleteAsync(
+            (result, error) -> {
+              if (!officeLive(player, menu) || menu.revision() != revision) return;
+              if (grant(player, services) == null || error != null || result.isEmpty()) {
+                notify(player, menu, "Could not load integration permissions.");
+                return;
+              }
+              var rows = result.orElseThrow();
+              var displayed = rows.stream().limit(GRANTS_PER_PAGE).toList();
+              GRANTS.put(menu, displayed);
+              var choices = new ArrayList<BankingNetwork.Choice>();
+              for (int i = 0; i < displayed.size(); i++) {
+                var row = displayed.get(i);
+                String label =
+                    row.companyName()
+                        + " · "
+                        + row.capabilities().toLowerCase(java.util.Locale.ROOT).replace(",", ", ")
+                        + " · "
+                        + row.key().provider()
+                        + " / "
+                        + row.key().externalKey();
+                choices.add(
+                    new BankingNetwork.Choice(
+                        "office_pick",
+                        "grant:" + i,
+                        label.length() <= 128 ? label : label.substring(0, 125) + "…",
+                        false));
+              }
+              if (rows.size() > GRANTS_PER_PAGE)
+                choices.add(officeChoice("grants_next", "Next permissions"));
+              if (after != null) choices.add(officeChoice("grants_first", "First page"));
+              choices.add(officeChoice("integrations", "Back to integration permissions"));
+              menu.setBusy(false);
+              menu.publish(
+                  "office_choices",
+                  List.of(
+                      displayed.isEmpty()
+                          ? "No mods have access."
+                          : "Choose a connection to manage."),
+                  "",
+                  choices);
+            },
+            player.server);
+  }
+
+  static void selectGrant(ServerPlayer player, BankingMenu menu, String selection) {
+    if (!officeLive(player, menu) || !menu.page().equals("office_choices")) return;
+    var rows = GRANTS.getOrDefault(menu, List.of());
+    int index = Integer.parseInt(selection.substring("grant:".length()));
+    if (index < 0 || index >= rows.size()) return;
+    var row = rows.get(index);
+    prepareRevoke(
+        player,
+        menu,
+        new String[] {
+          row.key().provider(),
+          row.key().externalKey(),
+          row.identifier(),
+          row.companyRevision(),
+          row.mandateRevision()
+        });
+  }
+
+  private static void prepareRevoke(ServerPlayer player, BankingMenu menu, String[] fields) {
+    var services = Economy.serverServices(player.server);
+    var key = new IntegrationBindings.Key(fields[0], fields[1]);
+    long companyRevision = Long.parseLong(fields[3]);
+    long mandateRevision = Long.parseLong(fields[4]);
+    if (companyRevision < 1 || mandateRevision < 1)
+      throw new IllegalArgumentException("Enter positive revision numbers.");
+    long revision = menu == null ? -1 : menu.revision();
+    if (menu != null) menu.setBusy(true);
+    new CorporationService(player)
+        .resolve(fields[2])
+        .whenCompleteAsync(
+            (company, error) -> {
+              if (menu != null && (!officeLive(player, menu) || menu.revision() != revision))
+                return;
+              if (grant(player, services) == null
+                  || error != null
+                  || company.isEmpty()
+                  || company.get().revision() != companyRevision) {
+                notify(
+                    player,
+                    menu,
+                    "Corporation or revision unavailable. Refresh the company details.");
+                return;
+              }
+              var reviews = reviews(player.server);
+              var prior = reviews.get(player.getUUID());
+              if ((prior != null && !prior.submitted())
+                  || (prior == null && reviews.size() >= MAX_PER_SERVER)) {
+                notify(player, menu, "Another integration request is awaiting review.");
+                return;
+              }
+              var command =
+                  new IntegrationBindings.Revoke(
+                      key, company.get().id(), companyRevision, mandateRevision);
+              var review =
+                  new Review(
+                      UUID.randomUUID(),
+                      player,
+                      player.connection,
+                      services,
+                      new OperationId(UUID.randomUUID()),
+                      command,
+                      () -> true,
+                      System.nanoTime() + REVIEW_LIFETIME,
+                      false);
+              reviews.put(player.getUUID(), review);
+              if (menu == null) submit(player.createCommandSourceStack(), review);
+              else office(player, menu);
+            },
+            player.server);
+  }
+
+  private static boolean officeLive(ServerPlayer player, BankingMenu menu) {
+    return menu.access() == BankingMenu.Access.CORPORATION && menu.valid(player);
+  }
+
+  static void office(ServerPlayer player, BankingMenu menu) {
+    if (!officeLive(player, menu)) return;
+    var review = reviews(player.server).get(player.getUUID());
+    DISPLAYED.remove(menu);
+    UUID company = review == null ? null : company(review.command());
+    if (company == null) {
+      display(menu, review, "", List.of());
+      return;
+    }
+    long revision = menu.revision();
+    menu.setBusy(true);
+    var auth = grant(player, review.services());
+    if (auth == null) {
+      notify(player, menu, "Open the corporation office again.");
+      return;
+    }
+    review
+        .services()
+        .readAccounts(
+            auth,
+            false,
+            reads ->
+                Corporations.find(reads, new PlayerId(player.getUUID()), company)
+                    .map(
+                        found -> {
+                          var accounts = new ArrayList<String>();
+                          if (review.command() instanceof IntegrationBindings.Approve approval) {
+                            CorporateAccounts.list(reads, auth.target().world(), company).stream()
+                                .filter(account -> approval.accounts().contains(account.id()))
+                                .forEach(
+                                    account ->
+                                        accounts.add(account.currency().code() + " account"));
+                            if (accounts.size() != approval.accounts().size())
+                              throw new IllegalStateException("Account changed");
+                          }
+                          return new ConsentView(found.name(), accounts);
+                        }))
+        .whenCompleteAsync(
+            (view, error) -> {
+              if (!officeLive(player, menu) || menu.revision() != revision) return;
+              if (error != null
+                  || view.isEmpty()
+                  || reviews(player.server).get(player.getUUID()) != review) {
+                notify(player, menu, "This request changed. Open Connected mods again.");
+                return;
+              }
+              display(menu, review, view.get().company(), view.get().accounts());
+            },
+            player.server);
+  }
+
+  private record ConsentView(String company, List<String> accounts) {}
+
+  private static void display(
+      BankingMenu menu, Review review, String identifier, List<String> accounts) {
+    menu.setBusy(false);
+    var lines = new ArrayList<String>();
+    var choices = new ArrayList<BankingNetwork.Choice>();
+    if (review == null) lines.add("No requests waiting for approval.");
+    else {
+      DISPLAYED.put(menu, review.token());
+      lines.addAll(details(review.command(), identifier, accounts));
+      if (review.submitted()) choices.add(officeChoice("integration_lookup", "Check result"));
+      else choices.add(officeChoice("integration_approve", "Approve this request"));
+    }
+    choices.add(officeChoice("revoke", "Manage access"));
+    menu.publish("office_integrations", lines, "", choices);
+  }
+
+  private static BankingNetwork.Choice officeChoice(String value, String label) {
+    return new BankingNetwork.Choice("office_page", value, label, false);
+  }
+
+  static void officeAction(ServerPlayer player, BankingMenu menu, String action) {
+    if (!officeLive(player, menu)
+        || !menu.page().equals("office_integrations")
+        || menu.choices().stream()
+            .noneMatch(c -> c.action().equals("office_page") && c.value().equals(action))) return;
+    var review = reviews(player.server).get(player.getUUID());
+    if (review == null
+        || review.player() != player
+        || !review.token().equals(DISPLAYED.get(menu))) {
+      notify(
+          player,
+          menu,
+          "The integration request expired or changed. Open Integration permissions to review it again.");
+      return;
+    }
+    if (action.equals("integration_lookup") && review.submitted())
+      lookup(player.createCommandSourceStack(), review, menu);
+    else if (action.equals("integration_approve")
+        && !review.submitted()
+        && review.providerCurrent().getAsBoolean())
+      submit(player.createCommandSourceStack(), review, menu);
+    else notify(player, menu, "Integration request unavailable.");
   }
 
   private static int submit(CommandSourceStack source, Review review) {
+    return submit(source, review, null);
+  }
+
+  private static int submit(CommandSourceStack source, Review review, BankingMenu menu) {
     var grant = grant(review.player(), review.services());
     if (grant == null || !review.live()) return unavailable(source);
     var submitted = review.submit();
@@ -259,18 +554,23 @@ public final class CorporationConsent {
             handler(review, grant.target()),
             null);
     reviews(review.player().server).put(review.player().getUUID(), submitted);
-    message(
-        review.player(),
-        "Operation "
-            + review.operation().value()
-            + " · Original outcome lookup /economy corporation lookup "
-            + review.token());
+    long revision = menu == null ? -1 : menu.revision();
+    if (menu != null) menu.setBusy(true);
+    if (menu == null)
+      message(
+          review.player(),
+          "Operation "
+              + review.operation().value()
+              + " · Original outcome lookup /economy corp lookup "
+              + review.token());
     submission
         .completion()
         .whenCompleteAsync(
             (delivery, failure) -> {
-              if (submitted.live())
-                outcome(submitted.player(), failure == null ? delivery.outcome() : null);
+              if (submitted.live()
+                  && (menu == null
+                      || officeLive(submitted.player(), menu) && menu.revision() == revision))
+                outcome(submitted.player(), menu, failure == null ? delivery.outcome() : null);
             },
             review.player().server);
     return 1;
@@ -279,8 +579,14 @@ public final class CorporationConsent {
   private static int lookup(CommandContext<CommandSourceStack> context) {
     var review = review(context);
     if (review == null || !review.submitted()) return unavailable(context.getSource());
+    return lookup(context.getSource(), review, null);
+  }
+
+  private static int lookup(CommandSourceStack source, Review review, BankingMenu menu) {
+    long revision = menu == null ? -1 : menu.revision();
     var grant = grant(review.player(), review.services());
-    if (grant == null) return unavailable(context.getSource());
+    if (grant == null) return unavailable(source);
+    if (menu != null) menu.setBusy(true);
     var command = review.command();
     review
         .services()
@@ -293,11 +599,14 @@ public final class CorporationConsent {
             handler(review, grant.target()))
         .whenCompleteAsync(
             (found, failure) -> {
-              if (!review.live()) return;
-              if (failure != null) outcome(review.player(), null);
+              if (!review.live()
+                  || (menu != null
+                      && (!officeLive(review.player(), menu) || menu.revision() != revision)))
+                return;
+              if (failure != null) outcome(review.player(), menu, null);
               else if (found.isEmpty())
-                message(review.player(), "No durable outcome for this operation.");
-              else outcome(review.player(), found.orElseThrow());
+                notify(review.player(), menu, "No durable outcome for this operation.");
+              else outcome(review.player(), menu, found.orElseThrow());
             },
             review.player().server);
     return 1;
@@ -373,14 +682,36 @@ public final class CorporationConsent {
     player.sendSystemMessage(Component.literal(text));
   }
 
-  private static void outcome(ServerPlayer player, Journal.Outcome outcome) {
+  private static void notify(ServerPlayer player, BankingMenu menu, String text) {
+    if (menu == null) message(player, text);
+    else CorporationOffice.result(menu, text);
+  }
+
+  private static void outcome(ServerPlayer player, BankingMenu menu, Journal.Outcome outcome) {
     if (outcome == null) {
-      message(player, "Outcome unavailable. Use the original operation lookup.");
+      notify(
+          player,
+          menu,
+          "Outcome unavailable. Open Integration permissions and look up the original outcome.");
+      return;
+    }
+    if (menu != null) {
+      notify(
+          player,
+          menu,
+          switch (outcome.status()) {
+            case COMMITTED -> "Request completed.";
+            case DURABLY_REJECTED, NOT_ACCEPTED ->
+                "Request declined. Review the company and its permissions before trying again.";
+            case UNKNOWN ->
+                "The result is still pending. Open Connected mods and choose Check result.";
+          });
       return;
     }
     var result = outcome.result();
-    message(
+    notify(
         player,
+        menu,
         "Corporation integration "
             + outcome.status().name()
             + " · "

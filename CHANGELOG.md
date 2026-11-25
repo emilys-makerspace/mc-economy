@@ -2,9 +2,45 @@
 
 Completed features, gameplay changes and notable fixes, grouped by date and phase/task. Newest dates appear first. Internal housekeeping, version-only changes and verification logs are omitted.
 
+## 2026-11-24
+
+- Bank names, card labels and terminal lettering use a larger pixel alphabet with clearer letter shapes.
+
+- Kiosks, ATMs, teller stations and banker desks have richer pixel-art finishes. Bankers and Collection Agents have subtle new clothing and accessory details.
+
+- Debit cards carry their bank’s colours. Credit cards pair the issuer’s colours with a distinct pattern and palette for each network. Corporate cards reverse the face colours and carry a CORP badge.
+
+- New credit cards and loans use the kiosk bank’s currency. First-time card applicants see their starter limit before confirming. Credit and loan screens use simpler wording for interest, fees and payments.
+
+- The corporation office opens on your companies. Send payments by choosing an account or entering a player name. Banking history, credit, loans, and trader screens use amounts, dates, and account names in place of internal references. Banking wire 18 requires matching client and server versions.
+
+- After registration, choose a matching bank and open the company account directly. Company menus show the actions available at that stage.
+
+- Corporation registration now asks for the company and share details before asking which personal account will pay the fee.
+
+- Fixed the inventory key closing the corporation registration form while typing a name. The same fix applies to other banking text fields.
+
 ## 2026-11-18
 
-- `/economy status` now tells players when banking is open, how many financial days remain during catch-up, and the estimated wait. Operators can follow progress in the server log.
+- Added the corporation office at `/economy corp gui` for registration, management and banking. Corporations issue Class A shares and fund their matching-currency bank account before starting business. Renaming releases the previous company identifier. Existing worlds require a reviewed upgrade to schema 60.
+- Added corporate credit applications, funded advances, interest, repayments, and closure through the office and bank kiosk. Founders can delegate borrowing by company account.
+- Added 64×64 corporate card variants and simplified the cash and card tooltips. Corporate debit cards issued on account opening use the holder’s current company permissions at a kiosk. Banking wire 17 requires matching clients and servers.
+
+- The kiosk’s Companies page explains how to register a company when the player’s list is empty. The deposit screen shows the full completion message once.
+
+- Bank kiosks accept deposits in all supported currencies and show the exchange fee and account credit before confirmation. ATM owners and operators can change a configured ATM’s bank while keeping its deposit and withdrawal mode.
+
+- Deposits show which currency the terminal accepts and let you correct rejected cash on the same screen. ATM and teller settings now have a **Cash services** menu for choosing deposits, withdrawals, both or neither. Bound kiosks explain that both services are automatic.
+
+- Fixed a singleplayer crash when closing the banking screen.
+
+- Open your first personal account in the local bank’s currency at a branch kiosk or a bank ATM. Your last open personal bank account is protected from closure. Multiplayer clients and servers need matching banking wire version 16.
+
+- Existing worlds check journal and account history in batches when reopening. Branch kiosks display a decline explanation once.
+
+- When a world reopens after time away, Economy can process several overdue financial updates between Minecraft ticks so banking opens sooner.
+
+- `/economy status` now tells players when banking is open, how many financial days remain during catch-up, and the estimated wait. Operators can follow startup checks and offline transaction progress in the server log every five seconds.
 
 - Approve a database upgrade in chat, then reopen the world or restart the server. Economy backs up the world and applies the upgrade during startup. Authorized players can use the review command immediately after joining, including in singleplayer with cheats enabled.
 

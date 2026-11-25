@@ -42,10 +42,21 @@ class CorporationsTest {
   }
 
   @Test
-  void feeAliasAndLifecycleSurviveReplayAndReopen() throws Exception {
+  void issuedSharesAndRenamedIdentifierSurviveReplayAndReopen() throws Exception {
     var registration =
         new Corporations.Register(
-            "Aster Works", new Corporations.Fee(account, 1, EconomyCurrency.CAD, 50000, null));
+            "Aster Works",
+            new Corporations.Fee(account, 1, EconomyCurrency.CAD, 50000, null),
+            new Corporations.ShareIssue(500, new Money(EconomyCurrency.CAD, 120)));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new Corporations.Register("Aster ", registration.fee()));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new Corporations.Register("A".repeat(33), registration.fee()));
+    assertThrows(
+        ArithmeticException.class,
+        () -> new Corporations.ShareIssue(Long.MAX_VALUE, new Money(EconomyCurrency.CAD, 2)));
     var operation = new OperationId(UUID.randomUUID());
     UUID id;
     var store = new SqliteStorage();
@@ -64,12 +75,18 @@ class CorporationsTest {
       id = UUID.fromString(first.result().payload().split("\\|")[0]);
       assertEquals(first, submit(store, registration, operation));
       assertEquals(
+          "CORPORATION_NAME_RESERVED",
+          submit(store, new Corporations.Register("ＡＳＴＥＲ-WORKS", registration.fee()))
+              .result()
+              .code());
+
+      assertEquals(
           "CORPORATION_ACTIVE",
           submit(store, new Corporations.Change(id, 1, Corporations.Action.RENAME, "Aster Studio"))
               .result()
               .code());
       assertEquals(
-          "CORPORATION_NAME_RESERVED",
+          "CORPORATION_ACTIVE",
           submit(store, new Corporations.Register("ＡＳＴＥＲ WORKS", registration.fee()))
               .result()
               .code());
@@ -114,7 +131,7 @@ class CorporationsTest {
       reopened.initialize(path.toRealPath());
       assertEquals(Journal.Status.COMMITTED, submit(reopened, registration, operation).status());
       assertEquals(
-          50000L,
+          0L,
           reopened
               .<Long>transaction(
                   tx -> Settlement.posted(tx::query, account.value(), EconomyCurrency.CAD))
@@ -123,6 +140,13 @@ class CorporationsTest {
           reopened.transaction(tx -> Corporations.find(tx::query, founder, id).orElseThrow());
       assertEquals(Corporations.State.DISSOLVED, company.state());
       assertEquals(6, company.revision());
+      var profile =
+          reopened.transaction(tx -> CorporateCapital.profile(tx::query, id).orElseThrow());
+      assertEquals("aster-studio", profile.identifier());
+      assertEquals(1, profile.shares().size());
+      assertEquals("A", profile.shares().getFirst().code());
+      assertEquals(new Money(EconomyCurrency.CAD, 60000), profile.required());
+      assertFalse(profile.funded());
     } finally {
       reopened.close();
     }

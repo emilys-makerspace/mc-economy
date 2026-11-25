@@ -23,22 +23,27 @@ SIDES = ('north', 'south', 'east', 'west', 'up', 'down')
 
 
 def materials():
+    grain_bands = (-12, -8, -2, 1, 2, 4, 5, 7, 7, 5, 4, 3, 1, 0, -2, -4)
     for wood, base in WOODS.items():
         veneer = Canvas(32, 32, base)
         for y in range(32):
             for x in range(32):
-                grain = math.sin(y * 1.45 + math.sin(x * .13) * .7)
-                variation = round(grain * 5) + (x * 7 + y * 3) % 3 - 1
-                veneer.pixel(x, y, shade(base, variation))
+                # A repeating cathedral-grain arch with paired early/latewood bands.
+                arch = (1 - math.cos(x * math.tau / 32)) * 2
+                ring = int((y + arch + math.sin((y + arch) * math.tau / 16)) * 2) % 16
+                veneer.pixel(x, y, shade(base, grain_bands[ring]))
         veneer.save(TEXTURES / f'{wood}_veneer.png')
 
     metal = Canvas(32, 32, '#B7ADA0')
     for y in range(32):
-        metal.rect(0, y, 32, y + 1, shade('#B7ADA0', (y % 4) * 2 - 3))
+        for x in range(32):
+            sheen = (0, 5, 12, 16, 9, 2, -5, -4)[((x - y // 2) % 32) // 4]
+            metal.pixel(x, y, shade('#B7ADA0', sheen + (y % 4) * 2 - 3))
     metal.save(TEXTURES / 'metal.png')
 
     brass = Canvas(16, 16, '#B39A62')
-    brass.rect(0, 0, 16, 2, '#D9C58F')
+    for y, tone in enumerate((18, 30, 40, 28, 17, 10, 6, 0, -4, -6, -9, -13, -17)):
+        brass.rect(0, y, 16, y + 1, shade('#B39A62', tone))
     brass.rect(0, 13, 16, 16, '#806A42')
     brass.save(TEXTURES / 'brass.png')
 
@@ -47,17 +52,23 @@ def materials():
     hardware.rect(2, 2, 30, 3, '#596568')
     for y in range(8, 25, 3):
         hardware.rect(8, y, 24, y + 1, '#20292C')
+        hardware.rect(9, y + 1, 24, y + 2, '#566164')
     for x in (4, 27):
         for y in (4, 27):
-            hardware.rect(x, y, x + 1, y + 1, '#87918E')
+            hardware.rect(x, y, x + 2, y + 2, '#263234')
+            hardware.pixel(x, y, '#A5AFAB')
     hardware.rect(4, 28, 10, 30, '#ADAA97')
     hardware.save(TEXTURES / 'hardware.png')
 
     screen = Canvas(64, 32, '#203C40')
-    screen.rect(1, 1, 63, 8, '#42676B')
-    screen.text('BRANCH', 4, 2, '#E2EADF')
+    for y in range(1, 31):
+        for x in range(1, 63):
+            glow = max(0, 10 - (abs(x - 32) + abs(y - 14)) // 4)
+            screen.pixel(x, y, shade('#203C40', glow - (2 if y % 3 == 0 else 0)))
+    screen.rect(1, 1, 63, 10, '#42676B')
+    screen.lettering('BRANCH', 4, 2, '#E2EADF')
     screen.rect(49, 3, 59, 5, '#95BCAE')
-    screen.text('ACCOUNTS', 4, 11, '#BBD6CD')
+    screen.lettering('ACCOUNTS', 4, 12, '#BBD6CD')
     for y, width in ((20, 27), (25, 20)):
         screen.rect(4, y, 4 + width, y + 2, '#709D98')
         screen.rect(45, y, 59, y + 2, '#ABC8B4')
@@ -69,25 +80,33 @@ def materials():
     keyboard.rect(3, 3, 61, 29, '#293639')
     for y in (5, 11, 17):
         for x in range(5, 58, 6):
+            keyboard.rect(x + 1, y + 1, x + 5, y + 5, '#182527')
             keyboard.rect(x, y, x + 4, y + 4, '#AAB3AA')
+            keyboard.pixel(x + 1, y + 2, '#748482')
             keyboard.rect(x, y, x + 4, y + 1, '#D2D4C7')
     keyboard.rect(16, 23, 46, 27, '#B8BDB1')
     keyboard.rect(51, 23, 59, 27, '#78998A')
     keyboard.save(TEXTURES / 'keyboard.png')
 
-    paper = Canvas(32, 32, '#E9DFC4')
-    paper.rect(2, 2, 30, 7, '#A8B6A0')
-    paper.rect(2, 8, 30, 9, '#9F9C83')
-    paper.rect(20, 8, 21, 30, '#BBAE8B')
-    for y in range(12, 30, 4):
-        paper.rect(2, y, 30, y + 1, '#C2B89B')
-        paper.rect(4, y - 2, 12 + y % 5, y - 1, '#6E8278')
-        paper.rect(24, y - 2, 28, y - 1, '#6E8278')
+    paper = Canvas(64, 64, '#E9DFC4')
+    paper.rect(2, 62, 64, 64, '#AD9E81')
+    paper.rect(62, 2, 64, 62, '#CABD9F')
+    paper.rect(4, 4, 60, 17, '#A8B6A0')
+    paper.lettering('LEDGER', 8, 7, '#354B48')
+    paper.rect(4, 19, 60, 21, '#9F9C83')
+    paper.rect(40, 19, 42, 60, '#BBAE8B')
+    for y in range(28, 60, 8):
+        paper.rect(4, y, 60, y + 2, '#C2B89B')
+        paper.rect(8, y - 4, 24 + y % 9, y - 2, '#6E8278')
+        paper.rect(48, y - 4, 56, y - 2, '#6E8278')
     paper.save(TEXTURES / 'paper.png')
 
     leather = Canvas(32, 32, '#3D584B')
     leather.rect(1, 1, 31, 31, '#65806A')
     leather.rect(2, 2, 30, 30, '#3D584B')
+    for y in range(5, 27, 4):
+        for x in range(5 + y % 3, 27, 6):
+            leather.rect(x, y, x + 2, y + 1, '#425D50')
     for position in range(4, 29, 3):
         leather.pixel(position, 3, '#B7AA7F')
         leather.pixel(position, 28, '#B7AA7F')

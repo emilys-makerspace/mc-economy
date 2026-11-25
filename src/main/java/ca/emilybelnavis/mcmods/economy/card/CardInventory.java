@@ -52,7 +52,9 @@ public final class CardInventory {
         CardDesigns.legacyAliases()
             .getOrDefault(
                 fields[2], CreditCardDesigns.legacyAliases().getOrDefault(fields[2], fields[2]));
-    if ((CardDesigns.byId(item).isEmpty() && CreditCardDesigns.byId(item).isEmpty())
+    if ((CardDesigns.byId(item).isEmpty()
+            && CreditCardDesigns.byId(item).isEmpty()
+            && !CorporateCards.isDesign(item))
         || !delivery.id().equals(token)
         || !token.equals(delivery.financialOperation())
         || !delivery.terms().source().equals("issued-card:" + token)

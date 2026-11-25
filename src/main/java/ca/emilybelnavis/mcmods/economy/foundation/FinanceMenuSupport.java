@@ -52,6 +52,13 @@ public final class FinanceMenuSupport {
     }
   }
 
+  static String date(long millis) {
+    return java.time.Instant.ofEpochMilli(millis)
+        .atZone(java.time.ZoneOffset.UTC)
+        .format(
+            java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm 'UTC'", Locale.ROOT));
+  }
+
   public static Audience audience(ServerPlayer player, BankingMenu menu) {
     return new Audience(player, menu, menu.session(), menu.revision());
   }

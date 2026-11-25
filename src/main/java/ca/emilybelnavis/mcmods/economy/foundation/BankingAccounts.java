@@ -12,6 +12,7 @@ import ca.emilybelnavis.mcmods.economy.banking.BankingOperation;
 import ca.emilybelnavis.mcmods.economy.banking.BankingSaves;
 import ca.emilybelnavis.mcmods.economy.banking.UiText;
 import ca.emilybelnavis.mcmods.economy.cash.CashCatalog;
+import ca.emilybelnavis.mcmods.economy.corporation.Corporations;
 import ca.emilybelnavis.mcmods.economy.fx.FxQuotes;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.journal.*;
@@ -51,11 +52,24 @@ public final class BankingAccounts {
           "bank_retry",
           "corp_list",
           "corp_next",
+          "corp_details",
+          "corp_summary",
+          "corp_people_next",
+          "corp_debit_issue",
+          "corp_credit",
+          "corp_funding",
+          "corp_source",
+          "corp_amount",
           "corp_select",
           "corp_account",
           "corp_open",
           "corp_fund",
           "corp_pay",
+          "corp_destination",
+          "corp_lookup",
+          "corp_send",
+          "corp_other",
+          "corp_to_account",
           "corp_close",
           "corp_confirm",
           "corp_recover",
@@ -111,6 +125,12 @@ public final class BankingAccounts {
     CorporateBanking companyBank;
     CorporateBanking.Review companyReview;
     UUID companyCursor;
+    UUID companyPeopleCursor;
+    CorporateKiosk.Sources companySources;
+    CorporateKiosk.Source companySource;
+    boolean closingCompanyAccount;
+    List<CorporateKiosk.Destination> destinations = List.of();
+    CorporateKiosk.Destination companyDestination;
     Set<EconomyCurrency> openCurrencies = Set.of();
     TerminalPolicy.Snapshot fxTerminal;
     FxSettlement.Exchange exchange;
@@ -144,6 +164,11 @@ public final class BankingAccounts {
     STATES.computeIfAbsent(menu, ignored -> new State()).selected = id;
   }
 
+  public static boolean hasSelectedCompany(BankingMenu menu) {
+    var state = STATES.get(menu);
+    return state != null && state.company != null;
+  }
+
   public static void closed(BankingMenu menu) {
     STATES.remove(menu);
   }
@@ -173,11 +198,24 @@ public final class BankingAccounts {
       switch (action) {
         case "corp_list",
             "corp_next",
+            "corp_details",
+            "corp_summary",
+            "corp_people_next",
+            "corp_debit_issue",
+            "corp_credit",
+            "corp_funding",
+            "corp_source",
+            "corp_amount",
             "corp_select",
             "corp_account",
             "corp_open",
             "corp_fund",
             "corp_pay",
+            "corp_destination",
+            "corp_lookup",
+            "corp_send",
+            "corp_other",
+            "corp_to_account",
             "corp_close",
             "corp_confirm",
             "corp_recover",
@@ -280,42 +318,18 @@ public final class BankingAccounts {
               var lines = new ArrayList<String>();
               if (view.profile().isEmpty()) {
                 lines.add(UiText.t("ui.bank.credit_is_not_established.295f70"));
-                lines.add(
-                    UiText.t("ui.bank.a_debit_card_login_or_failed_application_does_.410d32"));
-                lines.add(
-                    UiText.t("ui.bank.a_first_actual_credit_card_issuance_establishe.0d2196"));
+                lines.add(UiText.t("ui.finance.player.start_credit"));
               } else {
                 var profile = view.profile().orElseThrow();
-                lines.add(
-                    UiText.t("ui.bank.saved_credit_score.0f65f3") + profile.score() + " (300–900)");
-                lines.add(
-                    UiText.t("ui.bank.first_credit_issuance.8ef672")
-                        + java.time.Instant.ofEpochMilli(profile.firstIssuedAt()));
+                lines.add(UiText.t("ui.finance.player.score", profile.score()));
                 view.latest()
                     .ifPresent(
-                        history -> {
-                          var c = history.components();
-                          lines.add(
-                              UiText.t("ui.bank.baseline.63e8dd")
-                                  + c.baseline()
-                                  + UiText.t("ui.bank.5e1bd6cc79")
-                                  + signed(c.payment()));
-                          lines.add(
-                              UiText.t("ui.bank.utilization.0c883c")
-                                  + signed(c.utilization())
-                                  + UiText.t("ui.bank.8177d78cda")
-                                  + signed(c.age()));
-                          lines.add(
-                              UiText.t("ui.bank.inquiries.aa5930")
-                                  + c.inquiry()
-                                  + "; defaults: -"
-                                  + c.defaults());
-                          lines.add(
-                              UiText.t("ui.bank.recorded_at.0a1781")
-                                  + java.time.Instant.ofEpochMilli(history.boundary()));
-                        });
+                        update ->
+                            lines.add(
+                                UiText.t(
+                                    "ui.finance.player.last_update",
+                                    FinanceMenuSupport.date(update.boundary()))));
               }
-              lines.add(UiText.t("ui.bank.scheduled_score_updates_await_the_reporting_se.8729f7"));
               reply(
                   audience,
                   "credit_profile",
@@ -477,7 +491,7 @@ public final class BankingAccounts {
               reply(
                   audience,
                   "credit_facility",
-                  CreditReport.owner(found.orElseThrow()),
+                  FinanceReports.card(found.orElseThrow()),
                   UiText.t("ui.bank.credit_facility.09a380"),
                   List.of(
                       new BankingNetwork.Choice(
@@ -517,7 +531,7 @@ public final class BankingAccounts {
               state.creditStatementNext = page.nextClosedAt();
               var lines = new ArrayList<String>();
               for (var statement : page.statements())
-                lines.addAll(CreditReport.statement(statement, state.creditCurrency));
+                lines.addAll(FinanceReports.statement(statement, state.creditCurrency));
               if (lines.isEmpty())
                 lines.add(UiText.t("ui.bank.no_statements_have_closed_for_this_facility.129ab9"));
               var choices = new ArrayList<BankingNetwork.Choice>();
@@ -971,10 +985,9 @@ public final class BankingAccounts {
               var bank = InstitutionCatalog.require(terminal.binding().institution());
               state.offered = offeredAccounts(result.getValue().orElseThrow().accounts());
               var choices = new ArrayList<BankingNetwork.Choice>();
-              if (bank.tier1())
-                choices.add(
-                    new BankingNetwork.Choice(
-                        "corp_list", "", UiText.t("ui.bank.corporate.companies"), false));
+              choices.add(
+                  new BankingNetwork.Choice(
+                      "corp_list", "", UiText.t("ui.bank.corporate.companies"), false));
               choices.add(
                   new BankingNetwork.Choice(
                       "branch_open",
@@ -1056,6 +1069,196 @@ public final class BankingAccounts {
         .anyMatch(c -> c.action().equals(action) && c.value().equals(value));
   }
 
+  static void openOfficeAccounts(
+      ServerPlayer player, BankingMenu menu, Corporations.Company company) {
+    if (menu.access() != BankingMenu.Access.CORPORATION || !menu.valid(player)) return;
+    var audience = new Audience(player, menu, menu.session(), menu.revision());
+    var state = STATES.computeIfAbsent(menu, ignored -> new State());
+    state.companyReview = null;
+    showCompanyAccounts(
+        audience,
+        state,
+        new CorporateBanking(player, menu).kiosk(),
+        new CorporateBanking.Selection(company.id(), company.name(), company.revision(), 0),
+        false);
+  }
+
+  private static void showCompanyAccounts(
+      Audience audience,
+      State state,
+      CorporateKiosk kiosk,
+      CorporateBanking.Selection company,
+      boolean details) {
+    audience.menu().setBusy(true);
+    kiosk
+        .accounts(company)
+        .whenComplete(
+            (page, error) -> {
+              if (!audience.live()) return;
+              if (error != null) {
+                unavailable(audience, "corp_list");
+                return;
+              }
+              state.company = company;
+              state.companyAccount = null;
+              var offered = new LinkedHashMap<String, CorporateKiosk.Account>();
+              var choices = new ArrayList<BankingNetwork.Choice>();
+              var lines = new ArrayList<String>();
+              lines.add(CorporateKiosk.t("selected", company.name()));
+              var profile = page.profile();
+              if (details) {
+                for (var share : profile.shares())
+                  lines.add(
+                      CorporateKiosk.t(
+                          "share_details",
+                          share.code(),
+                          share.quantity(),
+                          share.price(),
+                          share.total()));
+                lines.addAll(kiosk.names(page.people()));
+                state.companyPeopleCursor = page.people().next();
+                if (state.companyPeopleCursor != null)
+                  choices.add(
+                      new BankingNetwork.Choice(
+                          "corp_people_next", "", CorporateKiosk.t("more_people"), false));
+                choices.add(companySummary());
+                reply(audience, "corp_details", lines, "", choices);
+                return;
+              }
+              if (!profile.funded())
+                lines.add(
+                    profile.required() == null
+                        ? CorporateKiosk.t("shares_needed")
+                        : CorporateKiosk.t("capital_needed", profile.required()));
+              for (var account : page.visible()) {
+                String id = account.endpoint().account().value().toString();
+                offered.put(id, account);
+                var bank =
+                    InstitutionCatalog.require(
+                        new InstitutionCatalog.InstitutionId(account.endpoint().bank()));
+                choices.add(
+                    new BankingNetwork.Choice(
+                        "corp_account",
+                        id,
+                        account.available() == null
+                            ? account.currency().code() + " · " + bank.name()
+                            : CorporateKiosk.t(
+                                "account",
+                                account.currency().code(),
+                                bank.name(),
+                                new Money(account.currency(), account.available())),
+                        false));
+              }
+              state.companyAccounts = Map.copyOf(offered);
+              if (offered.isEmpty() && page.openCurrency() == null && profile.funded())
+                lines.add(CorporateKiosk.t("no_accounts"));
+              if (page.openCurrency() != null)
+                choices.add(
+                    new BankingNetwork.Choice(
+                        "corp_open",
+                        page.openCurrency().code(),
+                        CorporateKiosk.t("open", page.openCurrency().code()),
+                        false));
+              choices.add(
+                  new BankingNetwork.Choice(
+                      "corp_details", "", CorporateKiosk.t("details"), false));
+              if (lines.size() > 1) lines = new ArrayList<>(List.of(lines.get(1)));
+              reply(audience, "corp_accounts", lines, "", choices);
+            });
+  }
+
+  private static BankingNetwork.Choice companySummary() {
+    return new BankingNetwork.Choice("corp_summary", "", CorporateKiosk.t("back_company"), false);
+  }
+
+  private static BankingNetwork.Choice backToCompanyAccount() {
+    return new BankingNetwork.Choice(
+        "corp_to_account", "", CorporateKiosk.t("back_account"), false);
+  }
+
+  private static void companyInputError(Audience audience, String key) {
+    reply(
+        audience,
+        audience.menu().page(),
+        audience.menu().lines(),
+        CorporateKiosk.t(key),
+        audience.menu().choices());
+  }
+
+  private static long corporateMinor(String value, EconomyCurrency currency) {
+    if (!value.matches("[0-9]{1,19}(\\.[0-9]{1,2})?")) throw new IllegalArgumentException("Amount");
+    long amount =
+        new java.math.BigDecimal(value).movePointRight(currency.fractionDigits()).longValueExact();
+    if (amount <= 0) throw new IllegalArgumentException("Amount");
+    return amount;
+  }
+
+  private static void chooseCompanyDestination(
+      Audience audience,
+      State state,
+      CorporateBanking banking,
+      CorporateKiosk kiosk,
+      CorporateKiosk.Destination dest) {
+    state.companyDestination = dest;
+    if (state.closingCompanyAccount) {
+      reviewCompany(
+          audience,
+          state,
+          banking,
+          kiosk.transfer(
+              state.company, state.companyAccount, "corp_close", dest.account(), 0, dest.label()));
+    } else {
+      reply(
+          audience,
+          "corp_send",
+          List.of(
+              CorporateKiosk.t("target", dest.label()),
+              CorporateKiosk.t("send_amount", state.companyAccount.currency().code())),
+          "",
+          List.of(
+              new BankingNetwork.Choice("corp_send", "", CorporateKiosk.t("review_payment"), false),
+              backToCompanyAccount()));
+    }
+  }
+
+  private static void reviewCompany(
+      Audience audience,
+      State state,
+      CorporateBanking banking,
+      java.util.concurrent.CompletionStage<CorporateKiosk.Prepared> preview) {
+    audience.menu().setBusy(true);
+    preview.whenComplete(
+        (prepared, error) -> {
+          if (!audience.live()) return;
+          if (error != null) {
+            companyInputError(audience, "review_unavailable");
+            return;
+          }
+          creditReview(
+              audience.player(), audience.menu(), banking, prepared.review(), prepared.lines());
+        });
+  }
+
+  static void creditReview(
+      ServerPlayer player,
+      BankingMenu menu,
+      CorporateBanking banking,
+      CorporateBanking.Review review,
+      List<String> lines) {
+    if (!menu.valid(player)) return;
+    var state = STATES.computeIfAbsent(menu, ignored -> new State());
+    state.companyReview = review;
+    state.companyBank = banking;
+    menu.setBusy(false);
+    menu.publish(
+        "corp_review",
+        lines,
+        "",
+        List.of(
+            new BankingNetwork.Choice("corp_confirm", "", CorporateKiosk.t("confirm"), false),
+            state.companyAccount == null ? companySummary() : backToCompanyAccount()));
+  }
+
   private static void corporate(
       Audience audience,
       ServerServices services,
@@ -1063,8 +1266,9 @@ public final class BankingAccounts {
       State state,
       String action,
       String value) {
-    if (audience.menu().access() != BankingMenu.Access.KIOSK) return;
-    boolean input = Set.of("corp_fund", "corp_pay", "corp_close").contains(action);
+    if (audience.menu().access() != BankingMenu.Access.KIOSK
+        && audience.menu().access() != BankingMenu.Access.CORPORATION) return;
+    boolean input = Set.of("corp_amount", "corp_lookup", "corp_send").contains(action);
     if (!action.equals("corp_list") && !offered(audience, action, input ? "" : value))
       throw new IllegalArgumentException("Company action not offered");
     if (action.equals("corp_confirm")) {
@@ -1104,59 +1308,48 @@ public final class BankingAccounts {
     state.companyReview = null;
     var banking = new CorporateBanking(audience.player(), audience.menu());
     var kiosk = banking.kiosk();
-    if (action.equals("corp_select")) {
-      var company = state.offeredCompanies.get(value);
-      if (company == null) throw new IllegalArgumentException("Company not offered");
+    if (action.equals("corp_summary") || action.equals("corp_details")) {
+      showCompanyAccounts(audience, state, kiosk, state.company, action.equals("corp_details"));
+      return;
+    }
+    if (action.equals("corp_people_next")) {
+      if (state.company == null || state.companyPeopleCursor == null)
+        throw new IllegalArgumentException("Company page expired");
       audience.menu().setBusy(true);
       kiosk
-          .accounts(company)
+          .people(state.company, state.companyPeopleCursor)
           .whenComplete(
-              (page, error) -> {
+              (people, error) -> {
                 if (!audience.live()) return;
                 if (error != null) {
                   unavailable(audience, "corp_list");
                   return;
                 }
-                state.company = company;
-                state.companyAccount = null;
-                var offered = new LinkedHashMap<String, CorporateKiosk.Account>();
-                var choices = new ArrayList<BankingNetwork.Choice>();
-                var lines = new ArrayList<String>();
-                lines.add(CorporateKiosk.t("selected", company.name()));
-                for (var account : page.visible()) {
-                  String id = account.endpoint().account().value().toString();
-                  offered.put(id, account);
-                  var bank =
-                      InstitutionCatalog.require(
-                          new InstitutionCatalog.InstitutionId(account.endpoint().bank()));
-                  choices.add(
-                      new BankingNetwork.Choice(
-                          "corp_account",
-                          id,
-                          account.available() == null
-                              ? account.currency().code() + " · " + bank.name()
-                              : CorporateKiosk.t(
-                                  "account",
-                                  account.currency().code(),
-                                  bank.name(),
-                                  new Money(account.currency(), account.available())),
-                          false));
-                }
-                state.companyAccounts = Map.copyOf(offered);
-                if (offered.isEmpty()) lines.add(CorporateKiosk.t("no_accounts"));
-                if (page.openCurrency() != null)
-                  choices.add(
-                      new BankingNetwork.Choice(
-                          "corp_open",
-                          page.openCurrency().code(),
-                          CorporateKiosk.t("open", page.openCurrency().code()),
-                          false));
-                reply(audience, "corp_accounts", lines, "", choices);
+                state.companyPeopleCursor = people.next();
+                reply(
+                    audience,
+                    "corp_people",
+                    kiosk.names(people),
+                    "",
+                    people.next() == null
+                        ? List.of()
+                        : List.of(
+                            new BankingNetwork.Choice(
+                                "corp_people_next", "", CorporateKiosk.t("more_people"), false)));
               });
       return;
     }
-    if (action.equals("corp_account")) {
-      var account = state.companyAccounts.get(value);
+    if (action.equals("corp_select")) {
+      var company = state.offeredCompanies.get(value);
+      if (company == null) throw new IllegalArgumentException("Company not offered");
+      showCompanyAccounts(audience, state, kiosk, company, false);
+      return;
+    }
+    if (action.equals("corp_account") || action.equals("corp_to_account")) {
+      var account =
+          action.equals("corp_to_account")
+              ? state.companyAccount
+              : state.companyAccounts.get(value);
       if (account == null) throw new IllegalArgumentException("Account not offered");
       audience.menu().setBusy(true);
       kiosk
@@ -1174,9 +1367,19 @@ public final class BankingAccounts {
                   choices.add(
                       new BankingNetwork.Choice(
                           "corp_history", "", CorporateKiosk.t("history"), false));
-                if (rights.pay()) {
+                if (rights.issueDebit())
                   choices.add(
-                      new BankingNetwork.Choice("corp_fund", "", CorporateKiosk.t("fund"), false));
+                      new BankingNetwork.Choice(
+                          "corp_debit_issue", "", CorporateKiosk.t("issue_debit"), false));
+                if (rights.credit())
+                  choices.add(
+                      new BankingNetwork.Choice(
+                          "corp_credit", "", CorporateKiosk.t("credit_facility"), false));
+                if (rights.fund())
+                  choices.add(
+                      new BankingNetwork.Choice(
+                          "corp_funding", "", CorporateKiosk.t("fund"), false));
+                if (rights.pay()) {
                   choices.add(
                       new BankingNetwork.Choice("corp_pay", "", CorporateKiosk.t("pay"), false));
                 }
@@ -1185,8 +1388,11 @@ public final class BankingAccounts {
                       new BankingNetwork.Choice(
                           "corp_close", "", CorporateKiosk.t("close"), false));
                 var lines = new ArrayList<String>();
-                lines.add(CorporateKiosk.t("owner", state.company.name()));
-                lines.add(CorporateKiosk.t("account_id", rights.endpoint().account().value()));
+                lines.add(state.company.name());
+                lines.add(
+                    CorporateKiosk.bankName(rights.endpoint().bank())
+                        + " · "
+                        + rights.currency().code());
                 if (rights.available() != null)
                   lines.add(
                       CorporateKiosk.t(
@@ -1204,46 +1410,220 @@ public final class BankingAccounts {
               (lines, error) -> {
                 if (!audience.live()) return;
                 if (error != null) unavailable(audience, "corp_list");
-                else reply(audience, "corp_history", lines, "", List.of());
+                else reply(audience, "corp_history", lines, "", List.of(backToCompanyAccount()));
               });
       return;
     }
-    if (input || action.equals("corp_open")) {
-      java.util.concurrent.CompletionStage<CorporateKiosk.Prepared> preview;
-      if (!input) preview = kiosk.open(state.company, EconomyCurrency.fromCode(value));
-      else {
-        if (state.companyAccount == null) throw new IllegalArgumentException("Account unavailable");
-        boolean close = action.equals("corp_close");
-        var fields = value.strip().split("\\s+");
-        if (fields.length != (close ? 1 : 2))
-          throw new IllegalArgumentException("Account and amount");
-        AccountId other =
-            close && value.isBlank() ? null : new AccountId(UUID.fromString(fields[0]));
-        if (other != null && !other.value().toString().equalsIgnoreCase(fields[0]))
-          throw new IllegalArgumentException("Account UUID");
-        long amount = close ? 0 : Long.parseLong(fields[1]);
-        if (!close && amount <= 0) throw new IllegalArgumentException("Positive amount required");
-        preview = kiosk.transfer(state.company, state.companyAccount, action, other, amount);
+    if (action.equals("corp_credit")) {
+      CorporateCreditMenu.open(
+          audience.player(), audience.menu(), banking, state.company, state.companyAccount);
+      return;
+    }
+    if (action.equals("corp_pay") || action.equals("corp_close")) {
+      state.closingCompanyAccount = action.equals("corp_close");
+      state.companyDestination = null;
+      audience.menu().setBusy(true);
+      kiosk
+          .destinations(state.company, state.companyAccount, state.closingCompanyAccount)
+          .whenComplete(
+              (destinations, error) -> {
+                if (!audience.live()) return;
+                if (error != null) {
+                  unavailable(audience, "corp_account");
+                  return;
+                }
+                state.destinations = destinations.accounts();
+                if (destinations.emptyClosure()) {
+                  reviewCompany(
+                      audience,
+                      state,
+                      banking,
+                      kiosk.transfer(state.company, state.companyAccount, "corp_close", null, 0));
+                  return;
+                }
+                var options = new ArrayList<BankingNetwork.Choice>();
+                for (var dest : destinations.accounts())
+                  options.add(
+                      new BankingNetwork.Choice(
+                          "corp_destination",
+                          dest.account().value().toString(),
+                          dest.label(),
+                          false));
+                if (destinations.external())
+                  options.add(
+                      new BankingNetwork.Choice(
+                          "corp_other", "", CorporateKiosk.t("other_recipient"), false));
+                options.add(backToCompanyAccount());
+                reply(
+                    audience,
+                    "corp_destinations",
+                    List.of(
+                        CorporateKiosk.t(
+                            options.size() == 1
+                                ? "no_destinations"
+                                : state.closingCompanyAccount
+                                    ? "closure_target"
+                                    : "choose_recipient")),
+                    "",
+                    options);
+              });
+      return;
+    }
+    if (action.equals("corp_other")) {
+      reply(
+          audience,
+          "corp_lookup",
+          List.of(CorporateKiosk.t("find_recipient")),
+          "",
+          List.of(
+              new BankingNetwork.Choice("corp_lookup", "", CorporateKiosk.t("find"), false),
+              backToCompanyAccount()));
+      return;
+    }
+    if (action.equals("corp_destination")) {
+      var destination =
+          state.destinations.stream()
+              .filter(d -> d.account().value().toString().equals(value))
+              .findFirst()
+              .orElseThrow();
+      chooseCompanyDestination(audience, state, banking, kiosk, destination);
+      return;
+    }
+    if (action.equals("corp_lookup")) {
+      String search = value.strip();
+      PlayerId target = null;
+      AccountId reference = null;
+      if (search.matches("[A-Za-z0-9_]{1,16}")) {
+        var server = audience.player().server;
+        var online = server.getPlayerList().getPlayerByName(search);
+        var id =
+            online != null
+                ? online.getUUID()
+                : Optional.ofNullable(server.getProfileCache())
+                    .flatMap(c -> c.get(search))
+                    .map(com.mojang.authlib.GameProfile::getId)
+                    .orElse(null);
+        if (id != null) target = new PlayerId(id);
+      } else if (search.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+        reference = new AccountId(UUID.fromString(search));
+      if (target == null && reference == null) {
+        companyInputError(audience, "recipient_unavailable");
+        return;
       }
       audience.menu().setBusy(true);
-      preview.whenComplete(
-          (prepared, error) -> {
-            if (!audience.live()) return;
-            if (error != null) {
-              unavailable(audience, "corp_list");
-              return;
-            }
-            state.companyBank = banking;
-            state.companyReview = prepared.review();
-            reply(
-                audience,
-                "corp_review",
-                prepared.lines(),
-                "",
-                List.of(
-                    new BankingNetwork.Choice(
-                        "corp_confirm", "", CorporateKiosk.t("confirm"), false)));
-          });
+      kiosk
+          .resolveDestination(
+              state.company, state.companyAccount, state.closingCompanyAccount, target, reference)
+          .whenComplete(
+              (dest, error) -> {
+                if (!audience.live()) return;
+                if (error != null) companyInputError(audience, "recipient_unavailable");
+                else chooseCompanyDestination(audience, state, banking, kiosk, dest);
+              });
+      return;
+    }
+    if (action.equals("corp_funding")) {
+      audience.menu().setBusy(true);
+      kiosk
+          .funding(state.company, state.companyAccount)
+          .whenComplete(
+              (sources, error) -> {
+                if (!audience.live()) return;
+                if (error != null) {
+                  unavailable(audience, "corp_list");
+                  return;
+                }
+                state.companySources = sources;
+                var rows =
+                    sources.accounts().stream()
+                        .map(
+                            source ->
+                                new BankingNetwork.Choice(
+                                    "corp_source",
+                                    source.account().value().toString(),
+                                    CorporateKiosk.t(
+                                        "source_balance", source.bank(), source.balance()),
+                                    false))
+                        .toList();
+                var lines = new ArrayList<String>();
+                if (sources.required() != null)
+                  lines.add(CorporateKiosk.t("capital_needed", sources.required()));
+                lines.add(CorporateKiosk.t(rows.isEmpty() ? "no_sources" : "choose_source"));
+                var controls = new ArrayList<>(rows);
+                controls.add(backToCompanyAccount());
+                if (rows.isEmpty())
+                  lines = new ArrayList<>(List.of(CorporateKiosk.t("no_sources")));
+                reply(audience, "corp_sources", lines, "", controls);
+              });
+      return;
+    }
+    if (action.equals("corp_source")) {
+      state.companySource =
+          state.companySources.accounts().stream()
+              .filter(source -> source.account().value().toString().equals(value))
+              .findFirst()
+              .orElseThrow();
+      if (state.companySources.required() == null) {
+        reply(
+            audience,
+            "corp_contribute",
+            List.of(
+                CorporateKiosk.t(
+                    "contribute_amount", state.companySource.balance().currency().code())),
+            "",
+            List.of(
+                new BankingNetwork.Choice("corp_amount", "", CorporateKiosk.t("review"), false),
+                backToCompanyAccount()));
+        return;
+      }
+    }
+    if (input
+        || action.equals("corp_open")
+        || action.equals("corp_source")
+        || action.equals("corp_debit_issue")) {
+      java.util.concurrent.CompletionStage<CorporateKiosk.Prepared> preview;
+      if (action.equals("corp_debit_issue")) {
+        preview =
+            banking
+                .reviewDebitIssue(state.company, Objects.requireNonNull(state.companyAccount))
+                .thenApply(
+                    review ->
+                        new CorporateKiosk.Prepared(
+                            review,
+                            List.of(CorporateKiosk.t("debit_review", state.company.name()))));
+      } else if (action.equals("corp_source") || action.equals("corp_amount")) {
+        var source = Objects.requireNonNull(state.companySource);
+        long amount;
+        try {
+          amount =
+              action.equals("corp_source")
+                  ? state.companySources.required().minorUnits()
+                  : corporateMinor(value, source.balance().currency());
+        } catch (IllegalArgumentException | ArithmeticException invalid) {
+          companyInputError(audience, "invalid_amount");
+          return;
+        }
+        preview =
+            kiosk.transfer(
+                state.company, state.companyAccount, "corp_fund", source.account(), amount);
+      } else if (action.equals("corp_send")) {
+        long amount;
+        try {
+          amount = corporateMinor(value, state.companyAccount.currency());
+        } catch (IllegalArgumentException | ArithmeticException invalid) {
+          companyInputError(audience, "invalid_amount");
+          return;
+        }
+        preview =
+            kiosk.transfer(
+                state.company,
+                state.companyAccount,
+                "corp_pay",
+                state.companyDestination.account(),
+                amount,
+                state.companyDestination.label());
+      } else preview = kiosk.open(state.company, EconomyCurrency.fromCode(value));
+      reviewCompany(audience, state, banking, preview);
       return;
     }
     UUID after = action.equals("corp_next") ? state.companyCursor : null;
@@ -1279,11 +1659,9 @@ public final class BankingAccounts {
               reply(
                   audience,
                   "corp_list",
-                  List.of(
-                      UiText.t(
-                          companies.choices().isEmpty() && companies.next() == null
-                              ? "ui.bank.corporate.no_companies"
-                              : "ui.bank.corporate.choose")),
+                  companies.choices().isEmpty() && companies.next() == null && after == null
+                      ? List.of(CorporateKiosk.t("no_companies"), CorporateKiosk.t("start_company"))
+                      : List.of(CorporateKiosk.t("choose")),
                   "",
                   choices);
             });
@@ -1323,8 +1701,12 @@ public final class BankingAccounts {
       State state,
       String action,
       String value) {
-    if (audience.menu().access() != BankingMenu.Access.KIOSK || !offered(audience, action, value))
+    boolean enrollment = audience.menu().access() == BankingMenu.Access.ATM_ENROLLMENT;
+    if (!(audience.menu().access() == BankingMenu.Access.KIOSK
+            || enrollment && action.equals("branch_open"))
+        || !offered(audience, action, value))
       throw new IllegalArgumentException("Choose an offered branch action");
+    String resultPage = enrollment ? "atm_enrollment" : "branch";
     if (action.equals("branch_products")) {
       reply(
           audience,
@@ -1366,7 +1748,7 @@ public final class BankingAccounts {
             (found, error) -> {
               if (!audience.live()) return;
               if (error != null || found.isEmpty()) {
-                unavailable(audience, "branch");
+                unavailable(audience, resultPage);
                 return;
               }
               try {
@@ -1374,6 +1756,9 @@ public final class BankingAccounts {
                 var terminal = view.terminal();
                 if (terminal == null || terminal.binding() == null || !terminal.binding().bound())
                   throw new IllegalArgumentException("BRANCH_UNAVAILABLE");
+                if (enrollment
+                    && (view.primary() != null || !audience.menu().matchesEnrollment(terminal)))
+                  throw new IllegalArgumentException("The opening offer has changed.");
                 var bank = InstitutionCatalog.require(terminal.binding().institution());
                 if (action.equals("branch_close")) {
                   if (view.provider() == null || !view.provider().bankKey().equals(bank.id().key()))
@@ -1450,11 +1835,11 @@ public final class BankingAccounts {
                     state,
                     intent,
                     fresh -> services.bankLifecycle(fresh, operation, attempt, request, null),
-                    "branch");
+                    resultPage);
               } catch (IllegalArgumentException | IllegalStateException invalid) {
                 reply(
                     audience,
-                    "branch",
+                    resultPage,
                     List.of(
                         UiText.t("ui.bank.visit_the_correct_bank_and_refresh_the_account.92cc6f")),
                     UiText.t("ui.bank.branch_admission_unavailable.8a32d7"),
@@ -1773,6 +2158,22 @@ public final class BankingAccounts {
                     if (page.equals("deposit") || menu.access() == BankingMenu.Access.ATM)
                       state.offered = Map.of(context.account().id().value(), context.account());
                     var display = new ArrayList<String>();
+                    var terminal = context.terminal();
+                    boolean bankBound =
+                        terminal != null
+                            && terminal.binding() != null
+                            && terminal.binding().bound();
+                    if (page.equals("deposit") && bankBound)
+                      display.add(
+                          UiText.t(
+                              switch (terminal.kind()) {
+                                case KIOSK -> "ui.bank.deposit.all_currencies";
+                                case ATM -> "ui.bank.deposit.accepted_bills";
+                                default -> "ui.bank.deposit.accepted_cash";
+                              },
+                              terminal.kind() == TerminalPolicy.Kind.KIOSK
+                                  ? context.account().currency().code()
+                                  : terminal.binding().nativeCurrency().code()));
                     if (page.equals("withdraw"))
                       display.add(
                           "Account Balance: " + money(result.getValue().orElseThrow().posted()));
@@ -1782,9 +2183,7 @@ public final class BankingAccounts {
                               + context.account().currency().code()
                               + UiText.t("ui.bank.account.6f9a89"));
                     display.addAll(lines);
-                    if (context.terminal() != null
-                        && context.terminal().binding() != null
-                        && context.terminal().binding().bound())
+                    if (!page.equals("deposit") && bankBound)
                       display.add(
                           UiText.t("ui.bank.terminal_cash_currency.3ece81")
                               + context.terminal().binding().nativeCurrency().code()
@@ -2502,7 +2901,16 @@ public final class BankingAccounts {
                         UiText.t("ui.bank.bind_this_machine_to.24936f") + bank.name() + "?",
                         UiText.t("ui.bank.native_currency.16da54") + bank.baseCurrency().code(),
                         UiText.t("ui.bank.existing_settings_are_retained_as_legacy_metad.d5f15b"),
-                        UiText.t("ui.bank.cash_service_will_be_disabled_enable_native_ca.69457f"),
+                        current.kind() == TerminalPolicy.Kind.KIOSK
+                            ? UiText.t("ui.bank.kiosk_cash_services", bank.baseCurrency().code())
+                            : current.kind() == TerminalPolicy.Kind.ATM
+                                    && current.settings().mode() != TerminalPolicy.Mode.DISABLED
+                                ? UiText.t(
+                                    "ui.bank.atm_rebind_cash",
+                                    deliveryLabel(current.settings().mode()),
+                                    bank.baseCurrency().code())
+                                : UiText.t(
+                                    "ui.bank.cash_service_will_be_disabled_enable_native_ca.69457f"),
                         UiText.t("ui.bank.pending_cash_custody_work_must_finish_before_b.eb817b")),
                     UiText.t("ui.bank.confirm_native_currency_change.c1bff9"),
                     List.of(
@@ -2601,17 +3009,21 @@ public final class BankingAccounts {
                       : UiText.t("ui.bank.unbound_bank_bank_selection_required.0d05f5");
               var lines = new ArrayList<String>();
               lines.add(identity);
+              if (bound && terminal.kind() == TerminalPolicy.Kind.KIOSK)
+                lines.add(UiText.t("ui.bank.kiosk_cash_services", binding.nativeCurrency().code()));
               lines.addAll(TerminalSettingsReview.scope(terminal));
-              lines.add(
-                  UiText.t(
-                      "ui.admin.binding."
-                          + (bound
-                              ? binding.migrationState().name().toLowerCase(Locale.ROOT)
-                              : "unbound")));
-              lines.add(
-                  UiText.t("ui.bank.cash.f016dc")
-                      + deliveryLabel(terminal.settings().mode())
-                      + UiText.t("ui.bank.f9f879217a"));
+              if (!bound || terminal.kind() != TerminalPolicy.Kind.KIOSK)
+                lines.add(
+                    UiText.t(
+                        "ui.admin.binding."
+                            + (bound
+                                ? binding.migrationState().name().toLowerCase(Locale.ROOT)
+                                : "unbound")));
+              if (terminal.kind() != TerminalPolicy.Kind.KIOSK)
+                lines.add(
+                    UiText.t("ui.bank.cash.f016dc")
+                        + deliveryLabel(terminal.settings().mode())
+                        + UiText.t("ui.bank.f9f879217a"));
               var controls = new ArrayList<BankingNetwork.Choice>();
               if (terminal.kind() != TerminalPolicy.Kind.REGISTER)
                 controls.add(
@@ -2948,6 +3360,19 @@ public final class BankingAccounts {
     }
   }
 
+  public static String pendingPrimaryBank(ServerPlayer player, WorldId world) {
+    var tag = player.getPersistentData().getCompound(PENDING);
+    if (!tag.hasUUID("world")
+        || !tag.getUUID("world").equals(world.value())
+        || !tag.hasUUID("actor")
+        || !tag.getUUID("actor").equals(player.getUUID())
+        || !tag.hasUUID("operation")
+        || !tag.hasUUID("request")
+        || !BankProviders.PRIMARY.service().equals(tag.getString("service"))
+        || !BankProviders.PRIMARY.operationType().equals(tag.getString("type"))) return null;
+    return tag.getCompound("fields").getString("bank");
+  }
+
   private static Journal.Intent pending(ServerPlayer player, WorldId world) {
     return pending(player, world, PENDING);
   }
@@ -3011,6 +3436,10 @@ public final class BankingAccounts {
           UiText.t("ui.bank.nothing_to_retry.def91a"));
       return;
     }
+    if (audience.menu().access() == BankingMenu.Access.ATM_ENROLLMENT
+        && !audience
+            .menu()
+            .enrolledAt(pendingPrimaryBank(audience.player(), grant.target().world()))) return;
     var intent = pending(audience.player(), grant.target().world());
     var page =
         intent.kind().equals(CorporateBanking.KIND) ? "corp_receipt" : audience.menu().page();
@@ -3100,8 +3529,17 @@ public final class BankingAccounts {
     if (outcome != null && outcome.status() == Journal.Status.COMMITTED)
       lines.add(
           switch (page) {
-            case "corp_receipt" -> CorporateKiosk.t("receipt");
-            case "setup" -> UiText.t("ui.bank.your_primary_account_is_ready.11212e");
+            case "corp_receipt" ->
+                CorporateKiosk.t(
+                    switch (intent.request().fields().getOrDefault("branch_action", "")) {
+                      case "OPEN" -> "opened";
+                      case "CLOSE" -> "closed";
+                      case "PAYMENT" -> "payment_done";
+                      case "CREDIT_OPEN", "ISSUE_DEBIT" -> "card_ready";
+                      default -> "receipt";
+                    });
+            case "setup", "atm_enrollment" ->
+                UiText.t("ui.bank.your_primary_account_is_ready.11212e");
             case "manage" -> UiText.t("ui.bank.your_account_is_ready.abcd4b");
             case "accounts" -> UiText.t("ui.bank.your_account_is_ready.abcd4b");
             case "close" ->
@@ -3116,9 +3554,11 @@ public final class BankingAccounts {
           });
     else if (outcome != null && outcome.status() == Journal.Status.DURABLY_REJECTED)
       lines.add(failureMessage(outcome.result().code()));
-    lines.add(UiText.t("ui.bank.operation.7811f5") + intent.operationId().value());
-    if (outcome != null)
-      lines.add(outcome.result().code().replace('_', ' ').toLowerCase(Locale.ROOT));
+    if (!page.equals("corp_receipt")) {
+      lines.add(UiText.t("ui.bank.operation.7811f5") + intent.operationId().value());
+      if (outcome != null)
+        lines.add(outcome.result().code().replace('_', ' ').toLowerCase(Locale.ROOT));
+    }
     if (!terminal)
       lines.add(UiText.t("ui.bank.keep_the_original_operation_choose_retry_banki.adc7ba"));
     String resultStatus =
@@ -3146,6 +3586,14 @@ public final class BankingAccounts {
             || intent.kind().equals(TerminalBanking.BIND)))
       action(audience.player(), audience.menu(), "settings", "");
     if (outcome != null && outcome.status() == Journal.Status.COMMITTED) {
+      if (intent.kind().equals(CorporateBanking.KIND)
+          && ("OPEN".equals(intent.request().fields().get("branch_action"))
+              || "ISSUE_DEBIT".equals(intent.request().fields().get("branch_action"))
+              || "CREDIT_OPEN".equals(intent.request().fields().get("branch_action")))) {
+        BankingController.deliver(
+            audience.player(), audience.menu(), world, intent.operationId().value());
+        return;
+      }
       if (intent.kind().equals(ca.emilybelnavis.mcmods.economy.credit.CreditFacilities.DRAW)
           && "ADVANCE".equals(intent.request().fields().get("kind"))) {
         state.selected =
@@ -3217,6 +3665,17 @@ public final class BankingAccounts {
 
   static String failureMessage(String code) {
     return switch (code) {
+      case "CORPORATION_ISSUE_SHARES_FIRST" -> CorporateKiosk.t("need_shares");
+      case "CORPORATION_CAPITAL_REQUIRED", "CORPORATION_CAPITAL_AMOUNT" ->
+          CorporateKiosk.t("need_deposit");
+      case "CORPORATION_CAPITAL_CURRENCY" -> CorporateKiosk.t("wrong_currency");
+      case "CORPORATE_CREDIT_LIMIT" -> CorporateKiosk.t("credit_limit");
+      case "CREDIT_DRAW_LIMIT" -> CorporateKiosk.t("credit_room");
+      case "CREDIT_REPAY_AMOUNT" -> CorporateKiosk.t("credit_repay");
+      case "CORPORATE_CREDIT_OUTSTANDING" -> CorporateKiosk.t("credit_outstanding");
+      case "CREDIT_OPERATING_FLOOR", "CREDIT_CAPITAL_UNAVAILABLE" ->
+          CorporateKiosk.t("credit_reserve");
+      case "CORPORATE_CREDIT_STALE" -> CorporateKiosk.t("credit_stale");
       case "TERMINAL_STALE" -> UiText.t("ui.admin.settings.stale");
       case "PRICING_QUOTE_STALE", "FX_PRICING_REQUIRED", "FX_PROVIDER_STALE" ->
           UiText.t("ui.bank.account_service_or_pricing_changed_review_a_fr.1a880a");
@@ -3240,8 +3699,13 @@ public final class BankingAccounts {
           "ACCOUNT_STALE",
           "DESTINATION_STALE" ->
           UiText.t("ui.bank.the_account_or_quote_changed_review_the_closur.37a26a");
-      case "PRIMARY_REQUIRED" ->
-          UiText.t("ui.bank.open_your_first_account_from_my_accounts.899393");
+      case "PRIMARY_REQUIRED", "PRIMARY_BANK_CURRENCY" ->
+          UiText.t("ui.terminal.opening.primary_required");
+      case "PRIMARY_EXISTS", "PRIMARY_STALE" -> UiText.t("ui.terminal.opening.primary_changed");
+      case "TIER2_UNAVAILABLE" -> UiText.t("ui.finance.creditmenus.7");
+      case "BANK_UNAVAILABLE", "CURRENCY_UNAVAILABLE" ->
+          UiText.t("ui.terminal.opening.unavailable");
+      case "DENOMINATION_STALE" -> UiText.t("ui.terminal.opening.denomination_changed");
       default -> UiText.t("ui.bank.request_declined_refresh_your_accounts_and_rev.634994");
     };
   }

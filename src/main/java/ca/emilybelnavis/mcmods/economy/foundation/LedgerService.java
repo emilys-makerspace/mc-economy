@@ -1931,6 +1931,21 @@ public final class LedgerService implements ca.emilybelnavis.mcmods.economy.api.
                 }));
   }
 
+  public CompletionStage<Optional<ca.emilybelnavis.mcmods.economy.card.CardAccess>>
+      corporateCardAccess(PlayerId actor, WorldId world, UUID token) {
+    return services.storage(
+        actor,
+        () ->
+            store.transaction(
+                tx ->
+                    ca.emilybelnavis.mcmods.economy.card.CorporateCards.resolve(
+                            tx::query, world, token, actor)
+                        .map(
+                            card ->
+                                new ca.emilybelnavis.mcmods.economy.card.CardAccess(
+                                    token, card.design()))));
+  }
+
   public JournalService.Submission revokeCard(
       PartyAuthorization.Grant grant,
       OperationId operation,

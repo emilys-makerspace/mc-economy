@@ -98,7 +98,9 @@ class CreditProfilesTest {
       var f = worker.submit(() -> new CreditFixtures(world, UUID.randomUUID(), true)).get();
       try {
         var requests =
-            worker.submit(() -> List.of(f.initial("crownstone"), f.initial("lantern_union"))).get();
+            worker
+                .submit(() -> List.of(f.initial("crownstone"), f.initial("orchard_direct")))
+                .get();
         var ready = new CountDownLatch(2);
         var start = new CountDownLatch(1);
         var results = new ArrayList<Future<String>>();

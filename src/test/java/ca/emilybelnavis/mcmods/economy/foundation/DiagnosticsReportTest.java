@@ -50,11 +50,13 @@ class DiagnosticsReportTest {
             0);
     for (boolean operator : new boolean[] {false, true}) {
       assertEquals(
-          List.of("Banking is catching up. 591 financial days left. About 15 minutes remaining."),
+          List.of(
+              "Banking is processing offline transactions. 591 days left, about 15 minutes remaining."),
           DiagnosticsReport.status(
               ServerServices.State.INITIALIZING, metrics, null, operator, 591L, 900L));
       assertEquals(
-          List.of("Banking is catching up. 1 financial day left. Estimating time remaining."),
+          List.of(
+              "Banking is processing offline transactions. 1 day left. Estimating time remaining."),
           DiagnosticsReport.status(ServerServices.State.READY, metrics, null, operator, 1L, null));
     }
   }

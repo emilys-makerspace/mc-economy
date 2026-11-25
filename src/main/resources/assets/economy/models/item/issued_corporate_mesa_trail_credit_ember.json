@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "economy:item/banking/corporate_mesa_trail_credit_ember"
+  }
+}

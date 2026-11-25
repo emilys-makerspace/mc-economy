@@ -1,9 +1,13 @@
 package ca.emilybelnavis.mcmods.economy.foundation;
 
 import ca.emilybelnavis.mcmods.economy.Economy;
+import ca.emilybelnavis.mcmods.economy.api.EconomyCurrency;
 import ca.emilybelnavis.mcmods.economy.banking.*;
 import ca.emilybelnavis.mcmods.economy.banking.UiText;
+import ca.emilybelnavis.mcmods.economy.credit.*;
+import ca.emilybelnavis.mcmods.economy.debt.DebtDiagnostics;
 import ca.emilybelnavis.mcmods.economy.debt.DebtLifecycle;
+import ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog;
 import java.util.*;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -55,7 +59,6 @@ public final class FinanceReports {
                 }
                 var snapshot = found.orElseThrow();
                 var lines = new ArrayList<String>();
-                lines.add(UiText.t("ui.finance.financereports.1"));
                 if (snapshot.netWorth() != null)
                   lines.add(
                       UiText.t(
@@ -70,14 +73,11 @@ public final class FinanceReports {
                                 ? UiText.t("ui.finance.tier2")
                                 : UiText.t("ui.finance.tier1")
                             : UiText.t("ui.finance.unavailable"))));
-                lines.add(
-                    UiText.t("ui.finance.financereports.4", CreditReport.label(snapshot.reason())));
-                lines.add(
-                    UiText.t(
-                        "ui.finance.financereports.5",
-                        snapshot.valuedAt(),
-                        snapshot.policyVersion()));
-                lines.add(UiText.t("ui.finance.financereports.6"));
+                if (!snapshot.available())
+                  lines.add(
+                      UiText.t(
+                          "ui.finance.financereports.4", CreditReport.label(snapshot.reason())));
+                else if (!snapshot.eligible()) lines.add(UiText.t("ui.finance.financereports.1"));
                 audience.reply(
                     "finance_wealth", lines, UiText.t("ui.finance.financereports.7"), List.of());
               });
@@ -104,8 +104,7 @@ public final class FinanceReports {
                                 "",
                                 UiText.t("ui.finance.financereports.8"),
                                 false));
-                var lines = new ArrayList<>(DebtReport.cases(page));
-                lines.add(UiText.t("ui.finance.financereports.9"));
+                var lines = cases(page);
                 audience.reply(
                     "finance_cases", lines, UiText.t("ui.finance.financecollections.2"), choices);
               });
@@ -125,7 +124,7 @@ public final class FinanceReports {
                 state.reports = page.nextCursor();
                 audience.reply(
                     "finance_report",
-                    DebtReport.reports(page, null),
+                    reports(page),
                     UiText.t("ui.finance.financereports.10"),
                     state.reports == null
                         ? List.of()
@@ -137,6 +136,90 @@ public final class FinanceReports {
                                 false)));
               });
     }
+  }
+
+  static List<String> card(CreditDiagnostics.FacilityView card) {
+    var lines = new ArrayList<String>();
+    var currency = card.currency();
+    lines.add(
+        InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(card.issuer())).name()
+            + " · "
+            + UiText.t("network.economy." + card.network().toLowerCase(Locale.ROOT)));
+    if (!card.status().equals("ACTIVE") || !card.access().equals("ENABLED"))
+      lines.add(
+          UiText.t(
+              "ui.finance.creditreport.1",
+              CreditReport.label(card.status()),
+              CreditReport.label(card.access())));
+    lines.add(
+        UiText.t(
+            "ui.finance.player.balance", CreditReport.money(currency, card.currentBalanceMinor())));
+    lines.add(
+        UiText.t(
+            "ui.finance.player.credit_left",
+            CreditReport.money(currency, card.availableCreditMinor()),
+            CreditReport.money(currency, card.limitMinor())));
+    if (card.requiredMinor() > 0 && card.dueAt() != null)
+      lines.add(
+          UiText.t(
+              "ui.finance.player.minimum_due",
+              CreditReport.money(currency, card.requiredMinor()),
+              FinanceMenuSupport.date(card.dueAt())));
+    if (card.pastDueMinor() > 0)
+      lines.add(
+          UiText.t(
+              "ui.finance.player.past_due", CreditReport.money(currency, card.pastDueMinor())));
+    if (!card.scheduleCurrent()) lines.add(UiText.t("ui.finance.player.updating"));
+    return lines;
+  }
+
+  static List<String> statement(
+      CreditFacilities.StatementSnapshot snapshot, EconomyCurrency currency) {
+    var statement = snapshot.statement();
+    return List.of(
+        UiText.t(
+            "ui.finance.player.statement",
+            FinanceMenuSupport.date(statement.closedAt()),
+            CreditReport.money(currency, statement.debtMinor())),
+        UiText.t(
+            "ui.finance.player.minimum_due",
+            CreditReport.money(currency, statement.totalRequiredMinor()),
+            FinanceMenuSupport.date(statement.dueAt())));
+  }
+
+  private static List<String> cases(DebtDiagnostics.CasePage page) {
+    if (page.entries().isEmpty()) return List.of(UiText.t("ui.finance.player.no_cases"));
+    var lines = new ArrayList<String>();
+    for (var view : page.entries()) {
+      var debt = view.debt();
+      lines.add(
+          UiText.t(
+              "ui.finance.player.case_balance",
+              InstitutionCatalog.require(debt.creditor(), debt.currency()).name(),
+              CreditReport.money(debt.currency(), debt.debtMinor()),
+              CreditReport.label(view.state())));
+    }
+    if (page.entries().stream().anyMatch(DebtDiagnostics.CaseView::collectionEligible))
+      lines.add(UiText.t("ui.finance.player.pay_collector"));
+    return lines;
+  }
+
+  private static List<String> reports(DebtDiagnostics.ReportPage page) {
+    var lines = new ArrayList<String>();
+    for (var view : page.entries()) {
+      if (!view.visible()) continue;
+      var report = view.report();
+      String status =
+          report.metAtSnapshot() ? "paid_on_time" : report.cured() ? "paid_late" : "missed";
+      lines.add(
+          UiText.t(
+              "ui.finance.player.payment_record",
+              FinanceMenuSupport.date(report.dueAt()),
+              CreditReport.label(report.kind()),
+              UiText.t("ui.finance.player." + status)));
+    }
+    if (lines.isEmpty()) lines.add(UiText.t("ui.finance.player.no_reports"));
+    return lines;
   }
 
   private static void unavailable(FinanceMenuSupport.Audience audience) {

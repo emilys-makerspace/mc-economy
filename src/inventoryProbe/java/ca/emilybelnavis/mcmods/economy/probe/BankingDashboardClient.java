@@ -707,7 +707,7 @@ public final class BankingDashboardClient {
   private void corporateMessage(
       net.neoforged.neoforge.client.event.ClientChatReceivedEvent.System event) {
     String line = event.getMessage().getString();
-    String prefix = "/economy corporation approve ";
+    String prefix = "/economy corp approve ";
     int at = line.indexOf(prefix);
     if (at >= 0) approveCommand = line.substring(at + 1, at + prefix.length() + 36);
     if (line.contains("COMMITTED")) commandCommitted = true;
@@ -718,21 +718,88 @@ public final class BankingDashboardClient {
       case 8 -> {
         if (!fresh(menu) || menu.dashboard() == null) return;
         personalAccount = menu.dashboard().accounts().rows().getFirst().id().toString();
-        client.player.connection.sendCommand(
-            "economy corporation register " + personalAccount + " " + witnessName);
-        next(40);
+        client.player.connection.sendCommand("economy corp gui");
+        next(60);
       }
-      case 40, 44 -> {
+      case 60 -> {
+        if (menu.page().equals("office_home")) {
+          pressOffered(client, menu, "office_page", "register");
+          next(61);
+        }
+      }
+      case 61 -> {
+        if (!menu.page().equals("office_register")) return;
+        var screen = (BankingScreen) client.screen;
+        var boxes =
+            screen.children().stream()
+                .filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
+                .map(net.minecraft.client.gui.components.EditBox.class::cast)
+                .toList();
+        require(boxes.size() == 3, "Company name, share quantity and share price inputs");
+        screen.setFocused(boxes.getFirst());
+        for (char letter : witnessName.toCharArray()) {
+          if (letter == 'e') screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_E, 0, 0);
+          screen.charTyped(letter, 0);
+        }
+        require(
+            client.screen == screen && witnessName.equals(boxes.getFirst().getValue()),
+            "Typing a company name keeps the office open");
+        boxes.get(1).setValue("10");
+        boxes.get(2).setValue("1.00");
+        button(screen, "Choose fee account").orElseThrow().onPress();
+        next(62);
+      }
+      case 62 -> {
+        if (!offered(menu, "office_pick", "fee:" + personalAccount)) return;
+        pressOffered(client, menu, "office_pick", "fee:" + personalAccount);
+        next(63);
+      }
+      case 63 -> {
+        if (!menu.page().equals("office_review")) return;
+        var approve =
+            menu.choices().stream()
+                .filter(c -> c.action().equals("office_approve"))
+                .findFirst()
+                .orElseThrow();
+        require(
+            menu.lines().stream().noneMatch(line -> line.contains(personalAccount)),
+            "Fee account uses a player-friendly name");
+        pressChoice(client, approve);
+        next(64);
+      }
+      case 64 -> {
+        if (!offered(menu, "office_page", "banks")) return;
+        pressOffered(client, menu, "office_page", "banks");
+        next(65);
+      }
+      case 65 -> {
+        if (!offered(menu, "office_pick", "bank:" + BANK)) return;
+        pressOffered(client, menu, "office_pick", "bank:" + BANK);
+        next(66);
+      }
+      case 66 -> {
+        if (!offered(menu, "corp_open", "CAD")) return;
+        var server = client.getSingleplayerServer();
+        var id = client.player.getUUID();
+        server.execute(
+            () -> {
+              var player = server.getPlayerList().getPlayer(id);
+              player.closeContainer();
+              BankingController.open(player, KIOSK);
+            });
+        next(41);
+      }
+      case 41 -> {
+        if (menu.access() != BankingMenu.Access.KIOSK || menu.dashboard() == null) return;
+        send(menu, "manage_accounts", "");
+        next(42);
+      }
+      case 44 -> {
         if (approveCommand == null) return;
         client.player.connection.sendCommand(approveCommand);
         approveCommand = null;
         commandCommitted = false;
-        next(step + 1);
-      }
-      case 41 -> {
-        if (!commandCommitted) return;
-        send(menu, "manage_accounts", "");
-        next(42);
+        next(45);
       }
       case 42 -> {
         if (!offered(menu, "corp_list", "")) return;
@@ -747,7 +814,7 @@ public final class BankingDashboardClient {
         if (company.isEmpty()) return;
         companyKey = company.get().value();
         client.player.connection.sendCommand(
-            "economy corporation appoint " + companyKey + " " + witnessManager);
+            "economy corp appoint cedar-field-studio " + witnessManager);
         next(44);
       }
       case 45 -> {
@@ -797,17 +864,12 @@ public final class BankingDashboardClient {
         if (corporateTransfers == 2) {
           pressOffered(client, menu, "corp_history", "");
           next(51);
+        } else if (corporateTransfers == 0) {
+          pressOffered(client, menu, "corp_funding", "");
+          next(54);
         } else {
-          var boxes =
-              client.screen.children().stream()
-                  .filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
-                  .map(net.minecraft.client.gui.components.EditBox.class::cast)
-                  .toList();
-          require(boxes.size() == 2, "Account and amount fields available");
-          boxes.getFirst().setValue(personalAccount);
-          boxes.getLast().setValue(corporateTransfers == 0 ? "1000" : "400");
-          pressOffered(client, menu, corporateTransfers++ == 0 ? "corp_fund" : "corp_pay", "");
-          next(48);
+          pressOffered(client, menu, "corp_pay", "");
+          next(55);
         }
       }
       case 51 -> {
@@ -835,9 +897,33 @@ public final class BankingDashboardClient {
         require(
             lastCorporateOperation.equals(menu.operation().operationId())
                 && menu.lines().stream()
-                    .anyMatch(l -> l.contains(lastCorporateOperation.toString())),
+                    .noneMatch(l -> l.contains(lastCorporateOperation.toString())),
             "Recovered same corporate operation");
         finish(client, true);
+      }
+      case 54 -> {
+        if (!fresh(menu)) return;
+        pressOffered(client, menu, "corp_source", personalAccount);
+        corporateTransfers++;
+        next(48);
+      }
+      case 55 -> {
+        if (!fresh(menu)) return;
+        pressOffered(client, menu, "corp_destination", personalAccount);
+        next(56);
+      }
+      case 56 -> {
+        if (!fresh(menu)) return;
+        var amount =
+            client.screen.children().stream()
+                .filter(net.minecraft.client.gui.components.EditBox.class::isInstance)
+                .map(net.minecraft.client.gui.components.EditBox.class::cast)
+                .findFirst()
+                .orElseThrow();
+        amount.setValue("4.00");
+        corporateTransfers++;
+        pressOffered(client, menu, "corp_send", "");
+        next(48);
       }
       default -> throw new IllegalStateException("Corporate witness stage " + step);
     }

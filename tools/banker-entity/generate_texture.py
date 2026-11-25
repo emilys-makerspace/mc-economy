@@ -27,8 +27,10 @@ def rect(x, y, width, height, pigment):
 def cloth(x, y, width, height, base):
     for py in range(y * SCALE, (y + height) * SCALE):
         for px in range(x * SCALE, (x + width) * SCALE):
-            weave = 3 if (px + (py if (px // 4) % 2 else -py)) % 8 < 2 else 0
-            skin.pixel(px, py, shade(base, weave + (px * 3 + py) % 3 - 1))
+            # The paired diagonals read as a few woven clusters at skin scale.
+            warp = (px - x) % 6
+            stitch = ((py - y) + min(warp, 5 - warp)) % 5
+            skin.pixel(px, py, shade(base, 7 if stitch == 0 else -3 if stitch == 1 else 0))
 
 
 def face():
@@ -92,11 +94,19 @@ def jacket():
     rect(35.5, 21, .5, 11, '#46513F')
     rect(36, 29, .5, 3, '#75806B')
     rect(32, 31, 8, 1, '#414D3D')
+    # A shallow stepped shoulder yoke and split tails on the rear panel.
+    rect(32, 21, 2, 1, '#69735F')
+    rect(34, 22, 4, 1, '#646F5B')
+    rect(38, 21, 2, 1, '#69735F')
+    rect(34, 30, 1, 2, '#46513F')
 
 
 def limbs():
     for x, y in ((40, 16), (32, 48)):
         cloth(x, y, 16, 16, SUIT)
+        rect(x + 4, y + 4, 4, 1, '#727B67')
+        rect(x + 12, y + 7, 2, 1, '#4C5748')
+        rect(x + 13, y + 8, 2, 1, '#65705D')
         # Wrapped shirt cuffs and hands on every side of both arms.
         rect(x, y + 11, 16, 1, '#394735')
         rect(x, y + 12, 16, 1, SHIRT)
@@ -108,12 +118,34 @@ def limbs():
     for x, y in ((0, 16), (16, 48)):
         cloth(x, y, 16, 16, TROUSERS)
         rect(x, y + 4, 16, 1, '#373F35')
-        rect(x + 5.5, y + 5, .5, 8, '#68725E')
-        rect(x + 6, y + 5, .5, 8, '#354030')
+        rect(x + 5, y + 5, 1, 6, '#54604F')
+        rect(x + 6, y + 6, 1, 7, '#384334')
+        rect(x + 4, y + 11, 2, 1, '#4D5848')
         rect(x, y + 13, 16, 2, '#49392E')
         rect(x, y + 15, 16, 1, '#282925')
         rect(x + 8, y, 4, 4, '#282925')
         rect(x + 4.5, y + 13.5, 3, .5, '#7C6147')
+
+
+def preview():
+    sheet = Canvas(288, 180, '#E7E4D8')
+    sheet.text('BANKER', 12, 8, '#29362E', 2)
+    for index, back in enumerate((False, True)):
+        figure = Canvas(16, 32)
+        # Orthographic UV swatches in model proportions.
+        arm_offset = 12 if back else 4
+        figure.blit(skin.crop(24 if back else 8, 8, 8, 8), 4, 0)
+        figure.blit(skin.crop(32 if back else 20, 20, 8, 12), 4, 8)
+        left = 0 if back else 12
+        figure.blit(skin.crop(32 + arm_offset, 52, 4, 12), left, 8)
+        figure.blit(skin.crop(40 + arm_offset, 20, 4, 12), 12 - left, 8)
+        figure.blit(skin.crop(16 + arm_offset, 52, 4, 12), 4 if back else 8, 20)
+        figure.blit(skin.crop(arm_offset, 20, 4, 12), 8 if back else 4, 20)
+        sheet.blit(figure, 16 + 78 * index, 26, 64, 128)
+        sheet.text('BACK' if back else 'FRONT', 36 + 78 * index, 162, '#29362E')
+    sheet.blit(skin, 196, 56)
+    sheet.text('64 X 64 UV', 208, 132, '#29362E')
+    sheet.save(Path(__file__).with_name('banker_views.png'))
 
 
 face()
@@ -121,4 +153,5 @@ jacket()
 limbs()
 target = ROOT / 'src/main/resources/assets/economy/textures/entity/banker.png'
 skin.save(target)
+preview()
 print(f'Generated {target.name}, 64x64 with blocky facial features and tailored clothing.')

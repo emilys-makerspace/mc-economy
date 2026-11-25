@@ -250,6 +250,10 @@ class OwnerHistoryTest {
         if (declaration.startsWith("CREATE TABLE activity_observations(")
             || declaration.contains(" ON activity_observations")) sql.execute(declaration);
       }
+      sql.execute("DROP TABLE corporate_cards");
+      sql.execute("DROP TABLE corporate_credit_lines");
+      sql.execute("DROP TABLE corporation_shares");
+      sql.execute("DROP TABLE corporation_registry");
       sql.execute("DROP TRIGGER corporation_integration_wind_down");
       sql.execute("DROP TABLE corporation_integration_mandates");
       sql.execute("DROP TABLE corporation_integration_epochs");

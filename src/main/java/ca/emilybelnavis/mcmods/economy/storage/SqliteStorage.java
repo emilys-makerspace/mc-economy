@@ -224,12 +224,14 @@ public final class SqliteStorage implements FoundationStore {
       }
       if (compatibility != null) {
         boolean done = compatibility.step();
-        storageProgress =
-            new ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress(
-                "journal-validation", compatibility.validated(), -1, false);
-        if (!done) return storageProgress;
+        if (!done)
+          return storageProgress =
+              new ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress(
+                  "journal-validation", compatibility.validated(), -1, false);
         compatibility = null;
-        return storageProgress;
+        return storageProgress =
+            new ca.emilybelnavis.mcmods.economy.foundation.StorageLifecycle.Progress(
+                "schema-validation", 0, -1, false);
       }
       if (initializingVersion > 0 && initializingVersion < SchemaMigrations.CURRENT)
         UpgradeBackup.validate(databasePath.getParent(), initialFingerprint);
@@ -241,6 +243,7 @@ public final class SqliteStorage implements FoundationStore {
             initializingVersion,
             SchemaMigrations.CURRENT,
             SchemaMigrations.REGISTRY);
+      if (initializingVersion >= 3) JournalSchema.prepareValidationQueries(connection);
       JournalSchema.validate(connection);
       RecoverySchema.validate(connection);
       FxSchema.validate(connection);
@@ -248,6 +251,7 @@ public final class SqliteStorage implements FoundationStore {
       CorporationSchema.validateManagers(connection);
       CorporationSchema.validateBanking(connection);
       CorporationSchema.validateIntegrations(connection);
+      CorporationSchema.validateCapital(connection);
       AccountSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.institution.InstitutionSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.pricing.PricingSchema.validate(connection);
@@ -624,6 +628,7 @@ public final class SqliteStorage implements FoundationStore {
       CorporationSchema.validateManagers(connection);
       CorporationSchema.validateBanking(connection);
       CorporationSchema.validateIntegrations(connection);
+      CorporationSchema.validateCapital(connection);
       AccountSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.institution.InstitutionSchema.validate(connection);
       ca.emilybelnavis.mcmods.economy.pricing.PricingSchema.validate(connection);

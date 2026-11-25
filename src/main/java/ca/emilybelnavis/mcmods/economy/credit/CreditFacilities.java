@@ -346,10 +346,7 @@ public final class CreditFacilities {
                           List.of(owner.world().value().toString(), c.actor().value().toString()),
                           1)
                       .isEmpty();
-          if (profile != null && request.currency() != bank.baseCurrency())
-            return reject("CREDIT_CONTRACT_CURRENCY");
-          if (profile == null && request.currency() != denom.currency())
-            return reject("STARTER_WORLD_CURRENCY");
+          if (request.currency() != bank.baseCurrency()) return reject("CREDIT_CONTRACT_CURRENCY");
           var terms =
               new CreditUnderwriting.RevolvingRequest(
                   profile != null,
@@ -403,6 +400,7 @@ public final class CreditFacilities {
                     owner,
                     initial,
                     () -> now,
+                    source.fx(),
                     (i, r, starter) ->
                         issueCommit(intent, reads, request, issuedTier, now, reserve))
                 .handler()

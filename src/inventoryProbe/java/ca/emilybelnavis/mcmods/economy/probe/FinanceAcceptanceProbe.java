@@ -108,11 +108,7 @@ public final class FinanceAcceptanceProbe {
         if (funded && ready() && act(server, "finance_credit_apply", "")) next(server, 11);
       }
       case 11 -> {
-        if (firstAction(server, "finance_credit_network")) next(server, 12);
-      }
-      case 12 -> {
-        if (offered("finance_credit_preview", "") && act(server, "finance_credit_preview", "2500"))
-          next(server, 13);
+        if (firstAction(server, "finance_credit_network")) next(server, 13);
       }
       case 13 -> {
         if (offered("finance_credit_confirm", "") && act(server, "finance_credit_confirm", ""))

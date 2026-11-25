@@ -197,11 +197,12 @@ public final class CreditUnderwriting {
   }
 
   public static RevolvingOffer revolving(RevolvingRequest request) {
-    return revolving(request, false);
+    return revolving(
+        request, false, request.requestedMinor() == minor(2_500, request.worldCurrency()));
   }
 
   private static RevolvingOffer revolving(
-      RevolvingRequest request, boolean nativeWholeMajorValidated) {
+      RevolvingRequest request, boolean nativeWholeMajorValidated, boolean exactStarterLimit) {
     var currency = request.worldCurrency();
     int captured = request.established() ? request.score() : 650;
     long combined = minor(revolvingCeiling(captured), currency),
@@ -222,8 +223,7 @@ public final class CreditUnderwriting {
     else if (request.openFacilities() >= 3) reason = "REVOLVING_FACILITY_CAP";
     else if (captured < 500) reason = "SCORE_BELOW_PRODUCT_FLOOR";
     else if (maximum < minor(500, currency)) reason = "REVOLVING_HEADROOM_BELOW_MINIMUM";
-    else if (!request.established() && request.requestedMinor() != minor(2_500, currency))
-      reason = "STARTER_EXACT_2500";
+    else if (!request.established() && !exactStarterLimit) reason = "STARTER_EXACT_2500";
     else if (!nativeWholeMajorValidated
         && request.requestedMinor() % currency.minorUnitsPerMajor() != 0)
       reason = "WHOLE_MAJOR_LIMIT_REQUIRED";
@@ -293,8 +293,6 @@ public final class CreditUnderwriting {
     if (requestedNative.minorUnits() <= 0
         || requestedNative.minorUnits() % requestedNative.currency().minorUnitsPerMajor() != 0)
       throw new IllegalArgumentException("WHOLE_MAJOR_LIMIT_REQUIRED");
-    if (!terms.established() && requestedNative.currency() != terms.worldCurrency())
-      throw new IllegalArgumentException("STARTER_WORLD_CURRENCY");
     var normalized = exposureToWorld(requestedNative, terms.worldCurrency(), fx);
     var request =
         new RevolvingRequest(
@@ -310,12 +308,25 @@ public final class CreditUnderwriting {
             terms.committedLimitMinor(),
             terms.currentExposureMinor(),
             normalized.minorUnits());
-    var offer = revolving(request, true);
+    boolean exactStarterLimit =
+        terms.established()
+            || requestedNative.equals(
+                starterLimit(terms.worldCurrency(), requestedNative.currency(), fx));
+    var offer = revolving(request, true, exactStarterLimit);
     return new NativeRevolvingOffer(
         offer,
         requestedNative,
         normalized,
         ceilingToFacility(offer.maximumNewLimit(), requestedNative.currency(), fx));
+  }
+
+  /** Fixed first-card allowance, rounded down to a whole unit of the issuing bank's currency. */
+  public static Money starterLimit(EconomyCurrency world, EconomyCurrency issuer, FxSnapshot fx) {
+    var worldLimit = new Money(world, minor(2_500, world));
+    if (world == issuer) return worldLimit;
+    var converted = ceilingToFacility(worldLimit, issuer, fx);
+    long unit = issuer.minorUnitsPerMajor();
+    return new Money(issuer, converted.minorUnits() / unit * unit);
   }
 
   /** Combined debt count, not principal plus the same committed line or a second sold-debt copy. */

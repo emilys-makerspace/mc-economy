@@ -1123,8 +1123,8 @@
             "slot": "economy:block/banking/crownstone_teller_slot",
             "vent": "economy:block/banking/crownstone_teller_vent",
             "screen": "economy:block/banking/crownstone_teller_front",
-            "glass": "economy:block/banking/crownstone_teller_front",
-            "chart": "economy:block/banking/crownstone_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/crownstone_teller_shell"
           },
           "models": [
@@ -1236,8 +1236,8 @@
             "slot": "economy:block/banking/orchard_direct_teller_slot",
             "vent": "economy:block/banking/orchard_direct_teller_vent",
             "screen": "economy:block/banking/orchard_direct_teller_front",
-            "glass": "economy:block/banking/orchard_direct_teller_front",
-            "chart": "economy:block/banking/orchard_direct_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/orchard_direct_teller_shell"
           },
           "models": [
@@ -1349,8 +1349,8 @@
             "slot": "economy:block/banking/tidecrest_teller_slot",
             "vent": "economy:block/banking/tidecrest_teller_vent",
             "screen": "economy:block/banking/tidecrest_teller_front",
-            "glass": "economy:block/banking/tidecrest_teller_front",
-            "chart": "economy:block/banking/tidecrest_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/tidecrest_teller_shell"
           },
           "models": [
@@ -1462,8 +1462,8 @@
             "slot": "economy:block/banking/crosswind_teller_slot",
             "vent": "economy:block/banking/crosswind_teller_vent",
             "screen": "economy:block/banking/crosswind_teller_front",
-            "glass": "economy:block/banking/crosswind_teller_front",
-            "chart": "economy:block/banking/crosswind_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/crosswind_teller_shell"
           },
           "models": [
@@ -1575,8 +1575,8 @@
             "slot": "economy:block/banking/lantern_union_teller_slot",
             "vent": "economy:block/banking/lantern_union_teller_vent",
             "screen": "economy:block/banking/lantern_union_teller_front",
-            "glass": "economy:block/banking/lantern_union_teller_front",
-            "chart": "economy:block/banking/lantern_union_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/lantern_union_teller_shell"
           },
           "models": [
@@ -1688,8 +1688,8 @@
             "slot": "economy:block/banking/mesa_trail_teller_slot",
             "vent": "economy:block/banking/mesa_trail_teller_vent",
             "screen": "economy:block/banking/mesa_trail_teller_front",
-            "glass": "economy:block/banking/mesa_trail_teller_front",
-            "chart": "economy:block/banking/mesa_trail_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/mesa_trail_teller_shell"
           },
           "models": [
@@ -1801,8 +1801,8 @@
             "slot": "economy:block/banking/asterbridge_teller_slot",
             "vent": "economy:block/banking/asterbridge_teller_vent",
             "screen": "economy:block/banking/asterbridge_teller_front",
-            "glass": "economy:block/banking/asterbridge_teller_front",
-            "chart": "economy:block/banking/asterbridge_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/asterbridge_teller_shell"
           },
           "models": [
@@ -1914,8 +1914,8 @@
             "slot": "economy:block/banking/greenhaven_teller_slot",
             "vent": "economy:block/banking/greenhaven_teller_vent",
             "screen": "economy:block/banking/greenhaven_teller_front",
-            "glass": "economy:block/banking/greenhaven_teller_front",
-            "chart": "economy:block/banking/greenhaven_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/greenhaven_teller_shell"
           },
           "models": [
@@ -2027,8 +2027,8 @@
             "slot": "economy:block/banking/meridian_grove_teller_slot",
             "vent": "economy:block/banking/meridian_grove_teller_vent",
             "screen": "economy:block/banking/meridian_grove_teller_front",
-            "glass": "economy:block/banking/meridian_grove_teller_front",
-            "chart": "economy:block/banking/meridian_grove_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/meridian_grove_teller_shell"
           },
           "models": [
@@ -2140,8 +2140,8 @@
             "slot": "economy:block/banking/slate_harbor_teller_slot",
             "vent": "economy:block/banking/slate_harbor_teller_vent",
             "screen": "economy:block/banking/slate_harbor_teller_front",
-            "glass": "economy:block/banking/slate_harbor_teller_front",
-            "chart": "economy:block/banking/slate_harbor_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/slate_harbor_teller_shell"
           },
           "models": [
@@ -2253,8 +2253,8 @@
             "slot": "economy:block/banking/fjordlight_teller_slot",
             "vent": "economy:block/banking/fjordlight_teller_vent",
             "screen": "economy:block/banking/fjordlight_teller_front",
-            "glass": "economy:block/banking/fjordlight_teller_front",
-            "chart": "economy:block/banking/fjordlight_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/fjordlight_teller_shell"
           },
           "models": [
@@ -2366,8 +2366,8 @@
             "slot": "economy:block/banking/harbor_meridian_teller_slot",
             "vent": "economy:block/banking/harbor_meridian_teller_vent",
             "screen": "economy:block/banking/harbor_meridian_teller_front",
-            "glass": "economy:block/banking/harbor_meridian_teller_front",
-            "chart": "economy:block/banking/harbor_meridian_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/harbor_meridian_teller_shell"
           },
           "models": [
@@ -2479,8 +2479,8 @@
             "slot": "economy:block/banking/jade_terrace_teller_slot",
             "vent": "economy:block/banking/jade_terrace_teller_vent",
             "screen": "economy:block/banking/jade_terrace_teller_front",
-            "glass": "economy:block/banking/jade_terrace_teller_front",
-            "chart": "economy:block/banking/jade_terrace_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/jade_terrace_teller_shell"
           },
           "models": [
@@ -2592,8 +2592,8 @@
             "slot": "economy:block/banking/southern_arc_teller_slot",
             "vent": "economy:block/banking/southern_arc_teller_vent",
             "screen": "economy:block/banking/southern_arc_teller_front",
-            "glass": "economy:block/banking/southern_arc_teller_front",
-            "chart": "economy:block/banking/southern_arc_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/southern_arc_teller_shell"
           },
           "models": [
@@ -2705,8 +2705,8 @@
             "slot": "economy:block/banking/fernreach_teller_slot",
             "vent": "economy:block/banking/fernreach_teller_vent",
             "screen": "economy:block/banking/fernreach_teller_front",
-            "glass": "economy:block/banking/fernreach_teller_front",
-            "chart": "economy:block/banking/fernreach_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/fernreach_teller_shell"
           },
           "models": [
@@ -2818,8 +2818,8 @@
             "slot": "economy:block/banking/cedar_parcel_teller_slot",
             "vent": "economy:block/banking/cedar_parcel_teller_vent",
             "screen": "economy:block/banking/cedar_parcel_teller_front",
-            "glass": "economy:block/banking/cedar_parcel_teller_front",
-            "chart": "economy:block/banking/cedar_parcel_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/cedar_parcel_teller_shell"
           },
           "models": [
@@ -2931,8 +2931,8 @@
             "slot": "economy:block/banking/lakeward_cantonal_teller_slot",
             "vent": "economy:block/banking/lakeward_cantonal_teller_vent",
             "screen": "economy:block/banking/lakeward_cantonal_teller_front",
-            "glass": "economy:block/banking/lakeward_cantonal_teller_front",
-            "chart": "economy:block/banking/lakeward_cantonal_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/lakeward_cantonal_teller_shell"
           },
           "models": [
@@ -3043,8 +3043,8 @@
             "slot": "economy:block/banking/newhaven_teller_slot",
             "vent": "economy:block/banking/newhaven_teller_vent",
             "screen": "economy:block/banking/newhaven_teller_front",
-            "glass": "economy:block/banking/newhaven_teller_front",
-            "chart": "economy:block/banking/newhaven_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/newhaven_teller_shell"
           },
           "models": [
@@ -3154,8 +3154,8 @@
             "slot": "economy:block/banking/atlas_reserve_teller_slot",
             "vent": "economy:block/banking/atlas_reserve_teller_vent",
             "screen": "economy:block/banking/atlas_reserve_teller_front",
-            "glass": "economy:block/banking/atlas_reserve_teller_front",
-            "chart": "economy:block/banking/atlas_reserve_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/atlas_reserve_teller_shell"
           },
           "models": [
@@ -3267,8 +3267,8 @@
             "slot": "economy:block/banking/obsidian_capital_teller_slot",
             "vent": "economy:block/banking/obsidian_capital_teller_vent",
             "screen": "economy:block/banking/obsidian_capital_teller_front",
-            "glass": "economy:block/banking/obsidian_capital_teller_front",
-            "chart": "economy:block/banking/obsidian_capital_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/obsidian_capital_teller_shell"
           },
           "models": [
@@ -3380,8 +3380,8 @@
             "slot": "economy:block/banking/alpine_vault_teller_slot",
             "vent": "economy:block/banking/alpine_vault_teller_vent",
             "screen": "economy:block/banking/alpine_vault_teller_front",
-            "glass": "economy:block/banking/alpine_vault_teller_front",
-            "chart": "economy:block/banking/alpine_vault_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/alpine_vault_teller_shell"
           },
           "models": [
@@ -3493,8 +3493,8 @@
             "slot": "economy:block/banking/kintsugi_trust_teller_slot",
             "vent": "economy:block/banking/kintsugi_trust_teller_vent",
             "screen": "economy:block/banking/kintsugi_trust_teller_front",
-            "glass": "economy:block/banking/kintsugi_trust_teller_front",
-            "chart": "economy:block/banking/kintsugi_trust_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/kintsugi_trust_teller_shell"
           },
           "models": [
@@ -3606,8 +3606,8 @@
             "slot": "economy:block/banking/mariner_crest_teller_slot",
             "vent": "economy:block/banking/mariner_crest_teller_vent",
             "screen": "economy:block/banking/mariner_crest_teller_front",
-            "glass": "economy:block/banking/mariner_crest_teller_front",
-            "chart": "economy:block/banking/mariner_crest_teller_front",
+            "glass": "economy:block/teller_glass",
+            "chart": "economy:block/trading_chart",
             "particle": "economy:block/banking/mariner_crest_teller_shell"
           },
           "models": [

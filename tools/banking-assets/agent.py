@@ -68,18 +68,42 @@ def sheet():
     p.rect(26,23,28,26,BRASS);p.pixel(27,23,PAPER);p.pixel(26,24,INK)
     # Back yoke and a diagonal satchel strap, continued over the shoulder.
     p.rect(32,20,40,22,shade(TEAL,14))
+    p.rect(32,22,35,23,shade(TEAL,6))
+    p.rect(37,22,40,23,shade(TEAL,6))
+    p.rect(35,24,36,31,shade(TEAL,-8))
+    p.rect(36,28,37,32,shade(TEAL,7))
+    p.rect(32,31,36,32,TEAL_DARK)
+    p.rect(37,31,40,32,TEAL_DARK)
     p.line(33,21,39,29,STONE)
     p.line(21,21,27,29,shade(STONE,-10))
+    p.rect(21,16,23,20,shade(STONE,6))
     for part in PARTS:
-        if part['material']=='sleeve':
-            for x,y,w,h in cube_faces(part).values():
-                if h==12:p.rect(x,y+9,x+w,y+10,STONE);p.rect(x,y+10,x+w,y+12,SKIN)
-        if part['material']=='trousers':
-            for x,y,w,h in cube_faces(part).values():
-                if h==12:p.rect(x,y+9,x+w,y+12,BOOT);p.rect(x,y+9,x+w,y+10,shade(BOOT,15))
+        faces = cube_faces(part)
+        if part['material'] == 'sleeve':
+            for side in ('front', 'back', 'right', 'left'):
+                x, y, w, h = faces[side]
+                p.rect(x, y + 9, x + w, y + 10, STONE)
+                p.rect(x, y + 10, x + w, y + h, SKIN)
+            x, y, w, _ = faces['front']
+            p.rect(x + 1, y, x + w, y + 1, shade(TEAL, 12))
+            p.rect(x, y + 6, x + 2, y + 7, shade(TEAL, -9))
+            p.rect(x + 1, y + 7, x + 3, y + 8, shade(TEAL, 6))
+        if part['material'] == 'trousers':
+            for side in ('front', 'back', 'right', 'left'):
+                x, y, w, h = faces[side]
+                p.rect(x, y + 9, x + w, y + h, BOOT)
+                p.rect(x, y + 9, x + w, y + 10, shade(BOOT, 15))
+            x, y, w, _ = faces['front']
+            p.rect(x + 1, y + 1, x + 2, y + 6, shade(TROUSER, 8))
+            p.rect(x, y + 6, x + 2, y + 7, shade(TROUSER, -7))
+            p.rect(x + 1, y + 10, x + 3, y + 11, shade(BOOT, 8))
     # Satchel flap and clasp, paper leaves in the separate torso-mounted folio.
     p.rect(50,36,54,38,shade(STONE,-28));p.rect(51,38,53,39,BRASS)
     p.rect(56,36,60,38,shade(STONE,-28));p.rect(57,38,59,39,BRASS)
+    for edge in (50, 56):
+        p.rect(edge, 36, edge + 4, 37, shade(STONE, -12))
+        p.pixel(edge + 1, 38, shade(BRASS, 18))
+        p.rect(edge, 40, edge + 4, 41, shade(STONE, -18))
     p.rect(33,33,39,34,STONE);p.rect(34,34,38,35,shade(INK,45));p.rect(34,36,37,37,shade(INK,45))
     p.pixel(38,33,BRASS)
     return p
@@ -144,12 +168,30 @@ def java_source():
     return '\n'.join(lines)
 
 
-def generate():
+def generate_art():
     texture=sheet()
     texture_path=ASSETS/'textures/entity/banking/collection_agent.png'
     texture.save(texture_path)
     source_path=HERE/'sources/agent/collection_agent_uv.svg'
     texture.svg(source_path)
+    preview=Canvas(544,272,(231,228,216,255))
+    preview.text('WAYSTONE RECOVERY',12,10,INK,2)
+    preview.text('COLLECTION AGENT',12,28,INK)
+    for i,direction in enumerate(('front','back','right')):
+        rendered=figure(texture,direction)
+        preview.blit(rendered,10+i*126,48,128,152)
+        preview.text(direction,40+i*126,211,INK)
+        preview.blit(rendered,53+i*126,225,32,38)
+    preview.blit(texture,400,56,128,128)
+    preview.text('64 X 64 UV',410,194,INK)
+    preview_path=HERE/'previews/agent_views.png'
+    preview.save(preview_path)
+    preview.svg(HERE/'sources/agent/collection_agent_views.svg')
+    return texture_path, source_path, preview_path
+
+
+def generate():
+    texture_path, source_path, preview_path = generate_art()
     blueprint_path=HERE/'sources/agent/collection_agent_model.json'
     blueprint={'schema':'economy:humanoid-art-v1','version':1,'license':'CC0-1.0',
         'name':'Waystone Recovery Collection Agent','texture':'economy:entity/banking/collection_agent',
@@ -160,20 +202,6 @@ def generate():
     output(blueprint_path,blueprint)
     java_path=ROOT/'src/main/java/ca/emilybelnavis/mcmods/economy/client/CollectionAgentGeometry.java'
     java_path.write_text(java_source())
-    preview=Canvas(544,272,(231,228,216,255))
-    preview.text('WAYSTONE RECOVERY',12,10,INK,2)
-    preview.text('COLLECTION AGENT ART ONLY',12,28,INK)
-    for i,direction in enumerate(('front','back','right')):
-        rendered=figure(texture,direction)
-        preview.blit(rendered,10+i*126,48,128,152)
-        preview.text(direction,40+i*126,211,INK)
-        preview.blit(rendered,53+i*126,225,32,38)
-    preview.blit(texture,400,56,128,128)
-    preview.text('64 X 64 UV',410,194,INK)
-    preview.text('NO ENTITY REGISTERED',390,211,INK)
-    preview_path=HERE/'previews/agent_views.png'
-    preview.save(preview_path)
-    preview.svg(HERE/'sources/agent/collection_agent_views.svg')
     return {'texture':'economy:entity/banking/collection_agent',
         'textureFile':str(texture_path.relative_to(ROOT)),
         'blueprintFile':str(blueprint_path.relative_to(ROOT)),

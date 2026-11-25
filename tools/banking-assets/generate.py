@@ -4,7 +4,7 @@ SPDX-License-Identifier: CC0-1.0
 """
 from pathlib import Path
 import hashlib, json
-from art import ASSETS, ROOT, BANKS, NETWORKS, Canvas, PAPER, INK, color, contrast, mark, output, shade
+from art import ASSETS, ROOT, BANKS, NETWORKS, Canvas, PAPER, INK, color, contrast, lettering_width, mark, output, shade
 HERE=Path(__file__).resolve().parent
 
 def key_path(kind,key):return ASSETS/kind/(key+'.png')
@@ -15,21 +15,78 @@ def tier_badge(tier):
     else:p.rect(7,4,9,12,PAPER)
     return p
 
-def card(bank,product,network):
-    p=Canvas(64,64);primary=color(bank['primary']);accent=color(bank['accent']);fg=contrast(primary)
-    p.polygon([(4,12),(58,12),(62,16),(62,48),(58,52),(4,52),(2,50),(2,14)],fg)
-    p.rect(5,15,59,49,primary)
-    # Product shapes differ without relying on issuer or network color.
-    if product=='debit':p.rect(7,17,23,24,accent)
-    else:p.polygon([(7,17),(19,17),(24,20),(19,24),(7,24)],accent)
-    p.text('DB' if product=='debit' else 'CR',9,18,contrast(accent))
-    p.blit(mark(bank['key'],accent),7,26,22,22)
-    # Original pixel lettering, no player names, numbers, limits or credentials.
-    for i,label in enumerate(bank['label'][:2]):p.text(label,31,25+i*6,fg)
-    p.text(bank['currency'],31,39,fg)
-    if network:p.blit(mark(network,fg),46,35,14,14)
+NETWORK_PALETTES = {n['key']: (color(n['primary']), color(n['accent'])) for n in NETWORKS}
+
+
+def face_panel(x, y, network):
+    """Positive distances are inside the product's large coloured panel."""
+    if network == 'orbit':
+        return 34 - int(((x - 58) ** 2 + (y - 36) ** 2) ** 0.5)
+    if network == 'keystone':
+        return x - (41 - 6 * ((y - 12) // 12))
+    if network == 'wayline':
+        return x - (49 - (y - 12) * 3 // 4)
+    if network == 'ember':
+        return 31 - abs(x - 56) - abs(y - 33) // 2
+    return y - 40  # Debit signature band
+
+
+def card(bank, product, network, corporate=False):
+    p = Canvas(64, 64)
+    primary, accent = color(bank['primary']), color(bank['accent'])
+    base, trim = (accent, primary) if corporate else (primary, accent)
+    panel, foil = NETWORK_PALETTES[network] if network else (trim, base)
+    if network and corporate:
+        panel, foil = foil, panel
+
+    # Cut corners, a polished upper edge and a shadow along the lower lip.
+    for y in range(12, 52):
+        inset = max(0, 3 - min(y - 12, 51 - y))
+        for x in range(2 + inset, 62 - inset):
+            depth = face_panel(x, y, network)
+            field = panel if depth >= 0 else base
+            tone = (3 - (x + 2 * (y - 12)) // 17) * 3
+            if depth in (0, 1):
+                pigment = foil if network else trim
+            elif network and depth in (4, 9):
+                pigment = shade(panel, 18)
+            else:
+                pigment = shade(field, tone)
+            if y == 12 or x == 2 + inset:
+                pigment = shade(field, 45)
+            elif y >= 50 or x == 61 - inset:
+                pigment = shade(field, -38)
+            p.pixel(x, y, pigment)
+
+    # Issuer lockup and a segmented contact chip occupy the quiet left field.
+    label_width = max(map(lettering_width, bank['label']))
+    p.rect(4, 13, 6 + label_width, 29, base)
+    for i, label in enumerate(bank['label'][:2]):
+        p.lettering(label, 5, 14 + 8 * i, contrast(base))
+    if corporate:
+        p.rect(52, 14, 61, 25, base)
+        p.blit(mark(bank['key'], trim), 52, 15, 9, 9)
     else:
-        p.rect(48,45,60,48,fg);p.line(48,44,54,40,fg);p.line(54,40,59,44,fg)
+        p.blit(mark(bank['key'], trim), 19, 29, 12, 12)
+    p.rect(7, 31, 18, 38, '#74583F')
+    p.rect(7, 30, 17, 37, '#E1BC76')
+    p.rect(8, 30, 16, 31, '#FFDEA0')
+    for x in (10, 14):
+        p.rect(x, 31, x + 1, 37, '#947447')
+    p.rect(7, 33, 11, 34, '#947447')
+    p.rect(14, 33, 17, 34, '#947447')
+
+    # A solid nameplate keeps the tiny letters clear of the engraved pattern.
+    label = 'DEBIT' if product == 'debit' else 'CREDIT'
+    p.rect(5, 41, 8 + lettering_width(label), 50, trim)
+    p.lettering(label, 7, 42, contrast(trim))
+    if network:
+        p.blit(mark(network, foil), 45, 28, 15, 15)
+    currency = bank['currency']
+    p.lettering(currency, 60 - lettering_width(currency), 43, contrast(panel))
+    if corporate:
+        p.rect(19, 30, 44, 40, INK)
+        p.lettering('CORP', 20, 32, PAPER)
     return p
 
 def write_icon_sources():
@@ -64,7 +121,12 @@ def write_icon_sources():
         p.svg(HERE/'sources/icons'/f'{name}.svg')
 
 def cards_and_marks():
-    cards=[];issuers=[];lang={};sheet=Canvas(864, len(BANKS)*84, '#192631')
+    cards=[];issuers=[];lang={}
+    row_height = 84
+    label_width = 150
+    product_width = 184
+    columns = 1 + max(len(bank['networks']) for bank in BANKS)
+    sheet = Canvas(label_width + columns * product_width, len(BANKS) * row_height, '#192631')
     for idx,bank in enumerate(BANKS):
         key=bank['key'];primary=color(bank['primary']);accent=color(bank['accent'])
         logo=mark(key,accent);logo.save(key_path('textures','gui/sprites/banking/issuers/'+key));logo.svg(HERE/'sources/issuers'/f'{key}.svg')
@@ -73,8 +135,12 @@ def cards_and_marks():
                         'palette':{'primary':bank['primary'],'accent':bank['accent']},
                         'sprite':'economy:banking/issuers/'+key,'texture':'economy:gui/sprites/banking/issuers/'+key})
         lang['bank.economy.'+key]=bank['name']
-        sheet.text(bank['name'].upper(),5,idx*84+5,PAPER);sheet.text(bank['currency']+' '+bank['tier'].replace('_',' '),5,idx*84+14,PAPER)
-        x=210
+        top = idx * row_height
+        sheet.rect(0, top, sheet.w, top + 1, '#42525E')
+        for i, word in enumerate(bank['name'].split()):
+            sheet.lettering(word, 6, top + 6 + i * 16, PAPER, scale=2)
+        sheet.lettering(bank['currency'], 6, top + 70, PAPER)
+        x = label_width
         for product,network in [('debit',None)]+[('credit',n.lower()) for n in bank['networks']]:
             item=key+'_'+product+('_'+network if network else '')
             art=card(bank,product,network);art.save(key_path('textures','item/banking/'+item));art.svg(HERE/'sources/cards'/f'{item}.svg')
@@ -85,13 +151,21 @@ def cards_and_marks():
             cards.append({'key':item,'institution':'economy:bank/'+key,'product':product,'network':network,
                           'texture':'economy:'+texture,'model':'economy:'+model,'translation':'item.economy.'+item,
                           'registered':False,'financial_authority':False})
-            sheet.blit(art,x,idx*84+18,64,64);sheet.blit(art,x+43,idx*84+2,16,16);x+=78
+            sheet.lettering((network + ' credit') if network else 'Debit', x, top + 5, PAPER)
+            for offset, title, face in (
+                (0, 'Personal', art),
+                (92, 'Corporate', card(bank, product, network, corporate=True)),
+            ):
+                sheet.lettering(title, x + offset, top + 16, '#B8C9D2')
+                sheet.blit(face, x + offset, top + 20)
+                sheet.blit(face, x + offset + 66, top + 44, 16, 16)
+            x += product_width
     for network in NETWORKS:
         key=network['key'];logo=mark(key,network['accent']);logo.svg(HERE/'sources/networks'/f'{key}.svg')
         lang['network.economy.'+key]=network['name']
     sheet.save(HERE/'previews/cards.png')
     for page in range(3):
-        start=page*8*84;height=min(8*84,sheet.h-start)
+        start=page*8*row_height;height=min(8*row_height,sheet.h-start)
         sheet.crop(0,start,sheet.w,height).save(HERE/'previews'/f'cards_{page+1}.png')
     # Monochrome/native-scale review supplements enlarged card/brand presentations.
     marks=Canvas(560,128,'#192631')

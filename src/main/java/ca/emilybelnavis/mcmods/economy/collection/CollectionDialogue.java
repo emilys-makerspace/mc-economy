@@ -354,9 +354,7 @@ public final class CollectionDialogue {
                                       + " · "
                                       + (account.primary()
                                           ? UiText.t("ui.dialogue.primary.a9a96e")
-                                          : UiText.t("ui.dialogue.bank.00f57e"))
-                                      + " · "
-                                      + account.id().value().toString().substring(0, 8),
+                                          : UiText.t("ui.dialogue.bank.00f57e")),
                                   state.funding != null
                                       && state.funding.id().equals(account.id())));
                         }
@@ -395,9 +393,7 @@ public final class CollectionDialogue {
     if (state.funding != null)
       lines.add(
           UiText.t("ui.dialogue.funding.a2a66d")
-              + state.funding.currency().code()
-              + " / "
-              + state.funding.id().value().toString().substring(0, 8));
+              + UiText.t("ui.terminal.account.bank", state.funding.currency().code()));
     choices.add(choice("cases", "", UiText.t("ui.dialogue.choose_case.f81e0b"), false));
     choices.add(choice("funding", "", UiText.t("ui.dialogue.choose_funding.1eb047"), false));
     if (state.selected != null && state.funding != null) {

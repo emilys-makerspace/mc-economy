@@ -113,17 +113,25 @@ class AccountLifecycleTest {
       var denominationBank = accountId();
       var source = accountId();
       var foreign = accountId();
+      var otherPlayer = new PlayerId(UUID.randomUUID());
       store.transaction(
           tx -> {
             insertBank(tx, primary, player, EUR, true);
             insertBank(tx, denominationBank, player, CAD, false);
             insertBank(tx, source, player, JPY, false);
-            insertBank(tx, foreign, new PlayerId(UUID.randomUUID()), USD, false);
+            insertBank(tx, foreign, otherPlayer, USD, false);
             return null;
           });
 
       ClosureReader untouched =
           (reads, account) -> fail("Ledger must remain private for invalid sources");
+      var otherOwner = owner(store.snapshot().worldId(), otherPlayer);
+      var lastAccount =
+          store.transaction(
+              tx ->
+                  AccountLifecycle.eligibility(
+                      tx::query, otherOwner, new Close(foreign, 1, null, null), untouched));
+      assertEquals(AccountLifecycle.Eligibility.ACCOUNT_PROTECTED, lastAccount);
       assertEquals(
           "ACCOUNT_PROTECTED", close(store, owner, new Close(primary, 1, null, null), untouched));
       assertEquals(

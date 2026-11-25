@@ -86,6 +86,7 @@ final class OfflineInspector {
       if (schema >= 57) CorporationSchema.validateManagers(c);
       if (schema >= 58) CorporationSchema.validateBanking(c);
       if (schema >= 59) CorporationSchema.validateIntegrations(c);
+      if (schema >= 60) CorporationSchema.validateCapital(c);
       if (schema >= 37) ca.emilybelnavis.mcmods.economy.journal.KioskUpgrades.validate(c);
       if (schema >= 38) BranchPlacementSchema.validate(c);
       if (schema >= 39) BankStaffingSchema.validate(c);

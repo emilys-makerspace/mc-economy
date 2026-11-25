@@ -50,7 +50,8 @@ public final class CreditProfiles {
       if (score < 300
           || score > 900
           || firstIssuedAt < 0
-          || starterMinor != Math.multiplyExact(2500L, starterCurrency.minorUnitsPerMajor())
+          || starterMinor <= 0
+          || starterMinor % starterCurrency.minorUnitsPerMajor() != 0
           || policyVersion != VERSION
           || revision < 1
           || lastBoundary < -1
@@ -199,6 +200,15 @@ public final class CreditProfiles {
 
   public static Registration firstIssuance(
       PartyRef owner, InitialRequest request, LongSupplier processingClock, ActualIssuance actual) {
+    return firstIssuance(owner, request, processingClock, null, actual);
+  }
+
+  static Registration firstIssuance(
+      PartyRef owner,
+      InitialRequest request,
+      LongSupplier processingClock,
+      CreditUnderwriting.FxSnapshot fx,
+      ActualIssuance actual) {
     Objects.requireNonNull(processingClock);
     return new Registration(
         1,
@@ -214,7 +224,10 @@ public final class CreditProfiles {
           var denomination = RebaseSettlement.denomination(reads).orElse(null);
           if (denomination == null
               || denomination.revision() != request.denominationRevision()
-              || denomination.currency() != request.currency()) return reject("DENOMINATION_STALE");
+              || InstitutionCatalog.require(request.issuer()).baseCurrency() != request.currency())
+            return reject("DENOMINATION_STALE");
+          if (denomination.currency() != request.currency() && fx == null)
+            return unavailable("CREDIT_EXPOSURE_UNAVAILABLE");
           if (!origin(reads).filter(o -> o == request.calendarOrigin()).isPresent())
             return unavailable("CREDIT_CALENDAR_UNAVAILABLE");
           var enabled =
@@ -232,9 +245,7 @@ public final class CreditProfiles {
                   request.owner(),
                   request.issuer(),
                   request.facility(),
-                  new Money(
-                      request.currency(),
-                      Math.multiplyExact(2500L, request.currency().minorUnitsPerMajor())),
+                  CreditUnderwriting.starterLimit(denomination.currency(), request.currency(), fx),
                   650,
                   now,
                   intent.operationId().value());

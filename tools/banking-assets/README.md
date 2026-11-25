@@ -4,7 +4,7 @@ Run `python3 tools/banking-assets/generate.py` from the repository root, then `p
 
 All new art and geometry in this directory and the generated `banking/` resource directories are original project-authored work, dedicated under **CC0-1.0** (https://creativecommons.org/publicdomain/zero/1.0/). No downloaded images, fonts, real financial marks or copied trade dress were used. This dedication does not relicense existing project assets or Minecraft/NeoForge code. Existing terminal geometry is reused under the project's existing license.
 
-`art.py`, `generate.py`, `hardware.py` and `agent.py` are editable construction sources. `sources/` contains pixel-aligned SVG artwork and geometry source snapshots. `resource_inventory.json` mirrors the shipped manifest at `assets/economy/banking/art_manifest.json`; it lists issuers, networks, card art, hardware models and Collection Agent resources. The editable menu icons and network marks live under `sources/`. `previews/` contains all banks at inventory/UI scale, monochrome identities, hardware fronts and civilian agent views. Card lettering uses the original 3×5 pixel alphabet in `art.py`; DB/rectangle and CR/arrow identify product, network motifs identify networks, and both products use untiered artwork. Debit cards have one appearance per bank and credit cards one per bank/network. Old approved tier-suffixed item IDs remain registry aliases for save compatibility; obsolete tier-specific artwork is removed.
+`art.py`, `generate.py`, `hardware.py` and `agent.py` are editable construction sources. `sources/` contains pixel-aligned SVG artwork and geometry source snapshots. `resource_inventory.json` mirrors the shipped manifest at `assets/economy/banking/art_manifest.json`; it lists issuers, networks, card art, hardware models and Collection Agent resources. The editable menu icons and network marks live under `sources/`. `previews/` contains all banks at inventory/UI scale, monochrome identities, hardware fronts and civilian agent views. Card and fixture labels use the original seven-pixel-high alphabet from `art.py`, with narrower letters where appropriate. Each issuer has a debit design in its own colours and a credit design for each supported network, combining the issuer and network palettes. The 64×64 sprites use stepped shading for a 16-bit pixel-art look. In the [card preview](previews/cards.png), each issuer occupies one row. The debit and credit columns pair personal and corporate versions, each with a 16×16 inventory sample beside the full texture. Old approved tier-suffixed item IDs remain registry aliases for save compatibility; obsolete tier-specific artwork is removed.
 
 ## Physical binding handoff
 
@@ -37,7 +37,7 @@ monitor, separate numbered keycaps, card-reader and cash-throat details, louvers
 a screw-fastened rear service door and its lock. Each of the 23 banks and the
 generic console receives its own enamel cabinet and accent-strip textures.
 These are original CC0-1.0 pixel drawings made with the project's `Canvas`
-primitives and three-by-five alphabet in `art.py`.
+primitives and seven-pixel-high lettering in `art.py`.
 
 The assembled 57 cuboids include raised keys and reader controls, a recessed
 screen with independent bezel rails, a cash tray, walnut side cheeks, metal

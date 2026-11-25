@@ -9,7 +9,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -272,7 +271,7 @@ public final class CashCatalog {
       long minorUnits,
       boolean bill) {
     DeferredItem<Item> item =
-        ITEMS.register(id, () -> new CollectibleItem(new Item.Properties().stacksTo(64)));
+        ITEMS.register(id, () -> new Item(new Item.Properties().stacksTo(64)));
     cash.put(id, new Denomination(id, currency, minorUnits, bill, item));
   }
 
@@ -294,18 +293,5 @@ public final class CashCatalog {
                             .filter(value -> value.currency() == currency)
                             .forEach(value -> output.accept(value.item().get())))
                 .build());
-  }
-
-  private static final class CollectibleItem extends Item {
-    private CollectibleItem(Properties properties) {
-      super(properties);
-    }
-
-    @Override
-    public void appendHoverText(
-        ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-      super.appendHoverText(stack, context, tooltip, flag);
-      tooltip.add(Component.translatable("cash.economy.collectible_tooltip"));
-    }
   }
 }

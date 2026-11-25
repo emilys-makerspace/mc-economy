@@ -30,6 +30,10 @@ class CreditFacilitiesTest {
     final PartyRef owner;
 
     Fixture() throws Exception {
+      this(EconomyCurrency.CAD);
+    }
+
+    Fixture(EconomyCurrency worldCurrency) throws Exception {
       store.initialize(path.toRealPath());
       owner = new PartyRef(store.snapshot().worldId(), new PartyRef.Player(actor));
       var fx =
@@ -41,7 +45,8 @@ class CreditFacilitiesTest {
           Journal.Status.COMMITTED,
           fx.submit(
                   intent(
-                      FxService.OPEN, new Journal.CanonicalRequest(1, Map.of("currency", "CAD"))))
+                      FxService.OPEN,
+                      new Journal.CanonicalRequest(1, Map.of("currency", worldCurrency.code()))))
               .status());
       var capital =
           new InstitutionCapital(
@@ -78,6 +83,11 @@ class CreditFacilitiesTest {
     }
 
     CreditFacilities.IssueRequest request(long amount) {
+      return request(BANK, EconomyCurrency.CAD, amount);
+    }
+
+    CreditFacilities.IssueRequest request(
+        InstitutionCatalog.InstitutionId bank, EconomyCurrency currency, long amount) {
       long revision =
           store.transaction(
               tx ->
@@ -91,7 +101,7 @@ class CreditFacilitiesTest {
                   UUID.randomUUID(),
                   actor,
                   BranchAdmission.Action.valueOf("CREDIT_ISSUE"),
-                  BANK,
+                  bank,
                   null,
                   null,
                   0,
@@ -100,8 +110,8 @@ class CreditFacilitiesTest {
       return new CreditFacilities.IssueRequest(
           proof,
           UUID.randomUUID(),
-          InstitutionCatalog.Network.ORBIT,
-          EconomyCurrency.CAD,
+          InstitutionCatalog.require(bank).networks().iterator().next(),
+          currency,
           amount,
           revision,
           0,
@@ -236,6 +246,48 @@ class CreditFacilitiesTest {
     @Override
     public void close() throws Exception {
       store.close();
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"orchard_direct", "cedar_parcel"})
+  void firstCardUsesIssuingBankCurrencyInGbpWorld(String issuer) throws Exception {
+    try (var f = new Fixture(EconomyCurrency.GBP)) {
+      var bank =
+          InstitutionCatalog.require(
+              new InstitutionCatalog.InstitutionId("economy:bank/" + issuer));
+      var currency = bank.baseCurrency();
+      var fx = f.store.transaction(tx -> f.inputs(tx::query, f.owner, f.time.get()).fx());
+      var worldLimit = new Money(EconomyCurrency.GBP, 250000);
+      long ceiling = CreditUnderwriting.ceilingToFacility(worldLimit, currency, fx).minorUnits();
+      long limit = ceiling - ceiling % currency.minorUnitsPerMajor();
+      var wrong = f.request(bank.id(), EconomyCurrency.GBP, worldLimit.minorUnits());
+      assertEquals(
+          "CREDIT_CONTRACT_CURRENCY",
+          f.submit(
+                  CreditFacilities.ISSUE,
+                  CreditFacilities.issuance(
+                      f.owner, wrong, BankProviders.NO_TIER2, f::inputs, f.time::get),
+                  f.intent(CreditFacilities.ISSUE, wrong.request()))
+              .result()
+              .code());
+      var request = f.request(bank.id(), currency, limit);
+      assertEquals(
+          "CREDIT_CARD_ISSUED",
+          f.submit(
+                  CreditFacilities.ISSUE,
+                  CreditFacilities.issuance(
+                      f.owner, request, BankProviders.NO_TIER2, f::inputs, f.time::get),
+                  f.intent(CreditFacilities.ISSUE, request.request()))
+              .result()
+              .code());
+      var facility = f.get(request.facility());
+      assertEquals(currency, facility.currency());
+      assertEquals(limit, facility.limitMinor());
+      var profile =
+          f.store.transaction(tx -> CreditProfiles.find(tx::query, f.owner).orElseThrow());
+      assertEquals(currency, profile.starterCurrency());
+      assertEquals(limit, profile.starterMinor());
     }
   }
 

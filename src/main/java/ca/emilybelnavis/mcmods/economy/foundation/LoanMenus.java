@@ -10,7 +10,6 @@ import ca.emilybelnavis.mcmods.economy.credit.CreditUnderwriting;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.loan.*;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletionStage;
 import net.minecraft.server.level.ServerPlayer;
@@ -273,7 +272,16 @@ public final class LoanMenus {
               reply(
                   audience,
                   "finance_loan_schedule",
-                  LoanReport.schedule(page),
+                  page.entries().isEmpty()
+                      ? List.of(UiText.t("ui.finance.player.no_schedule"))
+                      : page.entries().stream()
+                          .map(
+                              row ->
+                                  UiText.t(
+                                      "ui.finance.player.installment",
+                                      FinanceMenuSupport.date(row.dueAt()),
+                                      money(page.currency(), row.paymentMinor())))
+                          .toList(),
                   UiText.t("ui.finance.schedule"),
                   choices);
             });
@@ -308,7 +316,16 @@ public final class LoanMenus {
               reply(
                   audience,
                   "finance_loan_schedule",
-                  LoanReport.installments(page),
+                  page.installments().isEmpty()
+                      ? List.of(UiText.t("ui.finance.player.no_installments"))
+                      : page.installments().stream()
+                          .map(
+                              row ->
+                                  UiText.t(
+                                      "ui.finance.player.installment",
+                                      FinanceMenuSupport.date(row.dueAt()),
+                                      money(state.loan.currency(), row.originalMinor())))
+                          .toList(),
                   UiText.t("ui.finance.installments"),
                   choices);
             });
@@ -379,10 +396,7 @@ public final class LoanMenus {
                   "finance_loan_input",
                   List.of(
                       UiText.t("ui.finance.loanmenus.24", bank.name()),
-                      UiText.t("ui.finance.loanmenus.25"),
-                      UiText.t("ui.finance.loanmenus.26"),
-                      UiText.t("ui.finance.loanmenus.27"),
-                      UiText.t("ui.finance.loanmenus.28")),
+                      UiText.t("ui.finance.player.loan_inputs", bank.baseCurrency().code())),
                   UiText.t("ui.finance.choose_product_destination"),
                   choices);
             });
@@ -424,10 +438,7 @@ public final class LoanMenus {
               var branch = result.getKey().orElseThrow();
               var context = result.getValue().orElseThrow();
               var bank = bank(branch);
-              var currency =
-                  product == CreditUnderwriting.Product.SUBPRIME_LOAN
-                      ? context.denomination().currency()
-                      : bank.baseCurrency();
+              var currency = bank.baseCurrency();
               long principal = Math.multiplyExact(principalMajor, currency.minorUnitsPerMajor());
               return services.readAccounts(
                   grant,
@@ -490,7 +501,7 @@ public final class LoanMenus {
                             "ui.finance.loanmenus.30",
                             CreditReport.label(offer.worldOffer().reason())),
                         UiText.t("ui.finance.loanmenus.31", money(offer.maximumNativePrincipal())),
-                        UiText.t("ui.finance.loanmenus.32")),
+                        UiText.t("ui.finance.player.change_amount")),
                     UiText.t("ui.finance.application_unavailable"),
                     List.of(choice("apply", "", UiText.t("ui.finance.loanmenus.33"), false)));
                 return;
@@ -579,16 +590,16 @@ public final class LoanMenus {
             request.years()));
     lines.add(
         UiText.t(
-            "ui.finance.loanmenus.37",
+            "ui.finance.player.fixed_apr",
             UiText.decimal(offer.apr().movePointRight(2).stripTrailingZeros())));
     lines.add(
         UiText.t(
-            "ui.finance.loanmenus.38", money(request.currency(), schedule.installmentMinor())));
+            "ui.finance.player.installment_amount",
+            money(request.currency(), schedule.installmentMinor())));
     long firstDue =
         Math.addExact(BankingController.services(audience.player()).financialMillis(), Loans.MONTH);
-    lines.add(UiText.t("ui.finance.loanmenus.39", Instant.ofEpochMilli(firstDue)));
-    lines.add(UiText.t("ui.finance.loanmenus.40"));
-    lines.add(UiText.t("ui.finance.loanmenus.41"));
+    lines.add(UiText.t("ui.finance.player.first_due", FinanceMenuSupport.date(firstDue)));
+    lines.add(UiText.t("ui.finance.player.loan_risk"));
     if (preview.fx() != null) {
       lines.add(
           UiText.t(
@@ -605,7 +616,7 @@ public final class LoanMenus {
     } else
       lines.add(
           UiText.t("ui.finance.loanmenus.44", money(request.currency(), request.principalMinor())));
-    lines.add(UiText.t("ui.finance.loanmenus.45"));
+    lines.add(UiText.t("ui.finance.player.confirm_soon"));
     reply(
         audience,
         "finance_loan_offer",
@@ -686,7 +697,7 @@ public final class LoanMenus {
         "finance_loan_payment",
         List.of(
             UiText.t("ui.finance.loanmenus.48", state.funding.currency().code()),
-            UiText.t("ui.finance.loanmenus.49")),
+            UiText.t("ui.finance.player.loan_repay_amount")),
         UiText.t("ui.finance.choose_amount"),
         paymentChoices(state));
   }
@@ -779,7 +790,7 @@ public final class LoanMenus {
                   fx.fx().debit().currency(),
                   Math.addExact(fx.fx().debit().minorUnits(), fx.fx().fee().minorUnits()))));
     } else lines.add(UiText.t("ui.finance.loanmenus.56", money(currency, r.amountMinor())));
-    lines.add(UiText.t("ui.finance.loanmenus.57", Instant.ofEpochMilli(r.expiresAt())));
+    lines.add(UiText.t("ui.finance.player.confirm_soon"));
     if (r.fullPayoff()) lines.add(UiText.t("ui.finance.loanmenus.58"));
     reply(
         audience,

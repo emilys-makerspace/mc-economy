@@ -19,6 +19,17 @@ public final class CardDesigns {
     return "economy:issued_" + issuer.key().substring("economy:bank/".length()) + "_debit";
   }
 
+  public static String corporateDebitId(InstitutionCatalog.InstitutionId issuer) {
+    var bank = InstitutionCatalog.require(issuer);
+    return corporateId(id(issuer, bank.tier1() ? 1 : 2));
+  }
+
+  public static String corporateId(String personalDesign) {
+    if (!personalDesign.startsWith("economy:issued_"))
+      throw new IllegalArgumentException("Invalid card design");
+    return personalDesign.replace("economy:issued_", "economy:issued_corporate_");
+  }
+
   public static List<Design> all() {
     var result = new ArrayList<Design>();
     for (var bank : InstitutionCatalog.banks()) {

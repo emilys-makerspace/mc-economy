@@ -520,7 +520,7 @@ public final class TraderController {
           flow.view = view;
           selectAvailable(flow);
           flow.busy = false;
-          flow.status = "Choose rail, quantity, and account or cash currency";
+          flow.status = "Choose how to pay and how many to trade.";
           render(menu, flow);
         });
   }
@@ -697,7 +697,7 @@ public final class TraderController {
       throw new IllegalArgumentException("Select a rail and its account or currency first");
     reset(flow);
     flow.busy = true;
-    flow.status = "Flushing trader activity…";
+    flow.status = "Loading offers…";
     render(menu, flow);
     async(
         player,
@@ -1047,7 +1047,7 @@ public final class TraderController {
                 "Combined goods and cash/change do not fit; inputs untouched");
           pending.permit.capacity = true;
           flow.busy = false;
-          flow.status = "Review the exact quote, then Confirm";
+          flow.status = "Review the price, then confirm.";
           render(menu, flow);
         });
   }
@@ -1340,7 +1340,7 @@ public final class TraderController {
         || !TraderInventory.fitsCombined(player, pending.snapshot, pending.outputs))
       throw new IllegalArgumentException("Inventory or trader changed; inputs untouched");
     flow.busy = true;
-    flow.status = "Reserving exact inputs…";
+    flow.status = "Preparing your trade…";
     render(menu, flow);
     {
       if (!witness(player, menu, pending.permit))
@@ -1409,7 +1409,7 @@ public final class TraderController {
     var pricing = flow.services.servicePricing();
     // Held inputs replace the original inventory witness after their independently saved removal.
     pending.permit.capacity = true;
-    flow.status = "Committing the original trade…";
+    flow.status = "Completing your trade…";
     render(menu, flow);
     async(
         player,
@@ -1532,7 +1532,7 @@ public final class TraderController {
         0,
         () -> {
           flow.busy = false;
-          flow.status = "Trade committed. Any retained delivery is available under Claims.";
+          flow.status = "Trade complete. Pick up any remaining items under Deliveries.";
           pending.permit.live.set(false);
           flow.pending = null;
           render(menu, flow);
@@ -1650,7 +1650,7 @@ public final class TraderController {
           TraderInventory.prepareDelivery(player, current, delivery.originalInput(), world);
           var outputs = TraderInventory.outputStacks(player, current, world);
           if (!BankingInventory.fits(player, outputs)) {
-            flow.status = "Delivery retained: clear inventory space and use Claims";
+            flow.status = "Make room in your inventory, then open Deliveries.";
             done.run();
             return;
           }
@@ -1690,7 +1690,7 @@ public final class TraderController {
                 // Recheck before the saved STARTED marker; an inventory change retains an uncertain
                 // attempt.
                 if (!inventoryMatches(player, inventory)) {
-                  flow.status = "Inventory changed; delivery retained for reconciliation";
+                  flow.status = "Your inventory changed. Check Deliveries before trying again.";
                   done.run();
                   return;
                 }
@@ -1772,7 +1772,7 @@ public final class TraderController {
         id,
         () -> {
           flow.busy = false;
-          flow.status = "Claim processed; retained cases remain recoverable";
+          flow.status = "Delivery checked.";
           render(menu, flow);
         });
   }
@@ -1789,24 +1789,42 @@ public final class TraderController {
         flow,
         flow.services.tradeStorage(
             store ->
-                store.transaction(tx -> NpcDeliveries.page(tx::query, actor, after, pageSize + 1))),
-        ids -> {
+                store.transaction(
+                    tx ->
+                        NpcDeliveries.page(tx::query, actor, after, pageSize + 1).stream()
+                            .map(id -> Custody.find(tx::query, actor, id, false).orElseThrow())
+                            .toList())),
+        deliveries -> {
           var choices = new ArrayList<TraderNetwork.Choice>();
-          for (var id : ids.stream().limit(pageSize).toList())
-            choices.add(
-                choice("claim", id.toString(), "Collect " + id.toString().substring(0, 8), false));
+          for (var delivery : deliveries.stream().limit(pageSize).toList()) {
+            String items = delivery.terms().items();
+            String label = "Collect returned items";
+            if (items.startsWith("withdrawal-cash-v1|")) label = "Collect cash";
+            else if (items.startsWith("[")) {
+              var goods = com.google.gson.JsonParser.parseString(items).getAsJsonArray();
+              if (!goods.isEmpty()) {
+                var first = goods.get(0).getAsJsonObject();
+                label =
+                    "Collect "
+                        + first.get("count").getAsInt()
+                        + " × "
+                        + itemName(first.getAsJsonObject("goods").get("item").getAsString())
+                        + (goods.size() > 1 ? " + more" : "");
+              }
+            }
+            choices.add(choice("claim", delivery.id().toString(), label, false));
+          }
           if (after != null) choices.add(choice("back", "", "First page", false));
-          if (ids.size() > pageSize)
-            choices.add(choice("next", ids.get(pageSize - 1).toString(), "More claims", false));
+          if (deliveries.size() > pageSize)
+            choices.add(
+                choice("next", deliveries.get(pageSize - 1).id().toString(), "More claims", false));
           choices.add(choice("browse", "", "Back", false));
           choices.add(choice("exit", "", "Close", false));
           flow.busy = false;
           menu.publish(
               "claims",
-              List.of(
-                  "Committed goods and cash are retained until saved delivery.",
-                  "Ambiguous attempts require operator reconciliation."),
-              ids.isEmpty() ? "No retained deliveries on this page" : "Choose a retained delivery",
+              List.of(),
+              deliveries.isEmpty() ? "Nothing to collect" : "Choose what to collect",
               false,
               choices);
         });
@@ -2040,7 +2058,7 @@ public final class TraderController {
               choice(
                   "account",
                   account.id().value().toString(),
-                  account.currency() + " " + account.id().value().toString().substring(0, 8),
+                  account.currency() + (account.primary() ? " primary account" : " account"),
                   account.id().equals(flow.account)));
         choices.add(choice("browse", "", "Back", false));
       } else {
@@ -2069,11 +2087,16 @@ public final class TraderController {
           choices.add(choice("quote", "", "Request quote", false));
         if (flow.page > 0) choices.add(choice("back", "", "Previous offers", false));
         if (start + 3 < shown.size()) choices.add(choice("next", "", "More offers", false));
-        if (flow.account != null) lines.add("Selected account: " + flow.account.value());
-        if (flow.cash != null) lines.add("Selected cash: " + flow.cash);
+        if (flow.rail.equals("account"))
+          view.accounts().stream()
+              .filter(a -> a.id().equals(flow.account))
+              .findFirst()
+              .ifPresent(a -> lines.add("Pay from " + a.currency() + " account"));
+        if (flow.rail.equals("cash") && flow.cash != null)
+          lines.add("Pay in " + flow.cash + " cash");
       }
     }
-    choices.add(choice("claim", "", "Claims", false));
+    choices.add(choice("claim", "", "Deliveries", false));
     choices.add(choice("exit", "", "Close", false));
     menu.publish(
         "browse",

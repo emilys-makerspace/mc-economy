@@ -5,6 +5,7 @@ import ca.emilybelnavis.mcmods.economy.account.AccountCatalog;
 import ca.emilybelnavis.mcmods.economy.api.AccountIdentity;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.api.PartyRef;
+import ca.emilybelnavis.mcmods.economy.corporation.CorporateCapital;
 import ca.emilybelnavis.mcmods.economy.corporation.Corporations;
 import ca.emilybelnavis.mcmods.economy.corporation.Managers;
 import ca.emilybelnavis.mcmods.economy.journal.*;
@@ -118,13 +119,23 @@ public final class CorporationService {
                                 1)
                             .stream()
                             .findFirst()
-                            .map(
-                                row ->
-                                    new Receipt(
-                                        row.get("status"),
-                                        row.get("result_code"),
-                                        row.get("result_payload")))))
+                            .map(row -> receipt(reads, (PlayerId) grant.actor(), row))))
             .thenApply(Optional::orElseThrow));
+  }
+
+  private static Receipt receipt(
+      JournalEngine.ReadView reads, PlayerId actor, Map<String, String> row) {
+    String code = row.get("result_code"), details = row.get("result_payload");
+    if (Set.of("CORPORATION_ACTIVE", "CORPORATION_WINDING_DOWN", "CORPORATION_DISSOLVED")
+        .contains(code)) {
+      var fields = details.split("\\|", -1);
+      if (fields.length == 2)
+        details =
+            Corporations.find(reads, actor, UUID.fromString(fields[0]))
+                .map(company -> company.identifier() + " (revision " + fields[1] + ")")
+                .orElse("Company unavailable");
+    } else if (code.equals("MEMBERSHIP_UPDATED")) details = "Membership revision " + details;
+    return new Receipt(row.get("status"), code, details);
   }
 
   public CompletionStage<Optional<Corporations.Fee>> quoteRegistration(AccountId account) {
@@ -133,6 +144,26 @@ public final class CorporationService {
             grant(),
             false,
             reads -> Corporations.quote(reads, owner, account, services.financialMillis())));
+  }
+
+  public CompletionStage<Optional<Corporations.Company>> resolve(String identifier) {
+    var grant = grant();
+    var actor = (PlayerId) grant.actor();
+    return deliver(
+        services.readAccounts(
+            grant, false, reads -> Corporations.resolve(reads, actor, identifier)));
+  }
+
+  public CompletionStage<Optional<CorporateCapital.Profile>> profile(UUID id) {
+    var grant = grant();
+    var actor = (PlayerId) grant.actor();
+    return deliver(
+        services.readAccounts(
+            grant,
+            false,
+            reads ->
+                Corporations.find(reads, actor, id)
+                    .flatMap(company -> CorporateCapital.profile(reads, company.id()))));
   }
 
   public CompletionStage<Optional<Corporations.Company>> find(UUID id) {

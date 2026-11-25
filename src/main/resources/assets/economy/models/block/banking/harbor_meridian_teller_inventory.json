@@ -10,8 +10,8 @@
     "slot": "economy:block/banking/harbor_meridian_teller_slot",
     "vent": "economy:block/banking/harbor_meridian_teller_vent",
     "screen": "economy:block/banking/harbor_meridian_teller_front",
-    "glass": "economy:block/banking/harbor_meridian_teller_front",
-    "chart": "economy:block/banking/harbor_meridian_teller_front",
+    "glass": "economy:block/teller_glass",
+    "chart": "economy:block/trading_chart",
     "particle": "economy:block/banking/harbor_meridian_teller_shell"
   },
   "render_type": "minecraft:cutout",

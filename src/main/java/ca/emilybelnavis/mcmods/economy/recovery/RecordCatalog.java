@@ -71,9 +71,19 @@ public final class RecordCatalog {
                 ca.emilybelnavis.mcmods.economy.interest.DepositYield.register(catalog)));
     catalog = ca.emilybelnavis.mcmods.economy.autopay.Autopay.register(catalog);
     catalog =
-        catalog.with(
-            new Key(ca.emilybelnavis.mcmods.economy.corporation.Corporations.FACT, 1),
-            ca.emilybelnavis.mcmods.economy.corporation.Corporations::validateFact);
+        catalog
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.corporation.Corporations.FACT, 1),
+                ca.emilybelnavis.mcmods.economy.corporation.Corporations::validateFact)
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.corporation.CorporateCapital.FACT, 1),
+                ca.emilybelnavis.mcmods.economy.corporation.CorporateCapital::validateFact)
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.corporation.CorporateCredit.FACT, 1),
+                ca.emilybelnavis.mcmods.economy.corporation.CorporateCredit::validateFact)
+            .with(
+                new Key(ca.emilybelnavis.mcmods.economy.card.CorporateCards.BINDING, 1),
+                ca.emilybelnavis.mcmods.economy.card.CorporateCards::validateBinding);
     catalog =
         catalog.with(
             new Key(ca.emilybelnavis.mcmods.economy.corporation.Managers.FACT, 1),

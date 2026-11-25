@@ -7,6 +7,16 @@ import java.util.List;
 final class JournalSchema {
   private JournalSchema() {}
 
+  static void prepareValidationQueries(java.sql.Connection connection)
+      throws java.sql.SQLException {
+    // Validators join an operation to its typed records. Let SQLite see both the single-world
+    // distribution of (world_id,operation_id) and how many records share each type.
+    try (var statement = connection.createStatement()) {
+      statement.execute("ANALYZE journal_transactions");
+      statement.execute("ANALYZE journal_records");
+    }
+  }
+
   static void validate(java.sql.Connection connection) throws java.sql.SQLException {
     for (String sql : statements()) {
       if (!sql.stripLeading().startsWith("CREATE TRIGGER")) continue;

@@ -18,6 +18,31 @@ FONT = dict(zip('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', [
 '101101111001001','111100110001110','011100111101111','111001010010010','111101111101111','111101111001110']))
 FONT.update({' ': '000000000000000', '-': '000000111000000', '/': '001001010100100', '.': '000000000000010', ':':'000010000010000'})
 
+# Seven-row lettering for printed cards, signage and instrument panels.
+# Each hexadecimal digit pair is one row, with bit zero at the right edge.
+LETTER_ROWS = {
+    'A': '0e1111111f1111', 'B': '1e11111e11111e', 'C': '0e11101010110e',
+    'D': '1e11111111111e', 'E': '1f10101e10101f', 'F': '1f10101e101010',
+    'G': '0e11101013110f', 'H': '1111111f111111', 'I': '07020202020207',
+    'J': '0702020202120c', 'K': '11121418141211', 'L': '1010101010101f',
+    'M': '111b1515111111', 'N': '11191915131311', 'O': '0e11111111110e',
+    'P': '1e11111e101010', 'Q': '0e11111115120d', 'R': '1e11111e141211',
+    'S': '0f10100e01011e', 'T': '1f040404040404', 'U': '1111111111110e',
+    'V': '111111110a0a04', 'W': '1111111515150a', 'X': '11110a040a1111',
+    'Y': '11110a04040404', 'Z': '1f01020408101f',
+    '0': '0e11131519110e', '1': '02060202020207', '2': '0e11010204081f',
+    '3': '1e01010e01011e', '4': '02060a121f0202', '5': '1f10101e01011e',
+    '6': '0608101e11110e', '7': '1f010204080808', '8': '0e11110e11110e',
+    '9': '0e11110f01020c', ' ': '00000000000000',
+}
+LETTERS = {letter: bytes.fromhex(rows) for letter, rows in LETTER_ROWS.items()}
+LETTER_WIDTHS = {letter: max(3, max(rows).bit_length()) for letter, rows in LETTERS.items()}
+
+
+def lettering_width(label, scale=1):
+    return max(0, sum(LETTER_WIDTHS[ch] + 1 for ch in label.upper()) - 1) * scale
+
+
 def color(c):
     if isinstance(c, str): return tuple(bytes.fromhex(c.lstrip('#'))) + (255,)
     return tuple(c) if len(c) == 4 else tuple(c) + (255,)
@@ -60,6 +85,16 @@ class Canvas:
                 for gx in range(3):
                     if glyph[gy*3+gx]=='1':self.rect(x+gx*scale,y+gy*scale,x+(gx+1)*scale,y+(gy+1)*scale,c)
             x+=4*scale
+    def lettering(self, label, x, y, c, scale=1):
+        for ch in label.upper():
+            width = LETTER_WIDTHS[ch]
+            for row, bits in enumerate(LETTERS[ch]):
+                for col in range(width):
+                    if bits & (1 << (width - col - 1)):
+                        left, top = x + col * scale, y + row * scale
+                        self.rect(left, top, left + scale, top + scale, c)
+            x += (width + 1) * scale
+
     def blit(self,source,x,y,width=None,height=None):
         width=width or source.w;height=height or source.h
         for dy in range(height):

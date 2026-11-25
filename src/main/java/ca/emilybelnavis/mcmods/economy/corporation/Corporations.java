@@ -37,7 +37,39 @@ public final class Corporations {
     DISSOLVE
   }
 
-  public record Company(UUID id, UUID founder, String name, State state, long revision) {}
+  /** The public identifier can change on rename. partyId links retained financial history. */
+  public record Company(
+      UUID partyId, UUID founder, String name, String identifier, State state, long revision) {
+    public Company(UUID partyId, UUID founder, String name, State state, long revision) {
+      this(partyId, founder, name, Corporations.identifier(name), state, revision);
+    }
+
+    /** Compatibility accessor for existing accounting and integration callers. */
+    public UUID id() {
+      return partyId;
+    }
+  }
+
+  private static final String COMPANY_SELECT =
+      "SELECT c.*,r.identifier FROM corporation_registry r JOIN corporations c ON c.id=r.party ";
+
+  public record ShareIssue(long quantity, Money price) {
+    public ShareIssue {
+      Objects.requireNonNull(price);
+      if (quantity <= 0 || price.minorUnits() <= 0)
+        throw new IllegalArgumentException("Share quantity and price must both be positive");
+      Math.multiplyExact(quantity, price.minorUnits());
+    }
+
+    public Money total() {
+      return new Money(price.currency(), Math.multiplyExact(quantity, price.minorUnits()));
+    }
+  }
+
+  /** Public identifier. The journal retains its original, immutable ledger-party handle. */
+  public static String identifier(String name) {
+    return key(name).replace(' ', '-');
+  }
 
   public record Fee(
       AccountId account, long revision, EconomyCurrency currency, long minor, UUID publication) {
@@ -49,7 +81,7 @@ public final class Corporations {
     }
   }
 
-  public sealed interface Command permits Register, Change {
+  public sealed interface Command permits Register, Change, Issue {
     Map<String, String> fields();
 
     default Journal.CanonicalRequest request() {
@@ -57,28 +89,65 @@ public final class Corporations {
     }
   }
 
-  public record Register(String name, Fee fee) implements Command {
+  public record Register(String name, Fee fee, ShareIssue issue) implements Command {
+    /** Older integrations can create a company shell; its founder must issue and fund shares. */
+    public Register(String name, Fee fee) {
+      this(name, fee, null);
+    }
+
     public Register {
-      name = display(name);
+      name = validateName(name);
       Objects.requireNonNull(fee);
     }
 
     public Map<String, String> fields() {
-      return Map.of(
-          "action",
-          "REGISTER",
-          "name",
-          name,
-          "funding",
-          fee.account.value().toString(),
-          "account_revision",
-          Long.toString(fee.revision),
-          "currency",
-          fee.currency.name(),
-          "minor",
-          Long.toString(fee.minor),
-          "fx",
-          Objects.toString(fee.publication, ""));
+      var values =
+          new HashMap<>(
+              Map.of(
+                  "action",
+                  "REGISTER",
+                  "name",
+                  name,
+                  "funding",
+                  fee.account.value().toString(),
+                  "account_revision",
+                  Long.toString(fee.revision),
+                  "currency",
+                  fee.currency.name(),
+                  "minor",
+                  Long.toString(fee.minor),
+                  "fx",
+                  Objects.toString(fee.publication, "")));
+      if (issue != null) addShareFields(values, issue);
+      return Map.copyOf(values);
+    }
+  }
+
+  private static void addShareFields(Map<String, String> values, ShareIssue issue) {
+    values.put("shares", Long.toString(issue.quantity()));
+    values.put("share_price", Long.toString(issue.price().minorUnits()));
+    values.put("share_currency", issue.price().currency().code());
+  }
+
+  public record Issue(UUID id, long revision, ShareIssue issue) implements Command {
+    public Issue {
+      Objects.requireNonNull(id);
+      Objects.requireNonNull(issue);
+      if (revision < 1) throw new IllegalArgumentException("Invalid corporate revision");
+    }
+
+    public Map<String, String> fields() {
+      var values =
+          new HashMap<>(
+              Map.of(
+                  "action",
+                  "ISSUE",
+                  "company",
+                  id.toString(),
+                  "revision",
+                  Long.toString(revision)));
+      addShareFields(values, issue);
+      return Map.copyOf(values);
     }
   }
 
@@ -88,7 +157,7 @@ public final class Corporations {
       Objects.requireNonNull(action);
       if (revision < 1 || action == Action.REGISTER)
         throw new IllegalArgumentException("Lifecycle change");
-      if (action == Action.RENAME) name = display(name);
+      if (action == Action.RENAME) name = validateName(name);
       else if (!"".equals(name)) throw new IllegalArgumentException("Unexpected company name");
     }
 
@@ -109,16 +178,19 @@ public final class Corporations {
     return Normalizer2.getNFKCCasefoldInstance().normalize(name);
   }
 
-  private static String display(String raw) {
+  public static String validateName(String raw) {
     if (raw == null
         || raw.length() > 192
         || raw.codePoints()
             .anyMatch(c -> Character.isISOControl(c) || Character.getType(c) == Character.FORMAT))
       throw new IllegalArgumentException("Invalid company name");
-    String name = Normalizer.normalize(raw, Normalizer.Form.NFKC).strip().replaceAll(" +", " ");
+    String name = Normalizer.normalize(raw, Normalizer.Form.NFKC);
+    if (!name.equals(name.strip()) || raw.codePointCount(0, raw.length()) > 32)
+      throw new IllegalArgumentException(
+          "Enter a company name up to 32 characters without surrounding spaces");
     int length = name.codePointCount(0, name.length());
-    if (length < 3
-        || length > 48
+    if (length < 1
+        || length > 32
         || !name.matches("[\\p{L}\\p{N} .,‘’'&()_-]+")
         || name.codePoints().noneMatch(Character::isLetterOrDigit))
       throw new IllegalArgumentException("Invalid company name");
@@ -173,6 +245,7 @@ public final class Corporations {
         UUID.fromString(r.get("id")),
         UUID.fromString(r.get("founder")),
         r.get("name"),
+        r.get("identifier"),
         State.valueOf(r.get("state")),
         Long.parseLong(r.get("revision")));
   }
@@ -180,8 +253,20 @@ public final class Corporations {
   public static Optional<Company> find(JournalEngine.ReadView reads, PlayerId owner, UUID id) {
     return reads
         .query(
-            "SELECT * FROM corporations WHERE founder=? AND id=?",
+            COMPANY_SELECT + "WHERE c.founder=? AND c.id=?",
             List.of(owner.value().toString(), id.toString()),
+            1)
+        .stream()
+        .findFirst()
+        .map(Corporations::company);
+  }
+
+  public static Optional<Company> resolve(
+      JournalEngine.ReadView reads, PlayerId owner, String identifier) {
+    return reads
+        .query(
+            COMPANY_SELECT + "WHERE c.founder=? AND r.identifier=?",
+            List.of(owner.value().toString(), identifier),
             1)
         .stream()
         .findFirst()
@@ -193,7 +278,7 @@ public final class Corporations {
     if (limit < 1 || limit > 63) throw new IllegalArgumentException("Company page size");
     return reads
         .query(
-            "SELECT * FROM corporations WHERE founder=? AND id>? ORDER BY id LIMIT ?",
+            COMPANY_SELECT + "WHERE c.founder=? AND c.id>? ORDER BY c.id LIMIT ?",
             List.of(owner.value().toString(), Objects.toString(after, ""), Integer.toString(limit)),
             limit)
         .stream()
@@ -216,6 +301,8 @@ public final class Corporations {
           try {
             if (command instanceof Register register)
               return register(owner, player.id(), register, reads, now.getAsLong());
+            if (command instanceof Issue issue)
+              return CorporateCapital.issue(reads, owner.world(), player.id(), issue);
             return change(player.id(), (Change) command, reads);
           } catch (ArithmeticException overflow) {
             return reject("CORPORATION_OVERFLOW");
@@ -229,7 +316,10 @@ public final class Corporations {
 
   private static Optional<String> alias(JournalEngine.ReadView reads, String name) {
     return reads
-        .query("SELECT company FROM corporation_names WHERE name_key=?", List.of(key(name)), 1)
+        .query(
+            "SELECT party AS company FROM corporation_registry WHERE identifier=?",
+            List.of(identifier(name)),
+            1)
         .stream()
         .findFirst()
         .map(r -> r.get("company"));
@@ -262,6 +352,8 @@ public final class Corporations {
     var company = new Company(UUID.randomUUID(), founder.value(), command.name, State.ACTIVE, 1);
     var records = new ArrayList<>(posting.records());
     records.add(fact(company, Action.REGISTER));
+    if (command.issue != null)
+      records.add(CorporateCapital.issueFact(company.partyId, command.issue));
     return new JournalEngine.Commit(
         records,
         result(company),
@@ -271,10 +363,12 @@ public final class Corporations {
           LedgerProjection.write(tx, sink, currency, retired);
           tx.execute(
               "INSERT INTO corporations(id,founder,name,state,revision) VALUES(?,?,?,'ACTIVE',1)",
-              List.of(company.id.toString(), founder.value().toString(), company.name));
+              List.of(company.partyId.toString(), founder.value().toString(), company.name));
           tx.execute(
-              "INSERT INTO corporation_names VALUES(?,?)",
-              List.of(key(company.name), company.id.toString()));
+              "INSERT INTO corporation_registry(identifier,party) VALUES(?,?)",
+              List.of(identifier(company.name), company.partyId.toString()));
+          if (command.issue != null)
+            CorporateCapital.writeIssue(tx, identifier(company.name), command.issue);
         });
   }
 
@@ -300,9 +394,10 @@ public final class Corporations {
       return reject("CORPORATION_NAME_RESERVED");
     var company =
         new Company(
-            old.id,
+            old.partyId,
             old.founder,
             rename ? change.name : old.name,
+            rename ? identifier(change.name) : old.identifier,
             next,
             Math.incrementExact(old.revision));
     return new JournalEngine.Commit(
@@ -315,12 +410,12 @@ public final class Corporations {
                   company.name,
                   next.name(),
                   Long.toString(company.revision),
-                  company.id.toString(),
+                  company.partyId.toString(),
                   Long.toString(old.revision)));
-          if (rename && alias.isEmpty())
+          if (rename)
             tx.execute(
-                "INSERT INTO corporation_names VALUES(?,?)",
-                List.of(key(company.name), company.id.toString()));
+                "UPDATE corporation_registry SET identifier=? WHERE party=?",
+                List.of(identifier(company.name), company.partyId.toString()));
         });
   }
 
@@ -346,7 +441,17 @@ public final class Corporations {
     return new Journal.Record(
         FACT,
         1,
-        action + "|" + c.id + "|" + c.founder + "|" + c.name + "|" + c.state + "|" + c.revision);
+        action
+            + "|"
+            + c.partyId
+            + "|"
+            + c.founder
+            + "|"
+            + c.name
+            + "|"
+            + c.state
+            + "|"
+            + c.revision);
   }
 
   public static void validateFact(String payload) {
@@ -375,6 +480,6 @@ public final class Corporations {
   }
 
   private static Journal.Result result(Company c) {
-    return new Journal.Result(1, "CORPORATION_" + c.state, c.id + "|" + c.revision);
+    return new Journal.Result(1, "CORPORATION_" + c.state, c.partyId + "|" + c.revision);
   }
 }

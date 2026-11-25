@@ -265,6 +265,7 @@ public final class AccountLifecycle {
     var denomination = AccountCatalog.currentDenomination(reads);
     if (denomination == null) return Eligibility.DENOMINATION_PENDING;
     if (source.currency() == denomination) return Eligibility.ACCOUNT_PROTECTED;
+    if (AccountCatalog.openBanks(reads, owner).size() <= 1) return Eligibility.ACCOUNT_PROTECTED;
     if (source.revision() == Long.MAX_VALUE) return Eligibility.REVISION_EXHAUSTED;
 
     var state = reader.read(reads, source).orElse(null);

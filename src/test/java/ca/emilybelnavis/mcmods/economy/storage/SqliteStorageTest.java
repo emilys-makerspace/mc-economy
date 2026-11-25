@@ -48,6 +48,80 @@ class SqliteStorageTest {
   }
 
   @Test
+  void reopeningHistoryUsesIndexedOperationLookups() throws Exception {
+    var world = world("history");
+    ca.emilybelnavis.mcmods.economy.recovery.RecoveryFixtures.create(world, 256);
+    var store = new SqliteStorage(FixtureRecords.catalog());
+    try {
+      store.beginInitialization(world);
+      boolean reachedSchemaChecks = false;
+      for (var step = store.advanceInitialization();
+          !step.ready();
+          step = store.advanceInitialization()) {
+        if (step.phase().equals("schema-validation")) reachedSchemaChecks = true;
+      }
+      assertTrue(reachedSchemaChecks, "Schema checks must have their own startup phase");
+    } finally {
+      store.close();
+    }
+    try (var c =
+            DriverManager.getConnection("jdbc:sqlite:" + world.resolve("economy/economy.sqlite"));
+        var query =
+            c.prepareStatement(
+                "EXPLAIN QUERY PLAN SELECT r.payload FROM journal_records r JOIN journal_transactions t ON t.sequence=r.sequence WHERE t.operation_id=? AND r.record_type=? AND r.record_version=1")) {
+      query.setString(1, UUID.randomUUID().toString());
+      query.setString(2, "fixture:first");
+      var plan = new ArrayList<String>();
+      try (var rows = query.executeQuery()) {
+        while (rows.next()) plan.add(rows.getString("detail"));
+      }
+      assertTrue(
+          plan.stream()
+              .anyMatch(
+                  detail -> detail.contains("SEARCH t ") && detail.contains("operation_id=?")),
+          () -> "History lookup scans unrelated facts: " + plan);
+    }
+  }
+
+  @Test
+  void corporateIdentifierUpgradePreservesLegacyPartiesAndHandlesSlugCollisions() throws Exception {
+    var worldId = UUID.randomUUID();
+    var founder = UUID.randomUUID().toString();
+    var parties = List.of(new UUID(0, 1).toString(), new UUID(0, 2).toString());
+    try (var connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+      try (var settings = connection.createStatement()) {
+        settings.execute("PRAGMA foreign_keys=ON");
+      }
+      SchemaMigrations.apply(connection, worldId, 0, 59, SchemaMigrations.REGISTRY.subList(0, 59));
+      try (var insert =
+          connection.prepareStatement("INSERT INTO corporations VALUES(?,?,?,'ACTIVE',1)")) {
+        insert.setString(2, founder);
+        insert.setString(1, parties.getFirst());
+        insert.setString(3, "ABC Corporation LTD");
+        insert.executeUpdate();
+        insert.setString(1, parties.getLast());
+        insert.setString(3, "ABC-Corporation LTD");
+        insert.executeUpdate();
+      }
+      SchemaMigrations.apply(connection, worldId, 59, 60, SchemaMigrations.REGISTRY.subList(0, 60));
+      try (var query = connection.createStatement();
+          var rows =
+              query.executeQuery(
+                  "SELECT identifier,party,funded FROM corporation_registry ORDER BY party")) {
+        assertTrue(rows.next());
+        assertEquals("abc-corporation-ltd", rows.getString(1));
+        assertEquals(parties.getFirst(), rows.getString(2));
+        assertFalse(rows.getBoolean(3));
+        assertTrue(rows.next());
+        assertEquals("abc-corporation-ltd~1", rows.getString(1));
+        assertEquals(parties.getLast(), rows.getString(2));
+        assertFalse(rows.getBoolean(3));
+        assertFalse(rows.next());
+      }
+    }
+  }
+
+  @Test
   void freshReopenAndWorldIsolation() throws Exception {
     Path one = world("one");
     Path two = world("two");
@@ -90,6 +164,17 @@ class SqliteStorageTest {
             "banker_slots",
             "cash_issuance",
             "collection_agent_state",
+            "corporate_cards",
+            "corporation_claims",
+            "corporation_integration_bindings",
+            "corporation_integration_epochs",
+            "corporation_integration_mandates",
+            "corporation_managers",
+            "corporation_names",
+            "corporation_registry",
+            "corporate_credit_lines",
+            "corporation_shares",
+            "corporations",
             "credit_facilities",
             "credit_facility_tokens",
             "credit_inquiry_applications",

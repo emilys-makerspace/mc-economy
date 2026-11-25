@@ -22,12 +22,11 @@ import org.junit.jupiter.api.io.TempDir;
 class CreditAcceptanceTest {
   @TempDir Path path;
   private static final Instant NOW = Instant.parse("2026-11-05T12:00:00Z");
-  private static final InstitutionCatalog.InstitutionId BANK =
-      new InstitutionCatalog.InstitutionId("economy:bank/crownstone");
 
   private final class Fixture implements AutoCloseable {
     SqliteStorage store = new SqliteStorage();
     final EconomyCurrency currency;
+    final InstitutionCatalog.Entry bank;
     final PlayerId actor = new PlayerId(UUID.randomUUID());
     final AccountId funding = new AccountId(UUID.randomUUID()),
         merchant = new AccountId(UUID.randomUUID());
@@ -51,6 +50,11 @@ class CreditAcceptanceTest {
 
     Fixture(EconomyCurrency currency) throws Exception {
       this.currency = currency;
+      bank =
+          InstitutionCatalog.banks().stream()
+              .filter(entry -> entry.baseCurrency() == currency && entry.tier1())
+              .findFirst()
+              .orElseThrow();
       store.initialize(path.toRealPath());
       owner = new PartyRef(store.snapshot().worldId(), new PartyRef.Player(actor));
       assertEquals(
@@ -146,7 +150,7 @@ class CreditAcceptanceTest {
                   UUID.randomUUID(),
                   actor,
                   BranchAdmission.Action.CREDIT_ISSUE,
-                  BANK,
+                  bank.id(),
                   null,
                   null,
                   0,
@@ -156,7 +160,7 @@ class CreditAcceptanceTest {
           new CreditFacilities.IssueRequest(
               proof,
               UUID.randomUUID(),
-              InstitutionCatalog.Network.ORBIT,
+              bank.networks().stream().sorted().findFirst().orElseThrow(),
               currency,
               2500L * currency.minorUnitsPerMajor(),
               revision,
@@ -260,7 +264,9 @@ class CreditAcceptanceTest {
       return store.transaction(
           tx ->
               Settlement.posted(
-                  tx::query, FinancialAccounts.id(owner.world(), BANK, role, currency), currency));
+                  tx::query,
+                  FinancialAccounts.id(owner.world(), bank.id(), role, currency),
+                  currency));
     }
 
     long count(String type) {

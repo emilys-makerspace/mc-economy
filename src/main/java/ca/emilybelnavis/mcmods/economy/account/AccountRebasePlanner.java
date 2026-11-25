@@ -23,7 +23,7 @@ public final class AccountRebasePlanner {
             FROM account_catalog AS p INDEXED BY account_primary
             LEFT JOIN account_catalog AS c INDEXED BY account_open_bank_currency
               ON c.owner_id=p.owner_id AND c.currency=? AND c.purpose='BANK' AND c.status='OPEN'
-            WHERE p.is_primary=1
+            WHERE p.is_primary=1 AND p.status='OPEN' AND p.currency=?
             ORDER BY p.owner_id LIMIT ?
             """;
 
@@ -112,15 +112,17 @@ public final class AccountRebasePlanner {
     var rows =
         reads.query(
             ACCOUNTS,
-            List.of(intent.target().code(), Integer.toString(MAX_PRIMARIES + 1)),
+            List.of(
+                intent.target().code(),
+                current.currency().code(),
+                Integer.toString(MAX_PRIMARIES + 1)),
             MAX_PRIMARIES + 1);
     if (rows.size() > MAX_PRIMARIES) return unavailable(Status.PLAN_TOO_LARGE);
 
     var mappings = new ArrayList<Mapping>(rows.size());
     for (var row : rows) {
       var primary = account(row, "account_id", "revision", "currency");
-      if (primary.currency() != current.currency() || primary.revision() == Long.MAX_VALUE)
-        return unavailable(Status.CATALOG_MISMATCH);
+      if (primary.revision() == Long.MAX_VALUE) return unavailable(Status.CATALOG_MISMATCH);
 
       var status = checkClaims(reads, claims, primary.id());
       if (status != Status.READY) return unavailable(status);

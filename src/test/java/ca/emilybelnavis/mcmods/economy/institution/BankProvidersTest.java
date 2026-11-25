@@ -252,13 +252,18 @@ class BankProvidersTest {
   }
 
   @Test
-  void primaryRequiresMatchingNativeCurrencyAndLiveBankIssuer() throws Exception {
+  void firstAccountUsesTheBankCurrencyAndHonoursSpecialistEligibility() throws Exception {
     try (var f = new Fixture()) {
-      assertEquals(
-          "PRIMARY_BANK_CURRENCY",
-          f.submit(f.request(BranchAdmission.Action.PRIMARY, "crosswind", null, null, 0, 0, 0))
-              .result()
-              .code());
+      var specialist =
+          f.request(BranchAdmission.Action.PRIMARY, "atlas_reserve", null, null, 0, 0, 0);
+      assertEquals("TIER2_UNAVAILABLE", f.submit(specialist).result().code());
+      var result =
+          f.submit(f.request(BranchAdmission.Action.PRIMARY, "crosswind", null, null, 0, 0, 0));
+      assertEquals("PROVIDER_OPENED", result.result().code());
+      var primary =
+          f.store.transaction(tx -> AccountCatalog.primary(tx::query, f.owner).orElseThrow());
+      assertEquals("USD", primary.currency().code());
+      assertEquals(bank("crosswind").key(), f.binding(primary.id()).bankKey());
       assertEquals(
           "BANK_UNAVAILABLE",
           f.submit(f.request(BranchAdmission.Action.PRIMARY, "missing", null, null, 0, 0, 0))

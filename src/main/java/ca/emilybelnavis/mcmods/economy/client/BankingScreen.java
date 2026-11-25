@@ -31,6 +31,12 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
       draft = "",
       reviewedDraft = "",
       currency = "CAD";
+  private final Map<String, String> officeDraft = new HashMap<>();
+  private long rightsRevision = -1;
+  private final Set<String> officeRights = new LinkedHashSet<>(),
+      officeScope = new LinkedHashSet<>();
+  private boolean officeAllAccounts;
+  private List<EditBox> officeFields = List.of();
   private String corporateAccount = "", counterparty = "", corporateAmount = "";
   private String chooser = "", submittedReview = "";
   private long revision = -1;
@@ -122,6 +128,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
   }
 
   private List<BankingNetwork.Choice> choices(String action) {
+    if (action.equals("corp_actions")) return menu.choices();
     if (action.equals("history_controls"))
       return menu.choices().stream().filter(c -> !c.action().equals("history_detail")).toList();
     if (action.equals("home_choices"))
@@ -162,6 +169,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
   }
 
   private void rebuild() {
+    if (chooser.equals("cash_modes") && choices("configure").isEmpty()) chooser = "";
     if (menu.page().equals("settings")
         && settingsRevision != menu.revision()
         && !choices("configure").isEmpty()) {
@@ -179,7 +187,10 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     termInput = null;
     primary = null;
     primaryAction = "";
-    if (!menu.page().equals("home") && !menu.worldSetup()) {
+    if (!menu.page().equals("home")
+        && !menu.page().equals("office_home")
+        && !menu.worldSetup()
+        && menu.access() != BankingMenu.Access.ATM_ENROLLMENT) {
       var home =
           button(
               282,
@@ -188,6 +199,23 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
               Component.literal("⌂"),
               () -> send(menu.access() == BankingMenu.Access.ADMIN ? "banking" : "home", ""));
       home.setTooltip(Tooltip.create(Component.literal(terminalLabel("Home"))));
+    }
+    if (chooser.isEmpty()) {
+      String parent =
+          switch (menu.page()) {
+            case "account_overview" -> "accounts";
+            case "account_settings",
+                "primary_bank",
+                "credit_services",
+                "loan_services",
+                "card_services" ->
+                "manage_accounts";
+            default -> "";
+          };
+      if (!parent.isEmpty() && menu.allows(parent)) {
+        var back = button(254, 9, 24, Component.literal("←"), () -> send(parent, ""));
+        back.setTooltip(Tooltip.create(UiTextClient.component(ui("ui.client.back"))));
+      }
     }
     if (needsScrollControls()) {
       var up = button(258, 34, 22, Component.literal("▲"), () -> scrollBy(-1));
@@ -225,7 +253,8 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     if (destinations.stream().noneMatch(choice -> choice.value().equals(destination)))
       destination = destinations.isEmpty() ? "" : destinations.getFirst().value();
     if (!chooser.isEmpty()) {
-      buildRows(choices(chooser), true);
+      if (chooser.equals("cash_modes")) cashModes();
+      else buildRows(choices(chooser), true);
       button(
           10,
           188,
@@ -238,9 +267,13 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
           });
       return;
     }
+    if (menu.page().startsWith("office_")) {
+      buildOffice();
+      return;
+    }
     switch (menu.page()) {
       case "home" -> buildRows(choices("home_choices"), false);
-      case "primary_bank" -> {
+      case "primary_bank", "atm_enrollment" -> {
         for (var choice : menu.choices())
           button(
               10,
@@ -343,12 +376,15 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
       }
       case "corp_list" -> {
         buildRows(choices("corp_select"), false);
-        button(
-            10,
-            188,
-            136,
-            UiTextClient.component(ui("ui.client.back_branch")),
-            () -> send("manage_accounts", ""));
+        if (menu.access() == BankingMenu.Access.CORPORATION)
+          button(10, 188, 136, text("tab.home"), () -> send("home", ""));
+        else if (menu.issuedToken() == null)
+          button(
+              10,
+              188,
+              136,
+              UiTextClient.component(ui("ui.client.back_branch")),
+              () -> send("manage_accounts", ""));
         if (!choices("corp_recover").isEmpty())
           button(148, 188, 92, text("corp_receipt"), () -> send("corp_recover", ""));
         for (var choice : choices("corp_next"))
@@ -363,9 +399,92 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         buildRows(menu.choices(), false);
         corporateCompanies();
       }
+      case "corp_details" -> {
+        corporateBack();
+        for (var choice : choices("corp_people_next"))
+          button(
+              158,
+              188,
+              148,
+              UiTextClient.component(choice.label()),
+              () -> send(choice.action(), choice.value()));
+      }
+      case "corp_people" -> {
+        corporateCompanies();
+        for (var choice : choices("corp_people_next"))
+          button(
+              158,
+              188,
+              148,
+              UiTextClient.component(choice.label()),
+              () -> send(choice.action(), choice.value()));
+      }
+      case "corp_sources" -> {
+        buildRows(choices("corp_source"), false);
+        corporateBack();
+      }
+      case "corp_destinations" -> buildRows(menu.choices(), false);
+      case "corp_lookup", "corp_send" -> {
+        boolean lookup = menu.page().equals("corp_lookup");
+        corporateField(
+            10,
+            286,
+            lookup ? 36 : 23,
+            lookup ? "corp_counterparty" : "corp_amount",
+            lookup ? counterparty : corporateAmount,
+            v -> {
+              if (lookup) counterparty = v;
+              else corporateAmount = v;
+            });
+        for (var choice : menu.choices()) {
+          boolean back = choice.action().equals("corp_to_account");
+          button(
+              back ? 10 : 160,
+              188,
+              146,
+              UiTextClient.component(choice.label()),
+              () -> send(choice.action(), back ? "" : lookup ? counterparty : corporateAmount));
+        }
+      }
+      case "corp_contribute" -> {
+        corporateBack();
+        corporateField(10, 190, 23, "corp_amount", corporateAmount, v -> corporateAmount = v);
+        button(
+            158,
+            188,
+            148,
+            UiTextClient.component(ui("ui.bank.corporate.review")),
+            () -> send("corp_amount", corporateAmount));
+      }
+      case "corp_cc" -> {
+        corporateCompanies();
+        for (int i = 0; i < menu.choices().size(); i++) {
+          var c = menu.choices().get(i);
+          button(
+              10 + i % 2 * 150,
+              132 + i / 2 * 22,
+              146,
+              UiTextClient.component(c.label()),
+              () -> {
+                corporateAmount = "";
+                send(c.action(), c.value());
+              });
+        }
+      }
+      case "corp_cc_amount", "corp_cc_close" -> {
+        corporateCompanies();
+        if (menu.page().equals("corp_cc_amount"))
+          corporateField(10, 146, 23, "corp_amount", corporateAmount, v -> corporateAmount = v);
+        button(
+            160,
+            188,
+            146,
+            Component.literal("Review"),
+            () -> send("corp_cc_submit", corporateAmount));
+      }
       case "corp_account" -> corporateAccountForm();
       case "corp_history", "corp_review", "corp_receipt" -> {
-        corporateCompanies();
+        corporateBack();
         for (var choice : choices("corp_confirm")) {
           var confirm =
               button(
@@ -387,12 +506,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             () -> send("credit_profile", ""));
       }
       case "credit_profile", "credit_history", "credit_facility", "credit_statements" -> {
-        button(
-            10,
-            188,
-            296,
-            UiTextClient.component(ui("ui.client.actions")),
-            () -> openChooser("finance_choices"));
+        financeControls(false);
       }
       case "brand_review", "card_review", "settings_review" -> {
         for (var choice : menu.choices()) {
@@ -599,35 +713,14 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
               76,
               296,
               UiTextClient.component(ui("ui.client.choose_brand")),
-              () -> openChooser("brand_preview"));
+              () -> send("brand_preview", ""));
         if (!choices("configure").isEmpty()) {
           button(
               10,
               104,
               296,
-              UiTextClient.component(ui("ui.client.services", serviceLabel())),
-              () -> {
-                serviceMode =
-                    switch (serviceMode) {
-                      case "BOTH" -> "DEPOSIT";
-                      case "DEPOSIT" -> "WITHDRAW";
-                      case "WITHDRAW" -> "DISABLED";
-                      default -> "BOTH";
-                    };
-                rebuild();
-              });
-          var save =
-              button(
-                  160,
-                  188,
-                  146,
-                  UiTextClient.component(ui("ui.admin.settings.review_action")),
-                  () ->
-                      send(
-                          "configure",
-                          serviceMode + ";" + String.join(",", acceptedCurrencies) + ";all"));
-          save.active =
-              !menu.busy() && (serviceMode.equals("DISABLED") || !acceptedCurrencies.isEmpty());
+              UiTextClient.component(ui("ui.client.cash_services") + " ▸"),
+              () -> openChooser("cash_modes"));
         }
       }
       case "shop" -> {
@@ -648,12 +741,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
               menu.choices().stream()
                   .filter(c -> FinanceActions.input(c.action()) && c.value().isEmpty())
                   .findFirst();
-          button(
-              10,
-              188,
-              136,
-              UiTextClient.component(ui("ui.client.actions")),
-              () -> openChooser("finance_choices"));
+          financeControls(editable.isPresent());
           if (editable.isPresent()) {
             var choice = editable.orElseThrow();
             String label =
@@ -712,13 +800,240 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     updatePrimary();
   }
 
-  private String serviceLabel() {
-    return switch (serviceMode) {
+  private void financeControls(boolean amountForm) {
+    var choices = choices("finance_choices");
+    if (choices.isEmpty()) return;
+    if (choices.size() <= (amountForm ? 1 : 4)) {
+      for (int i = 0; i < choices.size(); i++) {
+        var c = choices.get(i);
+        var control =
+            button(
+                10 + (i % 2) * 150,
+                188 + (i / 2) * 22,
+                choices.size() == 1 && !amountForm ? 296 : 146,
+                UiTextClient.component(c.label()),
+                () -> send(c.action(), c.value()));
+        control.active = !blocked() && (!confirmation(c.action()) || reviewed());
+      }
+    } else {
+      button(
+          10,
+          188,
+          amountForm ? 136 : 296,
+          UiTextClient.component(ui("ui.client.actions")),
+          () -> openChooser("finance_choices"));
+    }
+  }
+
+  private void cashModes() {
+    var modes = ca.emilybelnavis.mcmods.economy.journal.TerminalPolicy.Mode.values();
+    for (int i = 0; i < modes.length; i++) {
+      String mode = modes[i].name();
+      button(
+          10,
+          68 + i * 24,
+          296,
+          Component.literal((mode.equals(serviceMode) ? "✓ " : "") + serviceLabel(mode)),
+          () -> {
+            serviceMode = mode;
+            rebuild();
+          });
+    }
+    button(
+        160,
+        188,
+        146,
+        UiTextClient.component(ui("ui.admin.settings.review_action")),
+        () -> send("configure", serviceMode + ";" + String.join(",", acceptedCurrencies) + ";all"));
+  }
+
+  private String serviceLabel(String mode) {
+    return switch (mode) {
       case "BOTH" -> ui("ui.client.both");
       case "DEPOSIT" -> ui("ui.client.deposits_only");
       case "WITHDRAW" -> ui("ui.client.withdrawals_only");
       default -> ui("ui.client.disabled");
     };
+  }
+
+  private void buildOffice() {
+    if (menu.page().equals("office_home") || menu.page().equals("office_choices")) {
+      buildRows(menu.choices(), false);
+      return;
+    }
+    if (choices("office_submit").isEmpty()) {
+      for (int i = 0; i < menu.choices().size(); i++) {
+        var choice = menu.choices().get(i);
+        button(
+            10 + 150 * (i % 2),
+            188 + 22 * (i / 2),
+            146,
+            UiTextClient.component(choice.label()),
+            () -> send(choice.action(), choice.value()));
+      }
+      return;
+    }
+    if (menu.page().equals("office_rights")) {
+      buildOfficeRights();
+      return;
+    }
+    boolean shares = menu.page().equals("office_register") || menu.page().equals("office_issue");
+    var labels =
+        switch (menu.page()) {
+          case "office_register" ->
+              List.of("Corporation name", "Number of Class A shares", "Price per share");
+          case "office_issue" -> List.of("Number of Class A shares", "Price per share");
+          case "office_rename" -> List.of("New company name");
+          case "office_appoint" -> List.of("Player name");
+          case "office_receipt" -> List.of("Receipt reference");
+          default -> List.<String>of();
+        };
+    var fields = new ArrayList<EditBox>();
+    for (int i = 0; i < labels.size(); i++) {
+      String label = labels.get(i);
+      String key = menu.page() + "/" + label;
+      int x = 10 + (i % 2) * 150, y = 74 + (i / 2) * 38;
+      var box =
+          addRenderableWidget(
+              new EditBox(font, leftPos + x, topPos + y, 142, 18, Component.literal(label)));
+      box.setMaxLength(label.toLowerCase(Locale.ROOT).contains("name") ? 32 : 128);
+      box.setValue(officeDraft.getOrDefault(key, ""));
+      box.setResponder(v -> officeDraft.put(key, v));
+      fields.add(box);
+    }
+    officeFields = List.copyOf(fields);
+    String currencyKey = menu.page() + "/currency";
+    if (shares) {
+      var currencies = EconomyCurrency.all();
+      String selected = officeDraft.getOrDefault(currencyKey, "CAD");
+      if (officeDraft.containsKey(currencyKey + "/open")) {
+        for (int i = 0; i < currencies.size(); i++) {
+          String code = currencies.get(i).code();
+          button(
+              10 + i % 6 * 50,
+              144 + i / 6 * 20,
+              47,
+              Component.literal(code),
+              () -> {
+                officeDraft.put(currencyKey, code);
+                officeDraft.remove(currencyKey + "/open");
+                rebuild();
+              });
+        }
+      } else {
+        button(
+            10,
+            144,
+            142,
+            Component.literal(selected + " ▾"),
+            () -> {
+              officeDraft.put(currencyKey + "/open", "1");
+              rebuild();
+            });
+      }
+    }
+    button(
+        160,
+        188,
+        146,
+        Component.literal(
+            menu.page().equals("office_receipt")
+                ? "Find receipt"
+                : menu.page().equals("office_register") ? "Choose fee account" : "Review"),
+        () -> {
+          var values = new ArrayList<>(fields.stream().map(EditBox::getValue).toList());
+          if (shares) values.add(officeDraft.getOrDefault(currencyKey, "CAD"));
+          send("office_submit", String.join("\t", values));
+        });
+  }
+
+  private void buildOfficeRights() {
+    officeFields = List.of();
+    var options = choices("office_submit");
+    if (rightsRevision != menu.revision()) {
+      rightsRevision = menu.revision();
+      officeRights.clear();
+      officeScope.clear();
+      officeAllAccounts = false;
+      for (var choice : options) {
+        if (!choice.selected()) continue;
+        String[] parts = choice.value().split(":", 2);
+        if (parts[0].equals("right")) officeRights.add(parts[1]);
+        else if (parts[1].equals("all")) officeAllAccounts = true;
+        else officeScope.add(parts[1]);
+      }
+    }
+    int rightIndex = 0, scopeIndex = 0;
+    for (var choice : options) {
+      String[] parts = choice.value().split(":", 2);
+      String value = parts[1];
+      if (parts[0].equals("right")) {
+        String label =
+            switch (value) {
+              case "view" -> "View history";
+              case "pay" -> "Pay";
+              case "accounts" -> "Manage accounts";
+              default -> "Borrow";
+            };
+        button(
+            10 + rightIndex % 2 * 150,
+            66 + rightIndex / 2 * 19,
+            146,
+            Component.literal((officeRights.contains(value) ? "[x] " : "[ ] ") + label),
+            () -> {
+              if (!officeRights.remove(value)) officeRights.add(value);
+              rebuild();
+            });
+        rightIndex++;
+      } else {
+        boolean all = value.equals("all");
+        boolean checked = all ? officeAllAccounts : officeScope.contains(value);
+        var option =
+            button(
+                10 + scopeIndex % 2 * 150,
+                120 + scopeIndex / 2 * 19,
+                146,
+                Component.literal((checked ? "[x] " : "[ ] ") + choice.label()),
+                () -> {
+                  if (all) officeAllAccounts = !officeAllAccounts;
+                  else if (!officeScope.remove(value)) officeScope.add(value);
+                  rebuild();
+                });
+        if (!all && officeAllAccounts) option.active = false;
+        scopeIndex++;
+      }
+    }
+    button(
+        160,
+        188,
+        146,
+        Component.literal("Review changes"),
+        () ->
+            send(
+                "office_submit",
+                (officeRights.isEmpty() ? "none" : String.join(",", officeRights))
+                    + "\t"
+                    + (officeAllAccounts
+                        ? "all"
+                        : officeScope.isEmpty() ? "none" : String.join(",", officeScope))));
+  }
+
+  private void corporateBack() {
+    var choice =
+        menu.choices().stream()
+            .filter(c -> c.action().equals("corp_to_account") || c.action().equals("corp_summary"))
+            .findFirst();
+    if (choice.isEmpty()) {
+      corporateCompanies();
+      return;
+    }
+    var back = choice.get();
+    button(
+        10,
+        188,
+        146,
+        UiTextClient.component(back.label()),
+        () -> send(back.action(), back.value()));
   }
 
   private void corporateCompanies() {
@@ -731,41 +1046,44 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
   }
 
   private void corporateAccountForm() {
+    corporateCompanies();
+    var actions =
+        menu.choices().stream()
+            .sorted(
+                java.util.Comparator.comparingInt(
+                    c ->
+                        List.of(
+                                "corp_funding",
+                                "corp_pay",
+                                "corp_history",
+                                "corp_credit",
+                                "corp_debit_issue",
+                                "corp_close")
+                            .indexOf(c.action())))
+            .toList();
+    for (int i = 0; i < actions.size(); i++) {
+      var choice = actions.get(i);
+      button(
+          10 + (i % 2) * 150,
+          108 + (i / 2) * 24,
+          146,
+          UiTextClient.component(choice.label()),
+          () -> {
+            counterparty = "";
+            corporateAmount = "";
+            send(choice.action(), choice.value());
+          });
+    }
     if (!corporateAccount.isEmpty())
       button(
-          178,
-          188,
-          128,
-          text("corp_copy"),
-          () -> minecraft.keyboardHandler.setClipboard(corporateAccount));
-    corporateCompanies();
-    boolean writable =
-        menu.choices().stream()
-            .anyMatch(c -> Set.of("corp_fund", "corp_pay", "corp_close").contains(c.action()));
-    if (writable) {
-      corporateField(10, 182, 36, "corp_counterparty", counterparty, value -> counterparty = value);
-      corporateField(
-          198, 108, 19, "corp_amount", corporateAmount, value -> corporateAmount = value);
-    }
-    int x = 10;
-    for (var choice : menu.choices()) {
-      var action = choice.action();
-      if (!Set.of("corp_fund", "corp_pay", "corp_close", "corp_history").contains(action)) continue;
-      button(
-          x,
           160,
-          72,
-          UiTextClient.component(choice.label()),
-          () ->
-              send(
-                  action,
-                  switch (action) {
-                    case "corp_history" -> "";
-                    case "corp_close" -> counterparty.trim();
-                    default -> counterparty.trim() + " " + corporateAmount.trim();
-                  }));
-      x += 75;
-    }
+          188,
+          146,
+          text("corp_copy"),
+          () -> {
+            minecraft.keyboardHandler.setClipboard(corporateAccount);
+            minecraft.player.displayClientMessage(text("corp_copied"), true);
+          });
   }
 
   private void corporateField(
@@ -980,7 +1298,17 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     g.drawString(
         font, visibleHeading, -font.width(visibleHeading) / 2, 0, theme.headerText(), false);
     g.pose().popPose();
-    if (Set.of(
+    if (declinedRowPage() && chooser.isEmpty()) {
+      drawLines(g, declineDetails(), 10, 56, 296, 176);
+      return;
+    }
+    boolean deposit = menu.page().equals("deposit");
+    boolean completedDeposit =
+        deposit && menu.operation().state() == BankingOperation.State.COMPLETED;
+    if (completedDeposit) {
+      int width = needsScrollControls() ? 238 : 296;
+      g.drawWordWrap(font, Component.literal(cleanText(statusText())), 10, 36, width, MUTED);
+    } else if (Set.of(
             BankingOperation.State.PROCESSING,
             BankingOperation.State.OUTCOME_UNCERTAIN,
             BankingOperation.State.COMPLETED,
@@ -992,41 +1320,47 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
       scrollbar(g, choices(chooser).size());
       return;
     }
-    boolean deposit = menu.page().equals("deposit");
     int x = deposit ? 164 : 10,
         y = deposit ? 98 : Set.of("fx", "withdraw").contains(menu.page()) ? 134 : 76;
     int bottom =
         (menu.page().startsWith("finance_") || menu.page().equals("credit_advance"))
             ? (input == null ? 180 : 148)
             : deposit ? 136 : Set.of("settings", "shop", "setup").contains(menu.page()) ? 154 : 184;
-    boolean rowPage =
-        Set.of(
-                "accounts",
-                "claims",
-                "branch",
-                "branch_targets",
-                "brands",
-                "branch_products",
-                "cards",
-                "card_funding",
-                "credit_facilities",
-                "payments",
-                "history_filters",
-                "history",
-                "branch_services",
-                "corp_list",
-                "account_settings",
-                "credit_services",
-                "loan_services",
-                "terminal_accounts",
-                "bill_accounts",
-                "withdraw_sources",
-                "withdrawal_sources",
-                "card_services")
-            .contains(menu.page());
-    if (rowPage && !menu.lines().isEmpty() && !menu.page().equals("corp_list"))
-      g.drawString(
-          font, font.plainSubstrByWidth(menu.lines().getFirst(), 296), 10, 57, MUTED, false);
+    if (menu.page().startsWith("corp_cc")) {
+      drawLines(g, menu.lines(), 10, 54, 296, 130);
+      return;
+    }
+    if (menu.page().startsWith("office_")
+        && !menu.page().equals("office_home")
+        && !menu.page().equals("office_choices")) {
+      if (!choices("office_submit").isEmpty()) {
+        if (menu.lines().size() > 1) drawLines(g, List.of(menu.lines().get(1)), 10, 35, 296, 61);
+        if (Set.of("office_register", "office_issue").contains(menu.page()))
+          g.drawString(font, "Business currency", 10, 133, MUTED, false);
+        if (menu.page().equals("office_rights")) {
+          g.drawString(font, "Permissions", 10, 55, MUTED, false);
+          g.drawString(font, "Applies to", 10, 109, MUTED, false);
+        }
+        for (var field : officeFields)
+          g.drawString(
+              font,
+              field.getMessage(),
+              field.getX() - leftPos,
+              field.getY() - topPos - 11,
+              MUTED,
+              false);
+      } else drawLines(g, menu.lines(), 10, 55, 296, 182);
+      return;
+    }
+    boolean rowPage = rowPage();
+    if (rowPage
+        && !menu.choices().isEmpty()
+        && !menu.lines().isEmpty()
+        && !menu.page().equals("corp_list")) {
+      var headingLines = font.split(UiTextClient.component(menu.lines().getFirst()), 296);
+      for (int i = 0; i < Math.min(2, headingLines.size()); i++)
+        g.drawString(font, headingLines.get(i), 10, 53 + i * 10, MUTED, false);
+    }
     boolean configurationForm = menu.page().equals("settings") && !choices("configure").isEmpty();
     if (menu.operation().state() == BankingOperation.State.PROCESSING || needsRetry()) {
       drawLines(g, menu.lines(), 10, 76, 296, 180);
@@ -1096,15 +1430,23 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
             false);
       }
 
-    } else if (menu.page().equals("corp_list") || menu.page().equals("corp_accounts")) {
+    } else if (menu.page().equals("corp_sources") && menu.choices().isEmpty()) {
+      drawLines(g, menu.lines(), 10, 55, 296, 180);
+    } else if (Set.of("corp_details", "corp_people", "corp_lookup", "corp_send", "corp_contribute")
+        .contains(menu.page())) {
+      drawLines(g, menu.lines(), 10, 55, 296, 183);
+    } else if (menu.page().equals("corp_list")) {
       // The row list and the heading have independent scrolling.
-      if (!menu.lines().isEmpty())
+      if (menu.page().equals("corp_list") && choices("corp_select").isEmpty()) {
+        drawLines(g, menu.lines(), 10, 55, 296, 180);
+      } else if (!menu.lines().isEmpty()) {
         g.drawString(
             font, font.plainSubstrByWidth(menu.lines().getFirst(), 296), 10, 55, TEXT, false);
-      if (menu.choices().isEmpty())
-        drawLines(g, menu.lines().stream().skip(1).toList(), 10, 75, 296, 180);
+        if (menu.choices().isEmpty())
+          drawLines(g, menu.lines().stream().skip(1).toList(), 10, 75, 296, 180);
+      }
     } else if (menu.page().equals("corp_account")) {
-      drawLines(g, menu.lines(), 10, 55, 296, 125);
+      drawLines(g, menu.lines(), 10, 55, 296, 106);
     } else if (!rowPage || menu.choices().isEmpty())
       drawLines(g, menu.lines(), x, y, 306 - x, bottom);
     if (rowPage)
@@ -1129,7 +1471,8 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     if (termInput != null) g.drawString(font, terminalLabel("Term"), 210, 154, MUTED, false);
     if (deposit)
       g.drawString(font, Component.translatable("container.inventory"), 12, 134, MUTED, false);
-    if (deposit) drawLines(g, List.of(statusText()), 184, 144, 122, needsRetry() ? 164 : 182);
+    if (deposit && !completedDeposit)
+      drawLines(g, List.of(statusText()), 184, 144, 122, needsRetry() ? 164 : 182);
   }
 
   private static String terminalLabel(String english) {
@@ -1137,9 +1480,62 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     return I18n.exists(key) ? ui(key) : english;
   }
 
+  private boolean rowPage() {
+    if (menu.page().equals("office_home") || menu.page().equals("office_choices")) return true;
+    return Set.of(
+            "accounts",
+            "claims",
+            "branch",
+            "branch_targets",
+            "brands",
+            "branch_products",
+            "cards",
+            "card_funding",
+            "credit_facilities",
+            "payments",
+            "history_filters",
+            "history",
+            "branch_services",
+            "corp_list",
+            "corp_sources",
+            "corp_destinations",
+            "corp_accounts",
+            "account_settings",
+            "credit_services",
+            "loan_services",
+            "terminal_accounts",
+            "bill_accounts",
+            "withdraw_sources",
+            "withdrawal_sources",
+            "card_services")
+        .contains(menu.page());
+  }
+
+  private boolean declinedRowPage() {
+    return menu.operation().state() == BankingOperation.State.DECLINED
+        && menu.choices().isEmpty()
+        && rowPage();
+  }
+
+  private List<String> declineDetails() {
+    var details = new LinkedHashSet<String>();
+    String reason = menu.operation().reasonKey();
+    if (I18n.exists(reason) && !reason.equals("screen.economy.operation.declined"))
+      details.add(operationText());
+    details.add(cleanText(UiTextClient.render(menu.status())));
+    for (var line : menu.lines()) details.add(cleanText(UiTextClient.render(line)));
+    details.removeIf(String::isBlank);
+    return details.isEmpty() ? List.of(operationText()) : List.copyOf(details);
+  }
+
   private boolean needsScrollControls() {
     if (Set.of("home", "account_overview").contains(menu.page())) return false;
     if (!chooser.isEmpty()) return choices(chooser).size() > 6;
+    if (declinedRowPage())
+      return declineDetails().stream()
+              .mapToInt(line -> font.split(Component.literal(line), 296).size())
+              .sum()
+          > 12;
     if (menu.page().equals("withdraw_mix")) return choices("withdraw_mix_change").size() > 5;
     if (menu.choices().size() > 6) return true;
     int textWidth = menu.page().equals("deposit") ? 142 : 296;
@@ -1157,6 +1553,17 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
   }
 
   private String pageTitle() {
+    if (menu.page().startsWith("corp_cc")) return "Corporate credit";
+    if (menu.page().startsWith("office_"))
+      return switch (menu.page()) {
+        case "office_home", "office_choices" -> "Corporations";
+        case "office_register" -> "Register company";
+        case "office_issue" -> "Issue shares";
+        case "office_review" -> "Review";
+        case "office_rights" -> "Permissions";
+        default -> "Corporation office";
+      };
+    if (chooser.equals("cash_modes")) return ui("ui.client.cash_services");
     if (menu.page().equals("finance_loan_payment")
         || menu.choices().stream()
             .anyMatch(
@@ -1234,6 +1641,10 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
   }
 
   private String statusText() {
+    return operationText() + " · " + UiTextClient.render(menu.status());
+  }
+
+  private String operationText() {
     Object[] arguments =
         menu.operation().args().stream()
             .map(
@@ -1256,9 +1667,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
     if (!I18n.exists(reason))
       reason =
           "screen.economy.operation." + menu.operation().state().name().toLowerCase(Locale.ROOT);
-    return Component.translatable(reason, arguments).getString()
-        + " · "
-        + UiTextClient.render(menu.status());
+    return Component.translatable(reason, arguments).getString();
   }
 
   private void drawLines(GuiGraphics g, List<String> lines, int x, int y, int width, int bottom) {
@@ -1267,7 +1676,7 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
       wrapped.addAll(
           font.split(
               Component.literal(
-                  menu.page().startsWith("corp_")
+                  (menu.page().startsWith("corp_") || menu.page().startsWith("office_"))
                       ? UiTextClient.render(line)
                       : cleanText(UiTextClient.render(line))),
               width));
@@ -1319,6 +1728,14 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
 
   @Override
   public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    if (getFocused() instanceof EditBox field
+        && field.canConsumeInput()
+        && keyCode != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE
+        && keyCode != org.lwjgl.glfw.GLFW.GLFW_KEY_TAB) {
+      // Printable characters arrive in charTyped after this key event.
+      field.keyPressed(keyCode, scanCode, modifiers);
+      return true;
+    }
     if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_DOWN
         || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_UP) {
       scrollBy(keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_PAGE_DOWN ? 5 : -5);
@@ -1333,37 +1750,14 @@ public final class BankingScreen extends AbstractContainerScreen<BankingMenu> {
         && mouseX < leftPos + 308
         && mouseY >= topPos + 72
         && mouseY < topPos + 184) {
-      if (menu.page().equals("withdraw_mix")) {
+      if (declinedRowPage() && chooser.isEmpty()) {
+        scroll = Math.max(0, scroll - (int) vertical);
+      } else if (menu.page().equals("withdraw_mix")) {
         scroll =
             Math.clamp(
                 scroll - (int) vertical, 0, Math.max(0, choices("withdraw_mix_change").size() - 5));
         rebuild();
-      } else if (!chooser.isEmpty()
-          || Set.of(
-                  "accounts",
-                  "claims",
-                  "branch",
-                  "branch_targets",
-                  "brands",
-                  "branch_products",
-                  "cards",
-                  "card_funding",
-                  "credit_facilities",
-                  "payments",
-                  "history_filters",
-                  "history",
-                  "branch_services",
-                  "corp_list",
-                  "corp_accounts",
-                  "account_settings",
-                  "credit_services",
-                  "loan_services",
-                  "terminal_accounts",
-                  "bill_accounts",
-                  "withdraw_sources",
-                  "withdrawal_sources",
-                  "card_services")
-              .contains(menu.page())) {
+      } else if (!chooser.isEmpty() || rowPage()) {
         int count =
             chooser.isEmpty()
                 ? switch (menu.page()) {

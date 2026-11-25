@@ -213,10 +213,7 @@ public final class Loans {
               && (primePolicyId == null && primeVersion < 1
                   || InstitutionCatalog.require(lender).baseCurrency() != currency)
           || product == CreditUnderwriting.Product.SUBPRIME_LOAN
-              && (tier != 1
-                  || primeVersion != 0
-                  || primeApr.signum() != 0
-                  || currency != worldCurrency))
+              && (tier != 1 || primeVersion != 0 || primeApr.signum() != 0))
         throw new IllegalArgumentException("Captured loan policy contract");
     }
 
@@ -363,8 +360,7 @@ public final class Loans {
           && (!lender.equals(InstitutionCatalog.IRONBRIDGE)
               || tier != 1
               || primeVersion != 0
-              || primeApr.signum() != 0
-              || currency != worldCurrency))
+              || primeApr.signum() != 0))
         throw new IllegalArgumentException("Subprime application decision");
       if (product == CreditUnderwriting.Product.BANK_LOAN
           && (!InstitutionCatalog.require(lender).customerBank()
@@ -632,8 +628,7 @@ public final class Loans {
     if (subprime && !kiosk.tier1()) return reject("SUBPRIME_KIOSK_UNAVAILABLE");
     var lender = subprime ? InstitutionCatalog.IRONBRIDGE : kiosk.id();
     if (!enabled(reads, owner.world(), lender)) return reject("LOAN_LENDER_DISABLED");
-    if (request.currency() != (subprime ? denomination.currency() : kiosk.baseCurrency()))
-      return reject("LOAN_CONTRACT_CURRENCY");
+    if (request.currency() != kiosk.baseCurrency()) return reject("LOAN_CONTRACT_CURRENCY");
     var destination = AccountCatalog.find(reads, owner, request.destination()).orElse(null);
     if (destination == null
         || destination.status() != AccountIdentity.Status.OPEN

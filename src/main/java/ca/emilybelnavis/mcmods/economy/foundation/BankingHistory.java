@@ -473,16 +473,18 @@ public final class BankingHistory {
               var choices = new ArrayList<BankingNetwork.Choice>();
               choices.add(
                   choice("history_account", "all", UiText.t("ui.bank.all_owned_accounts.21bdf0")));
-              for (var r : rows.stream().limit(16).toList())
-                choices.add(
-                    choice(
-                        "history_account",
-                        r.id().value().toString(),
-                        r.currency().code()
-                            + " "
-                            + shortId(r.id().value())
-                            + " "
-                            + display(r.status())));
+              int closed = 0;
+              for (var account : rows.stream().limit(16).toList()) {
+                var label =
+                    account.currency() == null
+                        ? UiText.t("ui.player.trading_account")
+                        : UiText.t("ui.terminal.account.bank", account.currency().code());
+                if (account.primary()) label += " · " + UiText.t("ui.dialogue.primary.a9a96e");
+                if (account.status()
+                    == ca.emilybelnavis.mcmods.economy.api.AccountIdentity.Status.CLOSED)
+                  label += " · " + display(account.status()) + " " + (++closed);
+                choices.add(choice("history_account", account.id().value().toString(), label));
+              }
               if (rows.size() > 16)
                 choices.add(
                     choice(
@@ -571,7 +573,9 @@ public final class BankingHistory {
                     ? "-"
                     : Instant.ofEpochMilli(q.toExclusive()).atZone(ZoneOffset.UTC).toLocalDate())
                 + UiText.t("ui.bank.exclusive");
-    return (q.account() == null ? UiText.t("ui.bank.all_accounts.6a19f2") : shortId(q.account()))
+    return (q.account() == null
+            ? UiText.t("ui.bank.all_accounts.6a19f2")
+            : UiText.t("ui.player.selected_account"))
         + " · "
         + (q.currency() == null ? UiText.t("ui.bank.all_currencies.7d2a5d") : q.currency().code())
         + " · "
@@ -586,49 +590,37 @@ public final class BankingHistory {
     return (r.internalMovement() ? UiText.t("ui.bank.internal.ab7882") : "")
         + money(r.amount())
         + " · "
-        + shortId(r.account())
+        + TerminalMenus.activity(r.service())
         + " · "
         + Instant.ofEpochMilli(r.recordedAt()).toString();
   }
 
   private static List<String> detailLines(HistoryDetails.Detail d) {
     var lines = new ArrayList<String>();
-    lines.add(UiText.t("ui.bank.committed_transaction.edbeed") + d.transaction());
-    lines.add(UiText.t("ui.bank.original_operation.1268ee") + d.operation());
-    lines.add(UiText.t("ui.bank.recorded_utc.caf495") + Instant.ofEpochMilli(d.recordedAt()));
-    lines.add(d.service() + " / " + d.operationType());
-    for (var m : d.movements()) lines.add(shortId(m.account()) + ": " + money(m.amount()));
-    if (d.movementsMore())
-      lines.add(UiText.t("ui.bank.additional_owned_movements_are_retained_in_ori.260452"));
-    lines.add(
-        UiText.t("ui.bank.fee.1069ca")
-            + (d.fee().availability() == HistoryDetails.Availability.KNOWN
-                ? money(d.fee().amount())
-                : display(d.fee().availability())));
-    lines.add(
-        UiText.t("ui.bank.counterparty.e9a8e2")
-            + (d.counterparty().visibility() == HistoryDetails.Visibility.CAPTURED
-                ? d.counterparty().label()
-                : display(d.counterparty().visibility())));
-    for (var f : d.fx()) {
-      lines.add(
-          UiText.t("ui.bank.captured_fx.09a723")
-              + f.source()
-              + " → "
-              + f.target()
-              + " · "
-              + display(f.family())
-              + UiText.t("ui.bank.utc.9f24a3")
-              + Instant.ofEpochMilli(f.effectiveAt()));
-      lines.add(
-          f.availability() == HistoryDetails.Availability.KNOWN
-              ? fxRate(f.numerator(), f.denominator()) + UiText.t("ui.bank.v.0286fb") + f.version()
-              : UiText.t("ui.bank.captured_publication_unavailable.6cff1e"));
+    lines.add(TerminalMenus.activity(d.service()) + " · " + Instant.ofEpochMilli(d.recordedAt()));
+    for (var movement : d.movements()) lines.add(money(movement.amount()));
+    if (d.movementsMore()) lines.add(UiText.t("ui.player.more_movements"));
+    if (d.fee().availability() == HistoryDetails.Availability.KNOWN
+        && d.fee().amount().minorUnits() != 0)
+      lines.add(UiText.t("ui.bank.fee.1069ca") + money(d.fee().amount()));
+    if (d.counterparty().visibility() == HistoryDetails.Visibility.CAPTURED) {
+      var other = d.counterparty().label();
+      if (other.startsWith("economy:bank/"))
+        ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.find(
+                new ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId(
+                    other))
+            .ifPresent(bank -> lines.add(UiText.t("ui.bank.counterparty.e9a8e2") + bank.name()));
     }
-    if (!d.provenance().isEmpty())
-      lines.add(UiText.t("ui.bank.original_sources.3b79fb") + d.provenance().size());
-    if (d.additionalDetail())
-      lines.add(UiText.t("ui.bank.some_original_detail_is_unavailable_or_exceeds.3542e2"));
+    for (var rate : d.fx()) {
+      lines.add(
+          rate.source()
+              + " → "
+              + rate.target()
+              + " · "
+              + (rate.availability() == HistoryDetails.Availability.KNOWN
+                  ? fxRate(rate.numerator(), rate.denominator())
+                  : UiText.t("ui.bank.captured_publication_unavailable.6cff1e")));
+    }
     return lines;
   }
 
@@ -671,11 +663,7 @@ public final class BankingHistory {
                 lines.add(
                     r.status().equals("AVAILABLE")
                         ? fxRate(r.numerator(), r.denominator())
-                            + UiText.t("ui.bank.v.0286fb")
-                            + r.version()
                         : display(r.status()));
-                if (r.publication() != null)
-                  lines.add(UiText.t("ui.bank.publication.ab3fec") + r.publication());
               }
               if (v.rows().isEmpty())
                 lines.add(UiText.t("ui.bank.no_retained_publication_for_this_selection.20ebd4"));
@@ -817,10 +805,6 @@ public final class BankingHistory {
 
   private static BankingNetwork.Choice choice(String action, String value, String label) {
     return new BankingNetwork.Choice(action, value, label, false);
-  }
-
-  private static String shortId(UUID id) {
-    return id.toString().substring(0, 8);
   }
 
   private static String money(Money money) {

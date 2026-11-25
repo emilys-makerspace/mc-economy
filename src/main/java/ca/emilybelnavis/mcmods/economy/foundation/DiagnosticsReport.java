@@ -36,22 +36,29 @@ public final class DiagnosticsReport {
           "Banking is paused until the server clock catches up with this world's saved time.");
     }
     if (catchingUp) {
-      String time =
-          estimatedSeconds == null
-              ? "Estimating time remaining."
-              : "About " + duration(estimatedSeconds) + " remaining.";
-      String progress =
-          remainingDays == null
-              ? "Processing scheduled updates."
-              : remainingDays == 0
-                  ? "Finishing scheduled updates."
-                  : remainingDays
-                      + (remainingDays == 1 ? " financial day left." : " financial days left.");
-      return List.of("Banking is catching up. " + progress + " " + time);
+      String message = "Banking is processing offline transactions.";
+      if (remainingDays == null) return List.of(message + " Estimating time remaining.");
+      String days = remainingDays + (remainingDays == 1 ? " day left" : " days left");
+      if (estimatedSeconds == null)
+        return List.of(message + " " + days + ". Estimating time remaining.");
+      String wait;
+      if (estimatedSeconds < 60) {
+        wait = "less than a minute";
+      } else {
+        long minutes = Math.round(estimatedSeconds / 60.0);
+        wait = "about " + minutes + (minutes == 1 ? " minute" : " minutes");
+      }
+      return List.of(message + " " + days + ", " + wait + " remaining.");
     }
     return List.of(
         switch (state) {
-          case INITIALIZING -> "Banking is starting. Checking this world's saved records.";
+          case INITIALIZING ->
+              switch (phase) {
+                case "journal-validation" -> "Banking is checking past transactions.";
+                case "schema-validation" -> "Banking is checking saved financial records.";
+                case "owner-history" -> "Banking is checking account histories.";
+                default -> "Banking is starting. Checking this world's saved records.";
+              };
           case READY -> "Banking is open.";
           case UNAVAILABLE -> {
             if ("STORAGE_UPGRADE_REQUIRED".equals(failureCode)) {
@@ -65,16 +72,6 @@ public final class DiagnosticsReport {
           }
           case STOPPING, STOPPED -> "Banking is closed while the world shuts down.";
         });
-  }
-
-  private static String duration(long seconds) {
-    if (seconds < 60) return Math.max(1, seconds) + (seconds <= 1 ? " second" : " seconds");
-    if (seconds < 3600) {
-      long minutes = Math.round(seconds / 60.0);
-      return minutes + (minutes == 1 ? " minute" : " minutes");
-    }
-    long hours = Math.round(seconds / 3600.0);
-    return hours + (hours == 1 ? " hour" : " hours");
   }
 
   public static List<String> render(
@@ -245,6 +242,8 @@ public final class DiagnosticsReport {
       case "storage",
           "storage-ready",
           "journal-validation",
+          "schema-validation",
+          "owner-history",
           "ready",
           "catch-up",
           "waiting-for-wall-clock",

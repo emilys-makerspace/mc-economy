@@ -215,6 +215,9 @@ public final class CorporatePayments {
                   payment.membershipRevision(),
                   payment.drain())
               : paymentAccounts(reads, source, target);
+      if (source.owner().owner() instanceof PartyRef.Organization org
+          && !CorporateCapital.profile(reads, org.id().value()).orElseThrow().funded())
+        return reject("CORPORATION_CAPITAL_REQUIRED");
       var actual = terms(reads, source, accounts, reviewed.principal(), payment.drain(), now);
       if (!actual.equals(reviewed)) return reject("CORPORATE_PAYMENT_STALE");
       var from = accounts.from();
@@ -274,13 +277,22 @@ public final class CorporatePayments {
       String receipt = integration == null ? body : integration.encode() + "|" + body;
       facts.add(new Journal.Record(FACT, integration == null ? 1 : 2, receipt));
       var feeCommit = fee;
-      return new JournalEngine.Commit(
-          facts,
-          new Journal.Result(1, "CORPORATE_PAYMENT_SETTLED", receipt),
-          tx -> {
-            principal.projections().apply(tx);
-            if (feeCommit != null) feeCommit.projections().apply(tx);
-          });
+      var transfer =
+          new JournalEngine.Commit(
+              facts,
+              new Journal.Result(1, "CORPORATE_PAYMENT_SETTLED", receipt),
+              tx -> {
+                principal.projections().apply(tx);
+                if (feeCommit != null) feeCommit.projections().apply(tx);
+              });
+      if (target.owner().owner() instanceof PartyRef.Organization company) {
+        var profile = CorporateCapital.profile(reads, company.id().value()).orElseThrow();
+        if (!profile.funded() && !(source.owner().owner() instanceof PartyRef.Player))
+          return reject("CORPORATION_CAPITAL_REQUIRED");
+        return CorporateCapital.fund(
+            reads, company.id().value(), new Money(to, reviewed.credit()), transfer);
+      }
+      return transfer;
     } catch (Refusal denied) {
       return reject(denied.getMessage());
     } catch (CurrencyConversion.Rejected conversion) {
@@ -386,7 +398,6 @@ public final class CorporatePayments {
         || !bank.enabled()
         || !bank.customerBank()
         || bank.baseCurrency() != account.currency() && (endpoint.corporate() || !account.primary())
-        || endpoint.corporate() && !bank.tier1()
         || reads
             .query(
                 "SELECT 1 FROM institution_parties WHERE world_id=? AND institution_key=? AND"

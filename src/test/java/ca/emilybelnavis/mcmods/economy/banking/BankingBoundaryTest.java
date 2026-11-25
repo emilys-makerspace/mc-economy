@@ -122,6 +122,11 @@ class BankingBoundaryTest {
 
   @Test
   void terminalModesExposeOnlyTheirOwnServerAuthorizedActions() {
+    var cardlessActions =
+        BankingNetwork.ACTIONS.stream()
+            .filter(BankingMenu.Access.ATM_ENROLLMENT::allows)
+            .collect(java.util.stream.Collectors.toSet());
+    assertEquals(Set.of("branch_open", "bank_retry"), cardlessActions);
     assertTrue(BankingMenu.Access.ATM.allows("withdraw_confirm"));
     assertTrue(BankingMenu.Access.ATM.allows("home"));
     assertTrue(BankingMenu.Access.TELLER.allows("manage_accounts"));
@@ -219,6 +224,7 @@ class BankingBoundaryTest {
         BankingPresentation.lines(
                 List.of(
                     "1. CAD primary — open",
+                    "Account: " + id,
                     "History for CAD " + id,
                     "#42 12.50 CAD",
                     "Transaction " + id,

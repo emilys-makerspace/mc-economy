@@ -123,12 +123,24 @@ class TerminalBankingTest {
         assertEquals(
             Status.NOT_ACCEPTED, bind(store, owner, generation, 3, bank.id(), true).status());
         live = true;
+        var cadSettings = snapshot(store).settings();
+        var second = InstitutionCatalog.banks().get(1);
         assertEquals(
-            "TERMINAL_BANK_LOCKED",
-            bind(store, owner, generation, 3, InstitutionCatalog.banks().get(1).id(), true)
-                .result()
-                .code());
-        assertEquals(3, snapshot(store).revision());
+            Status.COMMITTED, bind(store, owner, generation, 3, second.id(), true).status());
+        assertEquals(cadSettings, snapshot(store).settings());
+        var euro =
+            InstitutionCatalog.banks().stream()
+                .filter(b -> b.baseCurrency() == EconomyCurrency.EUR)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(
+            "TERMINAL_STALE", bind(store, owner, generation, 3, euro.id(), true).result().code());
+        assertEquals(Status.COMMITTED, bind(store, owner, generation, 4, euro.id(), true).status());
+        assertEquals(euro.id(), snapshot(store).binding().institution());
+        assertEquals(
+            new Settings(Mode.BOTH, Set.of(EconomyCurrency.EUR), Set.of("economy:eur_bill_5")),
+            snapshot(store).settings());
+        assertEquals(5, snapshot(store).revision());
       } finally {
         store.close();
       }

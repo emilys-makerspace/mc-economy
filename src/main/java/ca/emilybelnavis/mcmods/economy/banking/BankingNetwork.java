@@ -19,6 +19,10 @@ public final class BankingNetwork {
   public static final int MAX_SNAPSHOT_BYTES = 24 * 1024;
   public static final Set<String> ACTIONS =
       Set.of(
+          "office_page",
+          "office_pick",
+          "office_submit",
+          "office_approve",
           "home",
           "payments",
           "manage_accounts",
@@ -65,8 +69,23 @@ public final class BankingNetwork {
           "corp_open",
           "corp_fund",
           "corp_pay",
+          "corp_destination",
+          "corp_lookup",
+          "corp_send",
+          "corp_other",
+          "corp_to_account",
           "corp_close",
           "corp_history",
+          "corp_cc_pick",
+          "corp_cc_submit",
+          "corp_details",
+          "corp_summary",
+          "corp_people_next",
+          "corp_debit_issue",
+          "corp_credit",
+          "corp_funding",
+          "corp_source",
+          "corp_amount",
           "corp_recover",
           "corp_confirm",
           "branch_open",
@@ -360,7 +379,7 @@ public final class BankingNetwork {
   }
 
   private static void register(RegisterPayloadHandlersEvent event) {
-    var registrar = event.registrar("15");
+    var registrar = event.registrar("18");
     registrar.playToServer(
         Action.PAYLOAD_TYPE,
         Action.CODEC,

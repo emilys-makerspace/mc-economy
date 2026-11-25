@@ -9,6 +9,10 @@ final class BankingPresentation {
   private static final Pattern UUID =
       Pattern.compile(
           "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+  private static final Pattern IDENTIFIER_LINE =
+      Pattern.compile(
+          "(?i)(?:account(?: id| uuid)?|transaction(?: id)?|receipt id|operation id)\\s*:\\s*"
+              + UUID.pattern());
   private static final Pattern NUMBERED_LINE = Pattern.compile("[1-8]\\. .*");
   private static final Pattern CODE = Pattern.compile("[A-Z][A-Z0-9_]{2,}");
 
@@ -20,7 +24,8 @@ final class BankingPresentation {
     for (String line : source) {
       if (line == null) continue;
       String english = UiText.render(line, "en_gb");
-      if (english.startsWith("Operation ") || english.startsWith("Original operation:")) {
+      if ((english.startsWith("Operation ") || english.startsWith("Original operation:"))
+          && UUID.matcher(english).find()) {
         hideOutcomeCode = true;
         continue;
       }
@@ -32,7 +37,9 @@ final class BankingPresentation {
       hideOutcomeCode = false;
       if (english.startsWith("Transaction ")
           && UUID.matcher(english.substring("Transaction ".length())).matches()) continue;
-      if (english.startsWith("Terminal revision ") || UUID.matcher(english).matches()) continue;
+      if (english.startsWith("Terminal revision ")
+          || UUID.matcher(english).matches()
+          || IDENTIFIER_LINE.matcher(english.strip()).matches()) continue;
       String clean = line;
       if (english.startsWith("History for "))
         clean = UiText.mapText(clean, text -> UUID.matcher(text).replaceFirst("").stripTrailing());

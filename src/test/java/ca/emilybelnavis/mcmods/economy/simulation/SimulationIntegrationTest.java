@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.clock.*;
+import ca.emilybelnavis.mcmods.economy.foundation.ServerServices;
 import ca.emilybelnavis.mcmods.economy.fx.FxService;
 import ca.emilybelnavis.mcmods.economy.journal.*;
+import ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime;
 import ca.emilybelnavis.mcmods.economy.simulation.activity.*;
 import ca.emilybelnavis.mcmods.economy.simulation.macro.*;
 import ca.emilybelnavis.mcmods.economy.storage.SqliteStorage;
@@ -21,12 +23,13 @@ class SimulationIntegrationTest {
   @Test
   void productionRuntimeActivatesAfterFirstCurrencySelectionWithRealObservers() throws Exception {
     var wall = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);
+    seedActiveEconomy(wall);
+  }
+
+  private void seedActiveEconomy(Clock wall) throws Exception {
     var runtime =
-        new ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime(
-            ca.emilybelnavis.mcmods.economy.recovery.FoundationRuntime.Configuration.production(
-                wall),
-            5000,
-            SimulationConfig.defaults());
+        new FoundationRuntime(
+            FoundationRuntime.Configuration.production(wall), 5000, SimulationConfig.defaults());
     runtime.initialize(path.toRealPath());
     try {
       boolean ready = false;
@@ -58,6 +61,70 @@ class SimulationIntegrationTest {
       assertTrue(runtime.simulationStatus().installed(), runtime.simulationStatus().reason());
     } finally {
       runtime.close();
+    }
+  }
+
+  @Test
+  void reopenedWorldCommitsMultipleOverdueCalendarStepsBetweenServerTicks() throws Exception {
+    var origin = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);
+    seedActiveEconomy(origin);
+    var wall = Clock.offset(origin, Duration.ofMillis(5 * FinancialCalendar.DAY_MILLIS));
+    var runtime =
+        new FoundationRuntime(
+            FoundationRuntime.Configuration.production(wall), 5000, SimulationConfig.defaults());
+    long started = System.nanoTime();
+    var services = new ServerServices(path.toRealPath(), runtime);
+    try {
+      long previousTurns = 0;
+      long largestBatch = 0;
+      int ticks = 0;
+      while (services.state() == ServerServices.State.INITIALIZING
+          && System.nanoTime() - started < Duration.ofSeconds(30).toNanos()) {
+        Thread.sleep(50);
+        long turns = services.observedDeadlineTurns();
+        largestBatch = Math.max(largestBatch, turns - previousTurns);
+        previousTurns = turns;
+        services.tick();
+        ticks++;
+      }
+      assertEquals(
+          ServerServices.State.READY, services.state(), () -> String.valueOf(services.failure()));
+      assertTrue(previousTurns > 32, "Seed enough overdue work to require multiple batches");
+      assertTrue(largestBatch > 1, "Calendar catch-up must progress between Minecraft ticks");
+      var elapsed = Duration.ofNanos(System.nanoTime() - started);
+      System.out.printf(
+          Locale.ROOT,
+          "Five financial days, production SQLite fixture: %d deadline turns, %d server ticks, "
+              + "%d ms to ready, up to %d turns between ticks. At one turn per tick the same "
+              + "deadline work alone required at least %d ms at 20 TPS.%n",
+          previousTurns,
+          ticks,
+          elapsed.toMillis(),
+          largestBatch,
+          (previousTurns - 1) * 50);
+    } finally {
+      assertTrue(services.stop(Duration.ofSeconds(5)));
+    }
+    var store = new SqliteStorage();
+    try {
+      store.initialize(path.toRealPath());
+      var events =
+          store.transaction(
+              tx ->
+                  tx.query(
+                      "SELECT payload FROM journal_records WHERE record_type=? ORDER BY sequence, position",
+                      List.of(DeadlineDispatcher.PROGRESS_RECORD),
+                      1024));
+      assertFalse(events.isEmpty());
+      long previousTime = origin.millis();
+      for (var event : events) {
+        long effectiveTime = Long.parseLong(event.get("payload").split("\\|", -1)[3]);
+        assertTrue(effectiveTime >= previousTime, "Overdue transactions must commit in date order");
+        previousTime = effectiveTime;
+      }
+      assertEquals(wall.millis(), previousTime);
+    } finally {
+      store.close();
     }
   }
 

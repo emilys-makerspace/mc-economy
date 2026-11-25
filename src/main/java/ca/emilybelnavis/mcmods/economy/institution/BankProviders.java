@@ -263,8 +263,6 @@ public final class BankProviders {
             if (primary && existing != null) return reject("PRIMARY_EXISTS");
             if (!primary && (existing == null || existing.revision() != c.accountRevision()))
               return reject("PRIMARY_STALE");
-            if (primary && (!bank.tier1() || bank.baseCurrency() != denomination.currency()))
-              return reject("PRIMARY_BANK_CURRENCY");
             var denied = tier(reads, owner, request, tiers, bank);
             if (denied != null) return denied;
             var banks =
@@ -504,7 +502,7 @@ public final class BankProviders {
         });
   }
 
-  private static boolean enabled(
+  public static boolean enabled(
       JournalEngine.ReadView reads, WorldId world, InstitutionCatalog.Entry bank) {
     var rows =
         reads.query(

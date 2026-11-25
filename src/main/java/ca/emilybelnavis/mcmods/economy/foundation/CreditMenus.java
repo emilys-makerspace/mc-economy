@@ -103,15 +103,19 @@ public final class CreditMenus {
         case "finance_credit_network" -> {
           requireOffered(audience, action, value);
           state.network = InstitutionCatalog.Network.valueOf(value);
+          if (state.context.profile().isEmpty()) {
+            state.limit =
+                CreditUnderwriting.starterLimit(
+                        state.context.denomination().currency(),
+                        state.currency,
+                        state.context.inputs().fx())
+                    .minorUnits();
+            reviewLimit(audience, state, false);
+            break;
+          }
           audience.reply(
               "finance_credit",
-              terms(
-                  state.network,
-                  List.of(
-                      UiText.t("ui.finance.creditmenus.2"),
-                      state.context.profile().isEmpty()
-                          ? UiText.t("ui.finance.creditmenus.3")
-                          : UiText.t("ui.finance.creditmenus.4"))),
+              List.of(UiText.t("ui.finance.player.enter_limit", state.currency.code())),
               UiText.t("ui.finance.creditmenus.1"),
               List.of(choice("finance_credit_preview", "", UiText.t("ui.finance.creditmenus.5"))));
         }
@@ -167,23 +171,24 @@ public final class CreditMenus {
                     List.of());
                 return;
               }
-              state.currency =
-                  state.context.profile().isEmpty()
-                      ? state.context.denomination().currency()
-                      : bank.baseCurrency();
+              state.currency = bank.baseCurrency();
               var choices =
                   bank.networks().stream()
                       .sorted()
                       .map(
                           network ->
-                              choice("finance_credit_network", network.name(), network.name()))
+                              choice(
+                                  "finance_credit_network",
+                                  network.name(),
+                                  UiText.t(
+                                      "network.economy."
+                                          + network.name().toLowerCase(Locale.ROOT))))
                       .toList();
               audience.reply(
                   "finance_credit",
                   List.of(
                       bank.name(),
                       UiText.t("ui.finance.creditmenus.9", state.currency.code()),
-                      UiText.t("ui.finance.creditmenus.10"),
                       UiText.t("ui.finance.creditmenus.11")),
                   UiText.t("ui.finance.creditmenus.8"),
                   choices);
@@ -229,10 +234,11 @@ public final class CreditMenus {
     state.limit = wholeLimit(value, state.currency);
     if (increase && (state.facility == null || state.limit <= state.facility.limitMinor()))
       throw new IllegalArgumentException("Limit increase required");
-    if (!increase
-        && state.context.profile().isEmpty()
-        && state.limit != Math.multiplyExact(2_500L, state.currency.minorUnitsPerMajor()))
-      throw new IllegalArgumentException("Starter exact limit");
+    reviewLimit(audience, state, increase);
+  }
+
+  private static void reviewLimit(
+      FinanceMenuSupport.Audience audience, State state, boolean increase) {
     String confirm = increase ? "finance_credit_raise_ok" : "finance_credit_confirm";
     var lines =
         terms(
@@ -246,7 +252,6 @@ public final class CreditMenus {
                         .profile()
                         .map(profile -> Integer.toString(profile.score()))
                         .orElse(UiText.t("ui.finance.first_score"))),
-                UiText.t("ui.finance.creditmenus.14"),
                 UiText.t("ui.finance.creditmenus.15")));
     audience.reply(
         "finance_credit",
@@ -795,13 +800,11 @@ public final class CreditMenus {
               state.currency = state.facility.currency();
               audience.reply(
                   "finance_credit",
-                  terms(
-                      state.network,
-                      List.of(
-                          UiText.t(
-                              "ui.finance.creditmenus.54",
-                              money(state.currency, state.facility.limitMinor())),
-                          UiText.t("ui.finance.creditmenus.55"))),
+                  List.of(
+                      UiText.t(
+                          "ui.finance.creditmenus.54",
+                          money(state.currency, state.facility.limitMinor())),
+                      UiText.t("ui.finance.player.enter_limit", state.currency.code())),
                   UiText.t("ui.finance.creditmenus.53"),
                   List.of(
                       choice("finance_credit_limit", "", UiText.t("ui.finance.creditmenus.56"))));
@@ -938,29 +941,30 @@ public final class CreditMenus {
   private static void paymentReview(
       FinanceMenuSupport.Audience audience, State state, Money debit, Money fee, long expires) {
     var lines = new ArrayList<String>();
-    lines.add(UiText.t("ui.finance.creditmenus.62", money(debit.currency(), debit.minorUnits())));
-    lines.add(UiText.t("ui.finance.creditmenus.46", money(fee.currency(), fee.minorUnits())));
+    if (fee.minorUnits() > 0)
+      lines.add(UiText.t("ui.finance.creditmenus.46", money(fee.currency(), fee.minorUnits())));
     lines.add(
         UiText.t(
             "ui.finance.creditmenus.63",
             money(debit.currency(), Math.addExact(debit.minorUnits(), fee.minorUnits()))));
-    lines.add(
-        UiText.t(
-            "ui.finance.creditmenus.64",
-            money(state.facility.currency(), state.repayment.amountMinor())));
-    lines.add(
-        UiText.t(
-            "ui.finance.creditmenus.65",
-            money(state.facility.currency(), state.facility.requiredMinor())));
+    if (debit.currency() != state.facility.currency())
+      lines.add(
+          UiText.t(
+              "ui.finance.creditmenus.64",
+              money(state.facility.currency(), state.repayment.amountMinor())));
+    if (state.facility.requiredMinor() > 0)
+      lines.add(
+          UiText.t(
+              "ui.finance.creditmenus.65",
+              money(state.facility.currency(), state.facility.requiredMinor())));
     state.facility.requirements().stream()
         .filter(requirement -> requirement.unmetMinor() > 0)
         .mapToLong(CardServicing.Requirement::dueAt)
         .min()
         .ifPresent(
-            due -> lines.add(UiText.t("ui.finance.creditmenus.66", Instant.ofEpochMilli(due))));
+            due -> lines.add(UiText.t("ui.finance.creditmenus.66", FinanceMenuSupport.date(due))));
     lines.add(UiText.t("ui.finance.creditmenus.67", Instant.ofEpochMilli(expires)));
-    lines.add(UiText.t("ui.finance.creditmenus.68"));
-    lines.add(UiText.t("ui.finance.creditmenus.69"));
+
     audience.reply(
         "finance_credit",
         lines,

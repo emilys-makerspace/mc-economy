@@ -267,11 +267,12 @@ public final class BranchBootstrap {
                                     && current.binding() != null
                                     && current.binding().bound()
                                     && view.choice().institution() != null
-                                    && current
-                                        .binding()
-                                        .institution()
-                                        .key()
-                                        .equals(view.choice().institution());
+                                    && (current.kind() == TerminalPolicy.Kind.ATM
+                                        || current
+                                            .binding()
+                                            .institution()
+                                            .key()
+                                            .equals(view.choice().institution()));
                             if (ready) {
                               entity.applyPolicy(current);
                               entity.setPolicyReady(true);

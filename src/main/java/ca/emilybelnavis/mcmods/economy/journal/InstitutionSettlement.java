@@ -34,6 +34,14 @@ public final class InstitutionSettlement {
     return prepare(reads, legs, List.of(), Overdrafts.DebitKind.NORMAL, true);
   }
 
+  /** Settles a corporate loan between its authorized account and registered lender books. */
+  public static JournalEngine.Decision prepareCorporateCredit(
+      JournalEngine.ReadView reads,
+      List<PostingBatch.Leg> legs,
+      List<FinancialAccounts.Account> planned) {
+    return prepare(reads, legs, planned, Overdrafts.DebitKind.NORMAL, true);
+  }
+
   static JournalEngine.Decision prepareCorporateFee(
       JournalEngine.ReadView reads,
       List<PostingBatch.Leg> legs,

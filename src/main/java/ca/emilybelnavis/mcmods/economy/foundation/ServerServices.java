@@ -58,6 +58,8 @@ public final class ServerServices {
 
   public static final int STORAGE_CAPACITY = 256;
   public static final int CALCULATION_CAPACITY = 64;
+  private static final int MAX_STARTUP_STEPS = 32;
+  private static final long STARTUP_BATCH_BUDGET_NANOS = TimeUnit.MILLISECONDS.toNanos(25);
   private final UUID sessionId = UUID.randomUUID();
   private final Thread owner = Thread.currentThread();
   private final StorageLifecycle storage;
@@ -1101,6 +1103,10 @@ public final class ServerServices {
     return state;
   }
 
+  public boolean financialWorkPending() {
+    return !economy.ready();
+  }
+
   public long lastSampledJournalSequence() {
     var sample = storageDetails;
     return sample == null ? -1 : sample.lastCommittedSequence();
@@ -1203,7 +1209,20 @@ public final class ServerServices {
   }
 
   private StorageLifecycle.Progress startupStep() {
+    long started = System.nanoTime();
     var step = storage.startupStep();
+    // Keep paged checks and financial steps on the worker while there is spare capacity.
+    int steps = 1;
+    while (batchableStartupPhase(step.phase())
+        && !step.ready()
+        && steps < MAX_STARTUP_STEPS
+        && state == State.INITIALIZING
+        && !Thread.currentThread().isInterrupted()
+        && storageWorker.getQueue().isEmpty()
+        && System.nanoTime() - started < STARTUP_BATCH_BUDGET_NANOS) {
+      step = storage.startupStep();
+      steps++;
+    }
     sampleCatchUp(step.phase().equals("catch-up"));
     if (step.ready() && storage instanceof FoundationStore store) {
       if (!RegisterSales.reconcileBatch(store, RegisterSaleSettlement::returnOriginals))
@@ -1227,6 +1246,13 @@ public final class ServerServices {
       sampleDiagnosticsOnWorker();
     }
     return step;
+  }
+
+  private static boolean batchableStartupPhase(String phase) {
+    return switch (phase) {
+      case "journal-validation", "owner-history", "catch-up" -> true;
+      default -> false;
+    };
   }
 
   private void sampleCatchUp(boolean catchingUp) {

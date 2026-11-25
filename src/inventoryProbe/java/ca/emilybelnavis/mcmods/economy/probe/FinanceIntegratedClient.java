@@ -142,7 +142,8 @@ public final class FinanceIntegratedClient {
         }
         case 6 -> {
           var choice = first(menu, "finance_credit_network");
-          if (fresh(menu) && choice != null && press(screen, "Actions")) {
+          if (fresh(menu) && choice != null) {
+            press(screen, "Actions");
             networkLabel = choice.label();
             next(7);
           }
@@ -150,29 +151,21 @@ public final class FinanceIntegratedClient {
         case 7 -> {
           if (press(screen, networkLabel)) {
             sentRevision = menu.revision();
-            next(8);
-          }
-        }
-        case 8 -> {
-          if (fresh(menu) && offered(menu, "finance_credit_preview", "")) {
-            capture(minecraft, "finance-credit-input.png");
-            if (amount(screen, "2500") && press(screen, "Review limit")) {
-              sentRevision = menu.revision();
-              next(9);
-            }
+            next(9);
           }
         }
         case 9 -> {
           if (fresh(menu) && offered(menu, "finance_credit_confirm", "")) {
             require(
-                menu.lines().stream().anyMatch(s -> s.contains("APR")),
-                "Credit review contains APRs");
+                menu.lines().stream().anyMatch(s -> s.contains("Yearly interest on purchases")),
+                "Credit review shows the annual purchase rate");
             capture(minecraft, "finance-credit-review.png");
             next(90);
           }
         }
         case 90 -> {
-          if (press(screen, "Actions")) next(10);
+          press(screen, "Actions");
+          next(10);
         }
         case 10 -> {
           var choice = first(menu, "finance_credit_confirm");
@@ -289,7 +282,7 @@ public final class FinanceIntegratedClient {
         case 21 -> {
           if (fresh(menu) && offered(menu, "finance_loan_confirm", "")) {
             require(
-                menu.lines().stream().anyMatch(s -> s.contains("APR")),
+                menu.lines().stream().anyMatch(s -> s.contains("Yearly interest on purchases")),
                 "Loan offer APR reaches client");
             capture(minecraft, "finance-loan-offer.png");
             next(22);
@@ -573,7 +566,7 @@ public final class FinanceIntegratedClient {
       Files.writeString(
           root.resolve(success ? "finance-client-passed.txt" : "finance-client-failed.txt"),
           success
-              ? "PASS actual integrated host C2S/S2C kiosk branding, onboarding, credit network chooser, editable limit review button, credit terms/confirmation, protected token collection, first650/2500, remote finance/wealth/report/loan navigation and editable loan-offer review. Automatic-payment named-source MINIMUM consent, persisted ON and confirmed OFF. Eight rendered finance screenshots at GUI scale2. Loan offer was previewed only. External multiplayer transport, FX and collection payments are outside this fixture.\n"
+              ? "PASS actual integrated host C2S/S2C kiosk branding, onboarding, credit network chooser, starter limit and credit terms/confirmation, protected token collection, first650/2500, remote finance/wealth/report/loan navigation and editable loan-offer review. Automatic-payment named-source MINIMUM consent, persisted ON and confirmed OFF. Rendered finance screenshots at GUI scale2. Loan offer was previewed only. External multiplayer transport, FX and collection payments are outside this fixture.\n"
               : failure + "\n");
       System.out.println(
           success

@@ -24,6 +24,64 @@ class LoanCurrencyPrimeTest {
   @TempDir Path path;
 
   @Test
+  void brokeredLoanUsesBranchCurrencyInAnotherCurrencyWorld() throws Exception {
+    try (var f = new LoanTestFixture(path.toRealPath())) {
+      var usdAccount = new AccountId(UUID.randomUUID());
+      f.store.transaction(
+          tx ->
+              tx.execute(
+                  "INSERT INTO account_catalog VALUES(?,?,'BANK','USD','OPEN',1,0)",
+                  List.of(usdAccount.value().toString(), f.actor.value().toString())));
+      var crosswind = new InstitutionCatalog.InstitutionId("economy:bank/crosswind");
+      var proof =
+          BranchFixtures.proof(
+              new BranchAdmission.Context(
+                  f.owner.world(),
+                  UUID.randomUUID(),
+                  f.actor,
+                  BranchAdmission.Action.LOAN_APPLY,
+                  crosswind,
+                  null,
+                  null,
+                  0,
+                  0,
+                  0));
+      var terms = f.application(CreditUnderwriting.Product.SUBPRIME_LOAN, 50_000, 1);
+      for (var currency : List.of(EconomyCurrency.CAD, EconomyCurrency.USD)) {
+        var application =
+            new Loans.Application(
+                proof,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                terms.product(),
+                currency,
+                terms.principalMinor(),
+                terms.years(),
+                usdAccount,
+                1,
+                terms.profileRevision(),
+                0,
+                0,
+                terms.fxPublication(),
+                terms.calendarOrigin(),
+                Loans.RateMode.FIXED,
+                false);
+        var result = f.apply(application, f.intent(Loans.APPLY, application.request())).result();
+        if (currency == EconomyCurrency.CAD) {
+          assertEquals("LOAN_CONTRACT_CURRENCY", result.code());
+        } else {
+          assertEquals("LOAN_ORIGINATED", result.code());
+          var contract = f.get(application.loan());
+          assertEquals(InstitutionCatalog.IRONBRIDGE, contract.lender());
+          assertEquals(EconomyCurrency.CAD, contract.worldCurrency());
+          assertEquals(EconomyCurrency.USD, contract.currency());
+          assertEquals(contract, Loans.decode(Loans.contractRecord(contract).payload(), 1));
+        }
+      }
+    }
+  }
+
+  @Test
   void twoCurrenciesCaptureDistinctPublishedPrimeAndRejectWrongOrLegacySelection()
       throws Exception {
     try (var f = new LoanTestFixture(path.toRealPath())) {

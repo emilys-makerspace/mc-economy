@@ -71,6 +71,12 @@ class ManagersTest {
                 "INSERT INTO corporations VALUES(?,?,'Fixture Workshop','ACTIVE',1)",
                 List.of(company.toString(), founder.value().toString()));
             tx.execute(
+                "INSERT INTO corporation_registry(identifier,party,funded) VALUES('fixture-workshop',?,1)",
+                List.of(company.toString()));
+            tx.execute(
+                "INSERT INTO corporation_shares VALUES('fixture-workshop','A',1,100,'CAD')",
+                List.of());
+            tx.execute(
                 "INSERT INTO account_catalog VALUES(?,?,'BANK','CAD','OPEN',1,0)",
                 List.of(account.toString(), "organization:" + company));
             tx.execute(

@@ -9,6 +9,9 @@ import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.common.util.TriState;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.registries.*;
 
 /**
@@ -104,5 +107,17 @@ public final class TerminalCatalog {
     ITEMS.register(bus);
     ENTITIES.register(bus);
     TABS.register(bus);
+    NeoForge.EVENT_BUS.addListener(TerminalCatalog::allowSettingsGesture);
+  }
+
+  private static void allowSettingsGesture(PlayerInteractEvent.RightClickBlock event) {
+    // Vanilla skips the block while sneaking if either hand holds an item.
+    if (event.getUseBlock() == TriState.DEFAULT
+        && event.getHand() == net.minecraft.world.InteractionHand.MAIN_HAND
+        && event.getEntity().isShiftKeyDown()
+        && event.getItemStack().isEmpty()
+        && !event.getEntity().getOffhandItem().isEmpty()
+        && event.getLevel().getBlockState(event.getPos()).getBlock() instanceof WideTerminalBlock)
+      event.setUseBlock(TriState.TRUE);
   }
 }

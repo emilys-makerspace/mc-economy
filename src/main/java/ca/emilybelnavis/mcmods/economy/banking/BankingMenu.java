@@ -3,6 +3,7 @@ package ca.emilybelnavis.mcmods.economy.banking;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.cash.CashCatalog;
 import ca.emilybelnavis.mcmods.economy.foundation.ServerServices;
+import ca.emilybelnavis.mcmods.economy.foundation.TerminalMenus;
 import ca.emilybelnavis.mcmods.economy.journal.TerminalPolicy;
 import ca.emilybelnavis.mcmods.economy.terminal.TerminalLifecycle;
 import java.util.*;
@@ -23,7 +24,9 @@ public final class BankingMenu extends AbstractContainerMenu {
     REGISTER,
     CARD,
     ADMIN,
-    WORLD_SETUP;
+    WORLD_SETUP,
+    ATM_ENROLLMENT,
+    CORPORATION;
 
     private static final Set<String> BANKING =
         Set.of(
@@ -161,8 +164,23 @@ public final class BankingMenu extends AbstractContainerMenu {
                         "corp_open",
                         "corp_fund",
                         "corp_pay",
+                        "corp_destination",
+                        "corp_lookup",
+                        "corp_send",
+                        "corp_other",
+                        "corp_to_account",
                         "corp_close",
                         "corp_history",
+                        "corp_cc_pick",
+                        "corp_cc_submit",
+                        "corp_details",
+                        "corp_summary",
+                        "corp_people_next",
+                        "corp_debit_issue",
+                        "corp_credit",
+                        "corp_funding",
+                        "corp_source",
+                        "corp_amount",
                         "corp_recover",
                         "corp_confirm",
                         "branch_open",
@@ -190,12 +208,63 @@ public final class BankingMenu extends AbstractContainerMenu {
                         "credit_statements",
                         "credit_statements_next")
                     .contains(action);
+        case CORPORATION ->
+            action.startsWith("office_")
+                || Set.of(
+                        "corp_cc_pick",
+                        "corp_cc_submit",
+                        "corp_details",
+                        "corp_summary",
+                        "corp_people_next",
+                        "corp_debit_issue",
+                        "corp_credit",
+                        "corp_funding",
+                        "corp_source",
+                        "corp_amount",
+                        "home",
+                        "corp_list",
+                        "corp_next",
+                        "corp_select",
+                        "corp_account",
+                        "corp_open",
+                        "corp_fund",
+                        "corp_pay",
+                        "corp_destination",
+                        "corp_lookup",
+                        "corp_send",
+                        "corp_other",
+                        "corp_to_account",
+                        "corp_close",
+                        "corp_history",
+                        "corp_recover",
+                        "corp_confirm",
+                        "bank_retry",
+                        "collect",
+                        "claims",
+                        "claims_next")
+                    .contains(action);
         case REGISTER -> REGISTER_ACTIONS.contains(action);
         case CARD -> CARD_ACTIONS.contains(action);
         case ADMIN -> ADMIN_ACTIONS.contains(action);
         case WORLD_SETUP -> action.equals("setup");
+        case ATM_ENROLLMENT -> action.equals("branch_open") || action.equals("bank_retry");
       };
     }
+  }
+
+  private volatile ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId
+      corporateBank;
+
+  public ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId
+      corporateBank() {
+    return corporateBank;
+  }
+
+  public void selectCorporateBank(
+      ca.emilybelnavis.mcmods.economy.institution.InstitutionCatalog.InstitutionId bank) {
+    if (access != Access.CORPORATION)
+      throw new IllegalStateException("Corporation office required");
+    corporateBank = bank;
   }
 
   private final Inventory inventory;
@@ -205,13 +274,43 @@ public final class BankingMenu extends AbstractContainerMenu {
   private final Access access;
   private final SimpleContainer inputs = new SimpleContainer(24);
   private UUID issuedToken;
+  private TerminalMenus.Enrollment enrollment;
+
+  public boolean enrolledAt(String bankKey) {
+    return enrollment != null && enrollment.bankKey().equals(bankKey);
+  }
+
+  public boolean matchesEnrollment(TerminalPolicy.Snapshot terminal) {
+    return enrollment != null
+        && terminal != null
+        && terminal.active()
+        && terminal.kind() == TerminalPolicy.Kind.ATM
+        && terminal.generation().equals(generation)
+        && terminal.anchor().equals(anchor)
+        && terminal.revision() == enrollment.terminalRevision()
+        && terminal.binding() != null
+        && terminal.binding().bound()
+        && terminal.binding().institution().key().equals(enrollment.bankKey());
+  }
+
+  void showEnrollment(TerminalMenus.Enrollment offer) {
+    if (access != Access.ATM_ENROLLMENT) throw new IllegalStateException("ATM enrollment required");
+    enrollment = offer;
+    publish("atm_enrollment", offer.lines(), "", offer.choices());
+  }
 
   public UUID issuedToken() {
     return issuedToken;
   }
 
+  private volatile boolean corporateSessionOpen = true;
+
+  public boolean corporateSessionOpen() {
+    return corporateSessionOpen;
+  }
+
   public void setIssuedToken(UUID token) {
-    if (!remote() && access != Access.ATM)
+    if (!remote() && access != Access.ATM && access != Access.KIOSK)
       throw new IllegalStateException("Card or ATM menu required");
     issuedToken = Objects.requireNonNull(token);
   }
@@ -371,7 +470,12 @@ public final class BankingMenu extends AbstractContainerMenu {
   }
 
   public boolean allows(String action) {
-    return access.allows(action);
+    return access.allows(action)
+        && (access != Access.KIOSK
+            || issuedToken == null
+            || action.startsWith("corp_")
+            || action.startsWith("cc_")
+            || action.equals("bank_retry"));
   }
 
   public long revision() {
@@ -432,6 +536,12 @@ public final class BankingMenu extends AbstractContainerMenu {
         || player.containerMenu != this
         || !player.isAlive()
         || player.server.getPlayerList().getPlayer(player.getUUID()) != player) return false;
+    if (access == Access.CORPORATION) {
+      var services = BankingController.services(player);
+      return services != null
+          && services.state() == ServerServices.State.READY
+          && generation.equals(services.sessionId());
+    }
     if (worldSetup()) return Economy.canChooseWorld(player, generation);
     if (remote()) {
       var services = Economy.serverServices(player.serverLevel().getServer());
@@ -452,7 +562,7 @@ public final class BankingMenu extends AbstractContainerMenu {
     var services = Economy.serverServices(player.serverLevel().getServer());
     return services != null
         && services.state() == ServerServices.State.READY
-        && (access != Access.ATM
+        && (access != Access.ATM && (access != Access.KIOSK || issuedToken == null)
             || issuedToken != null
                 && java.util.stream.Stream.of(player.getMainHandItem(), player.getOffhandItem())
                     .anyMatch(
@@ -569,12 +679,9 @@ public final class BankingMenu extends AbstractContainerMenu {
     boolean debug =
         inventory.player instanceof ServerPlayer player
             && BankingController.services(player).debugGui();
+    // Account overview positions its balances by row, including empty placeholders.
     var visibleLines =
-        debug
-                || history != null
-                || page.equals("account_overview")
-                || Set.of("corp_account", "corp_review", "corp_history", "corp_receipt")
-                    .contains(page)
+        debug || page.equals("account_overview")
             ? List.copyOf(lines)
             : BankingPresentation.lines(lines);
     var visibleStatus = debug ? status : BankingPresentation.status(status);
@@ -764,8 +871,10 @@ public final class BankingMenu extends AbstractContainerMenu {
 
   @Override
   public void removed(Player player) {
-    ca.emilybelnavis.mcmods.economy.institution.KioskAdmission.closed(this);
-    if (player instanceof ServerPlayer serverPlayer) BankingController.closed(serverPlayer, this);
+    if (player instanceof ServerPlayer serverPlayer) {
+      corporateSessionOpen = false;
+      BankingController.closed(serverPlayer, this);
+    }
     super.removed(
         player); // Vanilla carried player item only; deposit inputs remain under controller
     // custody.

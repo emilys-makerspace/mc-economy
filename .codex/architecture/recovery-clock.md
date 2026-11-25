@@ -188,7 +188,7 @@ to bypass an unknown financial outcome.
 
 ## A6 calendar dispatch
 
-Production activates the version-one [financial calendar](financial-calendar.md) once after migration. FoundationRuntime merges arbitrary events with fixed intervals, preserves fixed publication priority at equal instants, and includes both debt sources in startup/write admission. Each worker turn commits at most one child or event completion. Startup final projection validation compares journal sequence so domain-only facts cannot be missed. Domain progress is separate from the fixed-only economic sequence.
+Production activates the version-one [financial calendar](financial-calendar.md) once after migration. FoundationRuntime merges arbitrary events with fixed intervals, preserves fixed publication priority at equal instants, and includes both debt sources in startup/write admission. Each scheduler step commits at most one child or event completion. Startup catch-up runs up to 32 ordered steps per worker task, checking the 25 ms budget, queued work and shutdown between steps. Startup final projection validation compares journal sequence so domain-only facts cannot be missed. Domain progress is separate from the fixed-only economic sequence.
 
 ## CHF historical first version
 

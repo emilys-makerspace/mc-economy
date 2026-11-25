@@ -33,7 +33,7 @@ public final class DepositInventory {
       if (unmarked) {
         var denomination =
             CashCatalog.find(stack)
-                .orElseThrow(() -> new IllegalArgumentException("DEPOSIT_DENOMINATION"));
+                .orElseThrow(() -> new IllegalArgumentException("DEPOSIT_UNKNOWN_ITEM"));
         var identity =
             UUID.nameUUIDFromBytes(
                 ("economy:unmarked-cash:"

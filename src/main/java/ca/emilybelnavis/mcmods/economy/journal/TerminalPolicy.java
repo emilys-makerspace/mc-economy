@@ -147,17 +147,28 @@ public final class TerminalPolicy {
     return new Settings(Mode.BOTH, EnumSet.allOf(EconomyCurrency.class), denominations);
   }
 
-  /**
-   * Frozen legacy teller semantics; bound terminals retain their explicit native-currency settings.
-   */
+  /** Effective dispensing settings, including native cash at bound kiosks. */
   public static Snapshot effective(Snapshot snapshot, Map<String, Denomination> catalog) {
+    return effective(snapshot, catalog, false);
+  }
+
+  static Snapshot effectiveForDeposit(Snapshot snapshot, Map<String, Denomination> catalog) {
+    return effective(snapshot, catalog, true);
+  }
+
+  private static Snapshot effective(
+      Snapshot snapshot, Map<String, Denomination> catalog, boolean deposit) {
     Objects.requireNonNull(snapshot);
     if (snapshot.kind() == Kind.KIOSK && snapshot.binding() != null && snapshot.binding().bound()) {
       var currency = snapshot.binding().nativeCurrency();
+      var currencies = EnumSet.noneOf(EconomyCurrency.class);
       var denominations = new TreeSet<String>();
       catalog.forEach(
           (id, denomination) -> {
-            if (denomination.currency() == currency) denominations.add(id);
+            if (deposit || denomination.currency() == currency) {
+              currencies.add(denomination.currency());
+              denominations.add(id);
+            }
           });
       return new Snapshot(
           snapshot.world(),
@@ -167,7 +178,7 @@ public final class TerminalPolicy {
           snapshot.kind(),
           snapshot.revision(),
           snapshot.active(),
-          new Settings(Mode.BOTH, Set.of(currency), denominations),
+          new Settings(Mode.BOTH, currencies, denominations),
           snapshot.binding());
     }
     if (snapshot.kind() != Kind.TELLER || snapshot.binding() != null && snapshot.binding().bound())

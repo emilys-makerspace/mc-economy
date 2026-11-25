@@ -20,7 +20,8 @@ public final class Managers {
   public enum Capability {
     VIEW_HISTORY,
     PAY_TRANSFER,
-    MANAGE_ACCOUNTS
+    MANAGE_ACCOUNTS,
+    BORROW
   }
 
   public enum Mutation {
@@ -30,6 +31,7 @@ public final class Managers {
   }
 
   public enum Use {
+    BORROW(Capability.BORROW),
     HISTORY(Capability.VIEW_HISTORY),
     PAYMENT(Capability.PAY_TRANSFER),
     OPEN(Capability.MANAGE_ACCOUNTS),

@@ -30,14 +30,19 @@ public final class KioskAdmission {
       BankingMenu menu,
       TerminalPolicy.Snapshot terminal,
       BranchAdmission.Context context) {
-    if (menu.access() != BankingMenu.Access.KIOSK
+    boolean kiosk =
+        menu.access() == BankingMenu.Access.KIOSK && terminal.kind() == TerminalPolicy.Kind.KIOSK;
+    boolean firstAccountAtAtm =
+        menu.access() == BankingMenu.Access.ATM_ENROLLMENT
+            && context.action() == BranchAdmission.Action.PRIMARY
+            && menu.matchesEnrollment(terminal);
+    if ((!kiosk && !firstAccountAtAtm)
         || !menu.valid(player)
         || !terminal.active()
         || !terminal.anchor().equals(menu.anchor())
         || !terminal.world().equals(context.world())
         || Economy.serverServices(player.server) == null
         || !terminal.world().equals(Economy.serverServices(player.server).worldId())
-        || terminal.kind() != TerminalPolicy.Kind.KIOSK
         || (terminal.binding() == null || !terminal.binding().bound())
         || !terminal.binding().institution().equals(context.bank())
         || !terminal.generation().equals(menu.generation())
@@ -67,6 +72,27 @@ public final class KioskAdmission {
     if (list.size() >= 256) throw new IllegalStateException("BRANCH_BUSY");
     list.add(new Lease(player, menu, terminal, live, issuer, System.currentTimeMillis() + 30_000));
     return issuer.issue(context, 30_000);
+  }
+
+  public static BranchAdmission.Proof office(
+      ServerPlayer player, BankingMenu menu, BranchAdmission.Context context) {
+    var services = Economy.serverServices(player.server);
+    if (menu.access() != BankingMenu.Access.CORPORATION
+        || !menu.valid(player)
+        || context.action() != BranchAdmission.Action.CORPORATE_BANK
+        || !context.session().equals(menu.session())
+        || !context.actor().value().equals(player.getUUID())
+        || !context.bank().equals(menu.corporateBank())
+        || services == null
+        || !context.world().equals(services.worldId()))
+      throw new IllegalArgumentException("CORPORATION_UNAVAILABLE");
+    return new BranchAdmission.Issuer(
+            System::currentTimeMillis,
+            (scope, reads) ->
+                scope.equals(context)
+                    && menu.corporateSessionOpen()
+                    && scope.bank().equals(menu.corporateBank()))
+        .issue(context, 30_000);
   }
 
   public static TerminalPolicy.Authority authority(
@@ -163,15 +189,16 @@ public final class KioskAdmission {
         });
   }
 
-  public static void closed(BankingMenu menu) {
-    for (var list : LEASES.values())
-      list.removeIf(
-          lease -> {
-            if (lease.menu() != menu) return false;
-            lease.live().revoke();
-            if (lease.issuer() != null) lease.issuer().disable();
-            return true;
-          });
+  public static void closed(MinecraftServer server, BankingMenu menu) {
+    var list = LEASES.get(server);
+    if (list == null) return;
+    list.removeIf(
+        lease -> {
+          if (lease.menu() != menu) return false;
+          lease.live().revoke();
+          if (lease.issuer() != null) lease.issuer().disable();
+          return true;
+        });
   }
 
   public static void removed(MinecraftServer server, String dimension, BlockPos position) {

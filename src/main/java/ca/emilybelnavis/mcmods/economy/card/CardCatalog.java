@@ -23,20 +23,10 @@ public final class CardCatalog {
   static {
     for (var design : CardDesigns.all()) {
       var bank = InstitutionCatalog.require(design.issuer());
-      var item =
-          ITEMS.register(
-              design.id().substring("economy:".length()),
-              () -> new DebitItem(new Item.Properties().stacksTo(1), bank));
-      ENTRIES.put(design.id(), new Entry(design.id(), design.issuer(), item));
+      register(design.id(), bank, null);
     }
-    for (var design : CreditCardDesigns.all()) {
-      var bank = InstitutionCatalog.require(design.issuer());
-      var item =
-          ITEMS.register(
-              design.id().substring("economy:".length()),
-              () -> new CreditItem(new Item.Properties().stacksTo(1), bank, design.network()));
-      ENTRIES.put(design.id(), new Entry(design.id(), design.issuer(), item));
-    }
+    for (var design : CreditCardDesigns.all())
+      register(design.id(), InstitutionCatalog.require(design.issuer()), design.network());
     CardDesigns.legacyAliases().forEach(CardCatalog::alias);
     CreditCardDesigns.legacyAliases().forEach(CardCatalog::alias);
   }
@@ -73,43 +63,49 @@ public final class CardCatalog {
     ITEMS.register(bus);
   }
 
-  private static final class CreditItem extends Item {
-    private final InstitutionCatalog.Entry issuer;
+  private static void register(String personalId, InstitutionCatalog.Entry bank, String network) {
+    for (boolean corporate : List.of(false, true)) {
+      String id = corporate ? CardDesigns.corporateId(personalId) : personalId;
+      var item =
+          ITEMS.register(
+              ResourceLocation.parse(id).getPath(),
+              () -> new PaymentCard(bank, corporate, network));
+      ENTRIES.put(id, new Entry(id, bank.id(), item));
+    }
+  }
+
+  private static final class PaymentCard extends Item {
+    private final InstitutionCatalog.Entry bank;
+    private final boolean corporate;
     private final String network;
 
-    CreditItem(Properties properties, InstitutionCatalog.Entry issuer, String network) {
-      super(properties);
-      this.issuer = issuer;
+    PaymentCard(InstitutionCatalog.Entry bank, boolean corporate, String network) {
+      super(new Item.Properties().stacksTo(1));
+      this.bank = bank;
+      this.corporate = corporate;
       this.network = network;
     }
 
     @Override
-    public void appendHoverText(
-        ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
-      lines.add(
-          Component.literal(
-              issuer.name() + " · " + network.substring("economy:".length()) + " Credit"));
-      if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_DATA)) {
-        lines.add(Component.translatable("item.economy.issued_card.expiry"));
-      }
-    }
-  }
-
-  private static final class DebitItem extends Item {
-    private final InstitutionCatalog.Entry issuer;
-
-    DebitItem(Properties properties, InstitutionCatalog.Entry issuer) {
-      super(properties);
-      this.issuer = issuer;
+    public Component getName(ItemStack stack) {
+      return Component.translatable(
+          network == null ? "item.economy.card.debit_name" : "item.economy.card.credit_name",
+          bank.name());
     }
 
     @Override
     public void appendHoverText(
         ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
-      lines.add(Component.literal(issuer.name() + " · Debit"));
-      if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_DATA)) {
-        lines.add(Component.translatable("item.economy.issued_card.expiry"));
-      }
+      var scope =
+          Component.translatable(
+              corporate ? "item.economy.card.corporate" : "item.economy.card.personal");
+      if (network != null)
+        scope
+            .append(" ⋅ ")
+            .append(
+                Component.translatable(
+                    "network.economy." + ResourceLocation.parse(network).getPath()));
+      lines.add(scope);
     }
   }
 }

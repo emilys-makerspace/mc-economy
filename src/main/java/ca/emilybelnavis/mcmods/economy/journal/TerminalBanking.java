@@ -135,6 +135,20 @@ public final class TerminalBanking {
     if (!current.active()
         || !current.generation().equals(generation)
         || current.revision() != revision) return reject("TERMINAL_STALE");
+    if (current.kind() == TerminalPolicy.Kind.ATM
+        && current.binding() != null
+        && current.binding().bound()) {
+      if (!Branches.serviceUsable(reads, world, generation)) return decline("TERMINAL_ACCESS");
+      var settings = current.settings();
+      if (settings.mode() == TerminalPolicy.Mode.DISABLED)
+        settings = TerminalPolicy.Settings.disabled();
+      else if (current.binding().nativeCurrency() != bank.baseCurrency()) {
+        var bills = nativeDenominations(current.kind(), bank.baseCurrency(), catalog);
+        if (bills.isEmpty()) return decline("TERMINAL_BANK_CASH_UNAVAILABLE");
+        settings = new TerminalPolicy.Settings(settings.mode(), Set.of(bank.baseCurrency()), bills);
+      }
+      return prepareBinding(world, bank, current, reads, settings);
+    }
     return prepareBinding(world, bank, current, reads);
   }
 
@@ -176,11 +190,16 @@ public final class TerminalBanking {
     var anchor = current.anchor();
     var generation = current.generation();
     if (!KioskUpgrades.usable(reads, world, generation)) return decline("KIOSK_UPGRADE_PENDING");
-    if (!Branches.providerMatches(reads, world, generation, bank.id().key()))
+    boolean boundAtm =
+        current.kind() == TerminalPolicy.Kind.ATM
+            && current.binding() != null
+            && current.binding().bound();
+    if (!boundAtm && !Branches.providerMatches(reads, world, generation, bank.id().key()))
       return reject("TERMINAL_GENERATED_BANK_LOCKED");
     if (current.kind() == TerminalPolicy.Kind.REGISTER) return reject("TERMINAL_BANK_KIND");
     if (revision == Long.MAX_VALUE) return reject("TERMINAL_REVISION_LIMIT");
-    if (current.binding() != null
+    if (!boundAtm
+        && current.binding() != null
         && current.binding().migrationState() == MigrationState.ENABLED
         && !current.binding().institution().equals(bank.id()))
       return reject("TERMINAL_BANK_LOCKED");

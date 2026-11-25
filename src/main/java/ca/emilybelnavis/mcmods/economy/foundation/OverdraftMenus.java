@@ -115,10 +115,7 @@ public final class OverdraftMenus {
                               choice(
                                   "finance_od_account",
                                   a.id().value().toString(),
-                                  UiText.t(
-                                      "ui.finance.od.account",
-                                      a.currency().code(),
-                                      a.id().value().toString())))
+                                  UiText.t("ui.finance.od.account", a.currency().code())))
                       .toList();
               audience.reply(
                   "finance_overdraft",

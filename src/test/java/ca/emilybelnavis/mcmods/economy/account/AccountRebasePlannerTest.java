@@ -52,6 +52,8 @@ class AccountRebasePlannerTest {
             insert(tx, withCollision, trading, "TRADING", "", "OPEN", 1, false);
             insert(tx, withoutCollision, otherPrimary, "BANK", "CAD", "OPEN", 5, true);
             insert(tx, withoutCollision, account(6), "BANK", "USD", "CLOSED", 2, false);
+            insert(tx, player(3), account(7), "BANK", "USD", "OPEN", 1, true);
+            insert(tx, player(4), account(8), "BANK", "JPY", "OPEN", 1, true);
             return null;
           });
 
@@ -181,9 +183,9 @@ class AccountRebasePlannerTest {
           assertNull(result.plan());
         }
       }
-      assertEquals(
-          Status.CATALOG_MISMATCH,
-          plan(store, confirmed, new Denomination(EUR, 4), untouched).status());
+      var foreignOnly = plan(store, confirmed, new Denomination(EUR, 4), untouched);
+      assertEquals(Status.READY, foreignOnly.status());
+      assertTrue(foreignOnly.plan().mappings().isEmpty());
     } finally {
       store.close();
     }

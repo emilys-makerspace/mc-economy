@@ -51,6 +51,19 @@ public final class Deposits {
     }
   }
 
+  public static final class WrongCurrency extends IllegalArgumentException {
+    public final int slot;
+    public final EconomyCurrency currency;
+    public final List<EconomyCurrency> accepted;
+
+    private WrongCurrency(int slot, EconomyCurrency currency, Set<EconomyCurrency> accepted) {
+      super("DEPOSIT_WRONG_CURRENCY");
+      this.slot = slot;
+      this.currency = currency;
+      this.accepted = accepted.stream().sorted().toList();
+    }
+  }
+
   public record Slot(int index, CashIssuance.Claim claim, String components, boolean unmarked) {
     public Slot {
       Objects.requireNonNull(claim);
@@ -263,7 +276,7 @@ public final class Deposits {
                     entry ->
                         new TerminalPolicy.Denomination(
                             entry.getValue().currency(), entry.getValue().bill())));
-    terminal = TerminalPolicy.effective(terminal, terminalCatalog);
+    terminal = TerminalPolicy.effectiveForDeposit(terminal, terminalCatalog);
     if (!terminal.active()
         || !terminal.generation().equals(binding.generation())
         || terminal.revision() != binding.terminalRevision())
@@ -310,10 +323,13 @@ public final class Deposits {
     for (var slot : slots) {
       var claim = slot.claim();
       var denomination = catalog.get(claim.item());
-      if (denomination == null
-          || !terminal.settings().denominations().contains(claim.item())
-          || !terminal.settings().currencies().contains(denomination.currency())
-          || (terminal.kind() == TerminalPolicy.Kind.ATM && !denomination.bill()))
+      if (denomination == null) throw invalid("DEPOSIT_UNKNOWN_ITEM");
+      if (!terminal.settings().currencies().contains(denomination.currency()))
+        throw new WrongCurrency(
+            slot.index(), denomination.currency(), terminal.settings().currencies());
+      if (terminal.kind() == TerminalPolicy.Kind.ATM && !denomination.bill())
+        throw invalid("DEPOSIT_ATM_COIN");
+      if (!terminal.settings().denominations().contains(claim.item()))
         throw invalid("DEPOSIT_DENOMINATION");
       if (!claim.world().equals(world)) throw invalid("DEPOSIT_WORLD");
       if (!slot.unmarked()) {

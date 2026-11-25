@@ -12,8 +12,9 @@ class BankingDepositFeedbackTest {
     assertTrue(disabled.contains("disabled on this ATM"));
     assertTrue(disabled.contains("owner"));
     var unaccepted = message("DEPOSIT_DENOMINATION");
-    assertTrue(unaccepted.contains("does not accept that cash"));
-    assertTrue(unaccepted.contains("bills only"));
+    assertTrue(unaccepted.contains("another cash denomination"));
+    assertTrue(message("DEPOSIT_ATM_COIN").contains("bills only"));
+    assertTrue(message("DEPOSIT_UNKNOWN_ITEM").contains("Remove non-cash"));
     assertNotEquals(disabled, unaccepted);
   }
 

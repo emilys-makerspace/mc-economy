@@ -4,6 +4,7 @@ import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.api.*;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.banking.BankingMenu;
+import ca.emilybelnavis.mcmods.economy.card.CorporateCards;
 import ca.emilybelnavis.mcmods.economy.corporation.*;
 import ca.emilybelnavis.mcmods.economy.institution.*;
 import ca.emilybelnavis.mcmods.economy.journal.*;
@@ -52,10 +53,14 @@ public final class CorporateBanking {
 
   public record Receipt(OperationId operation, Journal.Status status, String code) {}
 
-  private record Branch(TerminalPolicy.Snapshot terminal, long denominationRevision) {}
+  private record Branch(
+      TerminalPolicy.Snapshot terminal,
+      InstitutionCatalog.InstitutionId bank,
+      long denominationRevision) {}
 
   private PartyAuthorization.Grant grant() {
-    if (menu.access() != BankingMenu.Access.KIOSK
+    if ((menu.access() != BankingMenu.Access.KIOSK
+            && menu.access() != BankingMenu.Access.CORPORATION)
         || !menu.valid(player)
         || Economy.serverServices(player.server) != services)
       throw new IllegalStateException("BRANCH_UNAVAILABLE");
@@ -66,18 +71,22 @@ public final class CorporateBanking {
 
   private Branch branch(JournalEngine.ReadView reads) {
     var terminal =
-        TerminalPolicy.find(reads, world, anchor, actor, true)
-            .filter(
-                t ->
-                    t.active()
-                        && t.generation().equals(generation)
-                        && t.kind() == TerminalPolicy.Kind.KIOSK
-                        && t.binding() != null
-                        && t.binding().bound())
-            .orElseThrow(CorporateBanking::unavailable);
+        menu.access() == BankingMenu.Access.CORPORATION
+            ? null
+            : TerminalPolicy.find(reads, world, anchor, actor, true)
+                .filter(
+                    t ->
+                        t.active()
+                            && t.generation().equals(generation)
+                            && t.kind() == TerminalPolicy.Kind.KIOSK
+                            && t.binding() != null
+                            && t.binding().bound())
+                .orElseThrow(CorporateBanking::unavailable);
+    var issuer = terminal == null ? menu.corporateBank() : terminal.binding().institution();
+    if (issuer == null) throw unavailable();
     var bank =
-        InstitutionCatalog.find(terminal.binding().institution())
-            .filter(InstitutionCatalog.Entry::tier1)
+        InstitutionCatalog.find(issuer)
+            .filter(InstitutionCatalog.Entry::enabled)
             .orElseThrow(CorporateBanking::unavailable);
     var status =
         reads.query(
@@ -87,6 +96,7 @@ public final class CorporateBanking {
     if (status.isEmpty() || !"1".equals(status.getFirst().get("enabled"))) throw unavailable();
     return new Branch(
         terminal,
+        bank.id(),
         RebaseSettlement.denomination(reads).orElseThrow(CorporateBanking::unavailable).revision());
   }
 
@@ -109,9 +119,7 @@ public final class CorporateBanking {
             player.server);
   }
 
-  /**
-   * Each indexed scan is bounded independently of total company count. The ninth row is lookahead.
-   */
+  /** Each indexed query returns up to nine available companies. The ninth row is lookahead. */
   public record CompanyPage(List<Selection> choices, UUID next) {
     public CompanyPage {
       choices = List.copyOf(choices);
@@ -123,25 +131,40 @@ public final class CorporateBanking {
         reads -> {
           branch(reads);
           String last = Objects.toString(after, ""), who = actor.value().toString();
-          var owned =
-              reads.query(
-                  "SELECT id,name,state,revision,0 AS membership FROM corporations WHERE founder=? AND id>? ORDER BY id LIMIT 9",
-                  List.of(who, last),
-                  9);
-          var managed =
-              reads.query(
-                  "SELECT c.id,c.name,c.state,c.revision,m.revision AS membership FROM corporation_managers m JOIN corporations c ON c.id=m.company WHERE m.active=1 AND m.manager=? AND m.company>? ORDER BY m.company LIMIT 9",
-                  List.of(who, last),
-                  9);
-          var candidates =
-              java.util.stream.Stream.concat(owned.stream(), managed.stream())
-                  .sorted(Comparator.comparing(r -> r.get("id")))
-                  .limit(9)
-                  .toList();
+          List<Map<String, String>> candidates;
+          if (menu.issuedToken() != null) {
+            var card = card(reads);
+            candidates =
+                reads.query(
+                    """
+                SELECT c.id,c.name,c.revision,CASE WHEN c.founder=? THEN 0 ELSE m.revision END AS membership
+                FROM corporations c LEFT JOIN corporation_managers m ON m.company=c.id AND m.manager=? AND m.active=1
+                WHERE c.id=? AND c.id>? AND (c.founder=? OR m.active=1)
+                """,
+                    List.of(who, who, card.company().toString(), last, who),
+                    1);
+          } else {
+            candidates =
+                reads.query(
+                    "SELECT id,name,revision,0 AS membership FROM corporations WHERE founder=? AND id>? AND state<>'DISSOLVED' ORDER BY id LIMIT 9",
+                    List.of(who, last),
+                    9);
+            if (menu.access() == BankingMenu.Access.CORPORATION) {
+              var managed =
+                  reads.query(
+                      "SELECT c.id,c.name,c.revision,m.revision AS membership FROM corporation_managers m JOIN corporations c ON c.id=m.company WHERE m.active=1 AND m.manager=? AND m.company>? AND c.state<>'DISSOLVED' ORDER BY m.company LIMIT 9",
+                      List.of(who, last),
+                      9);
+              candidates =
+                  java.util.stream.Stream.concat(candidates.stream(), managed.stream())
+                      .sorted(Comparator.comparing(r -> r.get("id")))
+                      .limit(9)
+                      .toList();
+            }
+          }
           var visible =
               candidates.stream()
                   .limit(8)
-                  .filter(row -> !"DISSOLVED".equals(row.get("state")))
                   .map(
                       r ->
                           new Selection(
@@ -155,8 +178,23 @@ public final class CorporateBanking {
         });
   }
 
+  private CorporateCards.Account card(JournalEngine.ReadView reads) {
+    return CorporateCards.resolve(reads, world, menu.issuedToken(), actor)
+        .orElseThrow(CorporateBanking::unavailable);
+  }
+
+  String playerName(UUID id) {
+    var online = player.server.getPlayerList().getPlayer(id);
+    if (online != null) return online.getGameProfile().getName();
+    var cache = player.server.getProfileCache();
+    return cache == null
+        ? "Unknown player"
+        : cache.get(id).map(com.mojang.authlib.GameProfile::getName).orElse("Unknown player");
+  }
+
   private void requireSelection(
       JournalEngine.ReadView reads, UUID company, long revision, long membership) {
+    if (menu.issuedToken() != null && !card(reads).company().equals(company)) throw unavailable();
     if (membership == 0
         && Corporations.find(reads, actor, company)
             .filter(c -> c.revision() == revision && c.state() != Corporations.State.DISSOLVED)
@@ -178,7 +216,7 @@ public final class CorporateBanking {
   public CompletionStage<List<AccountView>> accounts(Selection selection) {
     return read(
         reads -> {
-          var bank = branch(reads).terminal.binding().institution();
+          var bank = branch(reads).bank();
           requireSelection(
               reads, selection.id, selection.companyRevision, selection.membershipRevision);
           var result = new ArrayList<AccountView>();
@@ -186,16 +224,7 @@ public final class CorporateBanking {
             var provider =
                 BankProviders.find(reads, account.id()).orElseThrow(CorporateBanking::unavailable);
             if (!provider.bankKey().equals(bank.key())) continue;
-            if (selection.membershipRevision > 0
-                && !Managers.permits(
-                    reads,
-                    actor,
-                    new Managers.Requirement(
-                        selection.id,
-                        selection.companyRevision,
-                        selection.membershipRevision,
-                        Managers.Use.HISTORY,
-                        account.id().value()))) continue;
+            if (!permits(reads, selection, Managers.Use.HISTORY, account.id())) continue;
             var endpoint =
                 new CorporatePayments.Endpoint(
                     account.owner(),
@@ -217,11 +246,16 @@ public final class CorporateBanking {
   InstitutionCatalog.Entry selectedBank(JournalEngine.ReadView reads, Selection selection) {
     requireSelection(
         reads, selection.id(), selection.companyRevision(), selection.membershipRevision());
-    return InstitutionCatalog.require(branch(reads).terminal().binding().institution());
+    return InstitutionCatalog.require(branch(reads).bank());
   }
 
   boolean permits(
       JournalEngine.ReadView reads, Selection selection, Managers.Use use, AccountId account) {
+    if (menu.issuedToken() != null) {
+      var linked = card(reads);
+      if (!linked.company().equals(selection.id())
+          || (account != null && !linked.account().equals(account))) return false;
+    }
     if (selection.membershipRevision() == 0)
       return Corporations.find(reads, actor, selection.id())
           .filter(
@@ -277,20 +311,24 @@ public final class CorporateBanking {
     return read(this::branch)
         .thenApply(
             branch -> {
-              if (!branch.terminal.binding().institution().key().equals(bank)) throw unavailable();
+              if (!branch.bank().key().equals(bank)) throw unavailable();
               var context =
                   new BranchAdmission.Context(
                       world,
                       menu.session(),
                       actor,
                       BranchAdmission.Action.CORPORATE_BANK,
-                      branch.terminal.binding().institution(),
+                      branch.bank(),
                       null,
                       account,
                       revision,
                       provider,
                       branch.denominationRevision);
-              var proof = KioskAdmission.issue(player, menu, branch.terminal, context);
+              var proof =
+                  branch.terminal == null
+                      ? KioskAdmission.office(player, menu, context)
+                      : KioskAdmission.issue(player, menu, branch.terminal, context);
+              var token = menu.issuedToken();
               var canonical = new TreeMap<>(fields);
               canonical.put("world", world.value().toString());
               canonical.put("actor", actor.value().toString());
@@ -320,6 +358,13 @@ public final class CorporateBanking {
                                 List.of(proof.id().toString()),
                                 1)
                             .isEmpty()) return reject("LEASE_USED");
+                        if (token != null) {
+                          var linked = CorporateCards.resolve(reads, world, token, actor);
+                          if (linked.isEmpty()
+                              || !linked.get().company().equals(company)
+                              || account != null && !linked.get().account().equals(account))
+                            return reject("CORPORATION_UNAVAILABLE");
+                        }
                         var decision = handler.prepare(intent, reads);
                         if (!(decision instanceof JournalEngine.Commit commit)) return decision;
                         return new JournalEngine.Commit(
@@ -376,8 +421,7 @@ public final class CorporateBanking {
         reads -> {
           if (!source.owner().world().equals(world)
               || !target.owner().world().equals(world)
-              || !branch(reads).terminal.binding().institution().key().equals(endpoint.bank()))
-            throw unavailable();
+              || !branch(reads).bank().key().equals(endpoint.bank())) throw unavailable();
           return CorporatePayments.quote(
               reads,
               actor,
@@ -417,6 +461,81 @@ public final class CorporateBanking {
           if (selection != null && !permits(r, selection, Managers.Use.PAYMENT, anchor.account()))
             return reject("CORPORATION_UNAVAILABLE");
           return CorporatePayments.prepare(i, r, payment, services.financialMillis());
+        });
+  }
+
+  public CompletionStage<Review> reviewDebitIssue(
+      Selection company, CorporateKiosk.Account selected) {
+    var endpoint = selected.endpoint();
+    if (!company(endpoint).equals(company.id()) || !selected.issueDebit()) throw unavailable();
+    var account = endpoint.account();
+    var fields =
+        Map.of(
+            "account",
+            account.value().toString(),
+            "account_revision",
+            Long.toString(endpoint.accountRevision()),
+            "provider_revision",
+            Long.toString(endpoint.providerRevision()),
+            "company_revision",
+            Long.toString(company.companyRevision()),
+            "membership_revision",
+            Long.toString(company.membershipRevision()));
+    return review(
+        "ISSUE_DEBIT",
+        company.id(),
+        endpoint.bank(),
+        fields,
+        account,
+        endpoint.accountRevision(),
+        endpoint.providerRevision(),
+        (intent, reads) -> {
+          if (!permits(reads, company, Managers.Use.CLOSE, account))
+            return reject("CORPORATION_UNAVAILABLE");
+          var identity = CorporateAccounts.find(reads, world, company.id(), account).orElse(null);
+          var binding = BankProviders.find(reads, account).orElse(null);
+          if (identity == null
+              || identity.status() != AccountIdentity.Status.OPEN
+              || identity.revision() != endpoint.accountRevision()
+              || binding == null
+              || binding.legacy()
+              || !binding.bankKey().equals(endpoint.bank())
+              || binding.revision() != endpoint.providerRevision())
+            return reject("CORPORATION_ACCOUNT_STALE");
+          if (CorporateCards.hasDebit(reads, account))
+            return reject("CORPORATE_DEBIT_ALREADY_ISSUED");
+          return CorporateCards.issueExisting(
+              intent,
+              reads,
+              world,
+              company.id(),
+              account,
+              new InstitutionCatalog.InstitutionId(endpoint.bank()),
+              actor);
+        });
+  }
+
+  public CompletionStage<Review> reviewCredit(
+      Selection company,
+      CorporateKiosk.Account account,
+      String action,
+      Map<String, String> fields,
+      JournalEngine.Handler handler) {
+    var endpoint = account.endpoint();
+    if (!company(endpoint).equals(company.id()) || !account.credit()) throw unavailable();
+    return review(
+        action,
+        company.id(),
+        endpoint.bank(),
+        fields,
+        endpoint.account(),
+        endpoint.accountRevision(),
+        endpoint.providerRevision(),
+        (intent, reads) -> {
+          if (!permits(reads, company, Managers.Use.BORROW, endpoint.account())
+              || !CorporateCapital.profile(reads, company.id()).orElseThrow().funded())
+            return reject("CORPORATION_UNAVAILABLE");
+          return handler.prepare(intent, reads);
         });
   }
 

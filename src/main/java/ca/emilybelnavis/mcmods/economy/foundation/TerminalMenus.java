@@ -11,6 +11,7 @@ import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.loan.*;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.CompletionStage;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -45,6 +46,63 @@ public final class TerminalMenus {
 
   record View(
       String page, List<String> lines, List<BankingNetwork.Choice> choices, Set<String> offered) {}
+
+  public record Enrollment(
+      String bankName,
+      String bankKey,
+      long terminalRevision,
+      List<String> lines,
+      List<BankingNetwork.Choice> choices) {}
+
+  public static CompletionStage<Optional<Enrollment>> atmEnrollment(
+      ServerServices services,
+      PartyAuthorization.Grant grant,
+      TerminalPolicy.Anchor anchor,
+      UUID generation,
+      String pendingPrimaryBank) {
+    var tiers =
+        services
+            .servicePricing()
+            .valuation()
+            .tierEligibility(grant.target().world(), services.financialClock());
+    return services.readAccounts(
+        grant,
+        false,
+        reads -> {
+          var owner = grant.target();
+          if (!(owner.owner() instanceof PartyRef.Player player)
+              || !player.id().equals(grant.actor())) return Optional.empty();
+          var terminal =
+              TerminalPolicy.find(reads, owner.world(), anchor, player.id(), true).orElse(null);
+          if (terminal == null
+              || !terminal.active()
+              || !terminal.generation().equals(generation)
+              || terminal.kind() != TerminalPolicy.Kind.ATM
+              || terminal.binding() == null
+              || !terminal.binding().bound()
+              || !Branches.serviceUsable(reads, owner.world(), generation)) return Optional.empty();
+          var bank = InstitutionCatalog.require(terminal.binding().institution());
+          if (AccountCatalog.primary(reads, owner).isPresent())
+            return bank.id().key().equals(pendingPrimaryBank)
+                ? Optional.of(
+                    new Enrollment(
+                        bank.name(), bank.id().key(), terminal.revision(), List.of(), List.of()))
+                : Optional.empty();
+          var lines = new ArrayList<String>();
+          var choices = new ArrayList<BankingNetwork.Choice>();
+          offerOpening(reads, owner, bank.id().key(), tiers, choices, lines);
+          if (!choices.isEmpty())
+            lines.add(
+                UiText.t("ui.terminal.opening.enroll", bank.baseCurrency().code(), bank.name()));
+          return Optional.of(
+              new Enrollment(
+                  bank.name(),
+                  bank.id().key(),
+                  terminal.revision(),
+                  List.copyOf(lines),
+                  List.copyOf(choices)));
+        });
+  }
 
   private static BankingNetwork.Choice choice(String action, String value, String label) {
     return new BankingNetwork.Choice(action, value, label, false);
@@ -134,6 +192,11 @@ public final class TerminalMenus {
     }
     if (action.equals("terminal_history_prev")) state.page = Math.max(0, state.page - 1);
     if (action.equals("terminal_history_next")) state.page++;
+    var tiers =
+        services
+            .servicePricing()
+            .valuation()
+            .tierEligibility(grant.target().world(), services.financialClock());
     var cards =
         java.util.stream.Stream.of(player.getMainHandItem(), player.getOffhandItem())
             .map(stack -> CardStackIdentity.mark(stack, services.worldId()))
@@ -183,7 +246,14 @@ public final class TerminalMenus {
                   || action.equals("payments")
                   || action.equals("terminal_accounts_page"))
                 return Optional.of(
-                    accounts(reads, grant.target(), bank, state.bills, state.accountPage));
+                    accounts(
+                        reads,
+                        grant.target(),
+                        bank,
+                        state.bills,
+                        state.accountPage,
+                        menu.access(),
+                        tiers));
               if (action.equals("manage_accounts")
                   || action.startsWith("terminal_")
                       && Set.of(
@@ -193,7 +263,8 @@ public final class TerminalMenus {
                               "terminal_cards",
                               "terminal_primary")
                           .contains(action))
-                return Optional.of(branch(reads, grant.target(), bank, action, menu.access()));
+                return Optional.of(
+                    branch(reads, grant.target(), bank, action, menu.access(), tiers));
               return Optional.of(
                   detail(
                       reads,
@@ -275,7 +346,13 @@ public final class TerminalMenus {
   }
 
   static View accounts(
-      JournalEngine.ReadView reads, PartyRef owner, String bank, boolean bills, int page) {
+      JournalEngine.ReadView reads,
+      PartyRef owner,
+      String bank,
+      boolean bills,
+      int page,
+      BankingMenu.Access access,
+      BankProviders.TierEligibility tiers) {
     if (page < 0 || page > 100_000) throw new IllegalArgumentException("Account page");
     var choices = new ArrayList<BankingNetwork.Choice>();
     var offered = new HashSet<String>();
@@ -325,16 +402,14 @@ public final class TerminalMenus {
               "terminal_accounts_page",
               Integer.toString(page + 1),
               UiText.t("ui.terminal.accounts.next")));
-    return new View(
-        bills ? "payments" : "terminal_accounts",
-        choices.isEmpty()
-            ? List.of(
-                bills
-                    ? UiText.t("ui.terminal.accounts.no_bills")
-                    : UiText.t("ui.terminal.accounts.empty"))
-            : List.of(),
-        choices,
-        offered);
+    var lines = new ArrayList<String>();
+    if (choices.isEmpty()) {
+      if (!bills && access == BankingMenu.Access.KIOSK)
+        offerOpening(reads, owner, bank, tiers, choices, lines);
+      if (lines.isEmpty())
+        lines.add(UiText.t(bills ? "ui.terminal.accounts.no_bills" : "ui.terminal.accounts.empty"));
+    }
+    return new View(bills ? "payments" : "terminal_accounts", lines, choices, offered);
   }
 
   private static View withdrawal(
@@ -390,13 +465,15 @@ public final class TerminalMenus {
         Set.of());
   }
 
-  private static View branch(
+  static View branch(
       JournalEngine.ReadView reads,
       PartyRef owner,
       String bank,
       String action,
-      BankingMenu.Access access) {
+      BankingMenu.Access access,
+      BankProviders.TierEligibility tiers) {
     var rows = new ArrayList<BankingNetwork.Choice>();
+    var lines = new ArrayList<String>();
     var accounts = bankAccounts(reads, owner, bank);
     String page = "branch_services";
     switch (action) {
@@ -497,12 +574,10 @@ public final class TerminalMenus {
         rows.add(choice("claims", "", UiText.t("ui.terminal.cards.collect")));
       }
       default -> {
-        if (access == BankingMenu.Access.KIOSK
-            && !bank.isEmpty()
-            && InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(bank)).tier1())
+        if (accounts.isEmpty() && access == BankingMenu.Access.KIOSK)
+          offerOpening(reads, owner, bank, tiers, rows, lines);
+        if (access == BankingMenu.Access.KIOSK && !bank.isEmpty())
           rows.add(choice("corp_list", "", UiText.t("ui.bank.corporate.companies")));
-        if (accounts.isEmpty())
-          rows.add(choice("branch_open", "", UiText.t("ui.terminal.account.open")));
         if (!accounts.isEmpty() || AccountCatalog.primary(reads, owner).isPresent())
           rows.add(choice("terminal_settings", "", UiText.t("ui.terminal.account.settings")));
         rows.add(choice("terminal_credit", "", UiText.t("ui.terminal.services.credit")));
@@ -511,7 +586,58 @@ public final class TerminalMenus {
         rows.add(choice("fx", "", UiText.t("ui.terminal.services.fx")));
       }
     }
-    return new View(page, List.of(), rows, Set.of());
+    return new View(page, lines, rows, Set.of());
+  }
+
+  private static void offerOpening(
+      JournalEngine.ReadView reads,
+      PartyRef owner,
+      String bankKey,
+      BankProviders.TierEligibility tiers,
+      List<BankingNetwork.Choice> choices,
+      List<String> lines) {
+    if (bankKey.isEmpty()) {
+      lines.add(UiText.t("ui.bank.this_kiosk_has_no_bank_binding.7b9080"));
+      return;
+    }
+    var bank = InstitutionCatalog.require(new InstitutionCatalog.InstitutionId(bankKey));
+    var open = AccountCatalog.openBanks(reads, owner);
+    boolean first = open.stream().noneMatch(AccountIdentity::primary);
+    if (!BankProviders.enabled(reads, owner.world(), bank)) {
+      lines.add(BankingAccounts.failureMessage("BANK_UNAVAILABLE"));
+      return;
+    }
+    var currencies = ca.emilybelnavis.mcmods.economy.fx.FxService.availableCurrencies(reads);
+    if (currencies.isEmpty()) {
+      lines.add(UiText.t("ui.terminal.opening.choose_currency"));
+      return;
+    }
+    if (!currencies.contains(bank.baseCurrency())) {
+      lines.add(BankingAccounts.failureMessage("CURRENCY_UNAVAILABLE"));
+      return;
+    }
+    if (open.stream().anyMatch(a -> a.currency() == bank.baseCurrency())) {
+      lines.add(BankingAccounts.failureMessage("BANK_CURRENCY_EXISTS"));
+      return;
+    }
+    if (open.size() >= AccountIdentity.MAX_OPEN_BANK_ACCOUNTS) {
+      lines.add(BankingAccounts.failureMessage("BANK_CAP_REACHED"));
+      return;
+    }
+    if (!bank.tier1()) {
+      var tier = tiers.current(reads, owner);
+      if (!tier.available() || !tier.eligible()) {
+        lines.add(BankingAccounts.failureMessage("TIER2_UNAVAILABLE"));
+        return;
+      }
+    }
+    choices.add(
+        choice(
+            "branch_open",
+            "",
+            UiText.t(
+                first ? "ui.terminal.opening.first" : "ui.terminal.opening.secondary",
+                bank.baseCurrency().code())));
   }
 
   static View detail(
@@ -690,7 +816,7 @@ public final class TerminalMenus {
         currency);
   }
 
-  private static String activity(String value) {
+  static String activity(String value) {
     String name = value.substring(value.lastIndexOf(':') + 1).toLowerCase(Locale.ROOT);
     String key =
         switch (name) {

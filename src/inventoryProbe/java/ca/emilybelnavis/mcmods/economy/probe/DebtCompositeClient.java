@@ -249,13 +249,7 @@ public final class DebtCompositeClient {
           if (fresh(menu)) action(menu, "finance_credit_apply", "", 10);
         }
         case 10 -> {
-          if (fresh(menu)) first(menu, "finance_credit_network", 11);
-        }
-        case 11 -> {
-          if (fresh(menu) && offered(menu, "finance_credit_preview", "")) {
-            send(menu, "finance_credit_preview", "2500");
-            step = 12;
-          }
+          if (fresh(menu)) first(menu, "finance_credit_network", 12);
         }
         case 12 -> {
           if (fresh(menu)) action(menu, "finance_credit_confirm", "", 13);

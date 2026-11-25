@@ -369,6 +369,35 @@ class BranchesTest {
                         ? "economy:cad_bill_10"
                         : "economy:chf_bill_10"),
                 terminal.settings().denominations());
+            if (slot == 0 && service.slot() == 1) {
+              var operator = new PlayerId(UUID.randomUUID());
+              var change =
+                  new Intent(
+                      new OperationId(UUID.randomUUID()),
+                      new RequestId(UUID.randomUUID()),
+                      operator,
+                      TerminalBanking.BIND,
+                      TerminalBanking.bindRequest(
+                          at, terminal.generation(), terminal.revision(), foreign.id(), true),
+                      null,
+                      null);
+              var rebrand =
+                  new JournalEngine(
+                      store,
+                      (a, k) -> true,
+                      Map.of(
+                          TerminalBanking.BIND,
+                          TerminalBanking.registration(
+                              store.snapshot().worldId(),
+                              CASH,
+                              (action, candidate, shown, reads) -> change.equals(candidate),
+                              (actor, reads) -> operator.equals(actor))));
+              assertEquals(Status.COMMITTED, rebrand.submit(change).status());
+              var rebound = terminal(store, at, BranchPlans.owner(branch));
+              assertEquals(foreign.id(), rebound.binding().institution());
+              assertEquals(Set.of("economy:chf_bill_10"), rebound.settings().denominations());
+              assertEquals(local.id().key(), view(store, branch).choice().institution());
+            }
           }
         }
       }

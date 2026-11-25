@@ -3,6 +3,8 @@ package ca.emilybelnavis.mcmods.economy.foundation;
 import ca.emilybelnavis.mcmods.economy.Economy;
 import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.api.Money;
+import ca.emilybelnavis.mcmods.economy.banking.BankingController;
+import ca.emilybelnavis.mcmods.economy.banking.BankingMenu;
 import ca.emilybelnavis.mcmods.economy.banking.BankingSaves;
 import ca.emilybelnavis.mcmods.economy.corporation.Corporations;
 import ca.emilybelnavis.mcmods.economy.corporation.Managers;
@@ -34,8 +36,9 @@ public final class CorporationCommands {
   private static final int PAGE = 8;
   private static final int MAX_REVIEWS_PER_SESSION = 128;
   private static final long REVIEW_LIFETIME = Duration.ofMinutes(2).toNanos();
+  private static final String LAST_RECEIPT = "economy_founder_last_receipt";
   private static final String PENDING = "economy_founder_pending";
-  private static final String PREFIX = "/economy corporation ";
+  private static final String PREFIX = "/economy corp ";
   private static final Map<ServerPlayer, Review> REVIEWS =
       Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -54,13 +57,21 @@ public final class CorporationCommands {
 
   private final CommandContext<CommandSourceStack> ctx;
   private final ServerPlayer player;
+  private final BankingMenu office;
+  private UUID selectedCompany;
   private final ServerServices services;
   private final CorporationService founder;
   private final ServerGamePacketListenerImpl connection;
 
   private CorporationCommands(CommandContext<CommandSourceStack> ctx) {
+    this(ctx.getSource().getPlayer(), null, ctx);
+  }
+
+  CorporationCommands(
+      ServerPlayer player, BankingMenu office, CommandContext<CommandSourceStack> ctx) {
     this.ctx = ctx;
-    player = ctx.getSource().getPlayer();
+    this.office = office;
+    this.player = player;
     services = Economy.serverServices(player.server);
     if (services == null || services.state() != ServerServices.State.READY)
       throw new IllegalStateException("Corporation service unavailable.");
@@ -69,7 +80,10 @@ public final class CorporationCommands {
   }
 
   public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-    var root = Commands.literal("corporation").requires(CorporationCommands::direct);
+    var root = Commands.literal("corp").requires(CorporationCommands::direct);
+    root.then(
+        Commands.literal("gui")
+            .executes(c -> run(c, x -> BankingController.openCorporation(x.player))));
     root.then(
         Commands.literal("list")
             .executes(c -> run(c, x -> x.list(null)))
@@ -77,7 +91,7 @@ public final class CorporationCommands {
     root.then(
         Commands.literal("managers")
             .then(
-                uuid("company")
+                Commands.argument("company", StringArgumentType.string())
                     .executes(c -> run(c, x -> x.managers(null)))
                     .then(uuid("after").executes(c -> run(c, x -> x.managers(x.id("after")))))));
     root.then(Commands.literal("funding").executes(c -> run(c, CorporationCommands::funding)));
@@ -86,12 +100,36 @@ public final class CorporationCommands {
             .then(
                 uuid("account")
                     .then(
-                        Commands.argument("name", StringArgumentType.greedyString())
-                            .executes(c -> run(c, CorporationCommands::registration)))));
+                        Commands.argument("currency", StringArgumentType.word())
+                            .then(
+                                Commands.argument("quantity", LongArgumentType.longArg(1))
+                                    .then(
+                                        Commands.argument("price", StringArgumentType.word())
+                                            .then(
+                                                Commands.argument(
+                                                        "name", StringArgumentType.greedyString())
+                                                    .executes(
+                                                        c ->
+                                                            run(
+                                                                c,
+                                                                x ->
+                                                                    x.registration(
+                                                                        x.id("account"),
+                                                                        x.arg("name"),
+                                                                        CorporationOffice
+                                                                            .shareIssue(
+                                                                                Long.toString(
+                                                                                    LongArgumentType
+                                                                                        .getLong(
+                                                                                            c,
+                                                                                            "quantity")),
+                                                                                x.arg("price"),
+                                                                                x.arg(
+                                                                                    "currency")))))))))));
     root.then(
         Commands.literal("rename")
             .then(
-                uuid("company")
+                Commands.argument("company", StringArgumentType.string())
                     .then(
                         Commands.argument("name", StringArgumentType.greedyString())
                             .executes(
@@ -120,7 +158,9 @@ public final class CorporationCommands {
   private static LiteralArgumentBuilder<CommandSourceStack> lifecycle(
       String name, Corporations.Action action) {
     return Commands.literal(name)
-        .then(uuid("company").executes(c -> run(c, x -> x.lifecycle(action, ""))));
+        .then(
+            Commands.argument("company", StringArgumentType.string())
+                .executes(c -> run(c, x -> x.lifecycle(action, ""))));
   }
 
   private static LiteralArgumentBuilder<CommandSourceStack> manager(
@@ -181,7 +221,8 @@ public final class CorporationCommands {
     var manager = uuid("manager").then(revision);
     if (action == Managers.Mutation.APPOINT)
       manager.executes(c -> run(c, x -> x.changeManager(action, 0, "view", "all")));
-    return Commands.literal(name).then(uuid("company").then(manager));
+    return Commands.literal(name)
+        .then(Commands.argument("company", StringArgumentType.string()).then(manager));
   }
 
   private static RequiredArgumentBuilder<CommandSourceStack, UUID> uuid(String name) {
@@ -196,7 +237,18 @@ public final class CorporationCommands {
       CommandContext<CommandSourceStack> ctx, Consumer<CorporationCommands> command) {
     if (!direct(ctx.getSource())) return 0;
     try {
-      command.accept(new CorporationCommands(ctx));
+      var handler = new CorporationCommands(ctx);
+      if (ctx.getNodes().stream().anyMatch(n -> n.getNode().getName().equals("company"))) {
+        handler.show(
+            handler.founder.resolve(handler.arg("company")),
+            found -> {
+              handler.selectedCompany =
+                  found
+                      .orElseThrow(() -> new IllegalArgumentException("Company unavailable."))
+                      .id();
+              command.accept(handler);
+            });
+      } else command.accept(handler);
       return 1;
     } catch (IllegalArgumentException | IllegalStateException ex) {
       ctx.getSource()
@@ -207,6 +259,7 @@ public final class CorporationCommands {
   }
 
   private UUID id(String key) {
+    if (key.equals("company")) return Objects.requireNonNull(selectedCompany);
     return UuidArgument.getUuid(ctx, key);
   }
 
@@ -215,21 +268,26 @@ public final class CorporationCommands {
   }
 
   private void say(String text) {
-    player.sendSystemMessage(Component.literal(text));
+    if (office == null) player.sendSystemMessage(Component.literal(text));
+    else if (office.valid(player)) CorporationOffice.result(office, text);
   }
 
   private <T> void show(CompletionStage<T> result, Consumer<T> success) {
+    long revision = office == null ? -1 : office.revision();
     result.whenCompleteAsync(
         (value, error) -> {
           if (player.connection != connection
               || player.server.getPlayerList().getPlayer(player.getUUID()) != player
               || Economy.serverServices(player.server) != services
-              || services.state() != ServerServices.State.READY) return;
+              || services.state() != ServerServices.State.READY
+              || office != null && (!office.valid(player) || office.revision() != revision)) return;
           if (error != null) {
             say(
-                "Corporation request unavailable. Check an outstanding operation with "
-                    + PREFIX
-                    + "receipt.");
+                office != null
+                    ? "Unable to load this request. You can check Latest receipt in More options."
+                    : "Corporation request unavailable. Check an outstanding operation with "
+                        + PREFIX
+                        + "receipt.");
             return;
           }
           try {
@@ -255,13 +313,11 @@ public final class CorporationCommands {
   private static String company(Corporations.Company company) {
     return company.name()
         + " ("
-        + company.id()
+        + company.identifier()
         + "), "
         + company.state()
         + ", revision "
-        + company.revision()
-        + ", founder "
-        + company.founder();
+        + company.revision();
   }
 
   private void list(UUID after) {
@@ -296,7 +352,7 @@ public final class CorporationCommands {
                 "Next page: "
                     + PREFIX
                     + "managers "
-                    + company
+                    + StringArgumentType.escapeIfRequired(arg("company"))
                     + " "
                     + rows.get(PAGE - 1).manager());
         });
@@ -316,7 +372,7 @@ public final class CorporationCommands {
                     + " account "
                     + id
                     + (account.primary() ? " (primary)" : ""),
-                PREFIX + "register " + id + " ");
+                PREFIX + "gui");
           }
         });
   }
@@ -330,48 +386,63 @@ public final class CorporationCommands {
                         new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, command))));
   }
 
-  private void registration() {
-    String name = arg("name");
+  void registration(UUID account, String name, Corporations.ShareIssue issue) {
     show(
-        founder.quoteRegistration(new AccountId(id("account"))),
+        founder.quoteRegistration(new AccountId(account)),
         result -> {
           var fee =
               result.orElseThrow(
                   () ->
                       new IllegalArgumentException(
                           "No eligible registration fee quote for this personal account."));
-          var command = new Corporations.Register(name, fee);
+          var command = new Corporations.Register(name, fee, issue);
           offer(
-              "Register “"
+              "Register "
                   + command.name()
-                  + "” with founder "
-                  + player.getUUID()
-                  + ". Retire "
+                  + "\n"
+                  + CorporationOffice.shareTerms(issue)
+                  + "\nRegistration fee today: "
                   + fee.currency().code()
                   + " "
                   + new Money(fee.currency(), fee.minor()).majorUnits().toPlainString()
-                  + " from your personal account "
-                  + fee.account().value()
-                  + " at revision "
-                  + fee.revision()
-                  + (fee.publication() == null
-                      ? "."
-                      : " (CAD 500.00 equivalent, FX publication " + fee.publication() + ")."),
-              (service, op, attempt) -> service.submit(op, attempt, command));
+                  + " from your "
+                  + fee.currency().code()
+                  + " account.",
+              (service, op, attempt) -> service.submit(op, attempt, command),
+              true);
         });
   }
 
   private void lifecycle(Corporations.Action action, String name) {
+    lifecycle(id("company"), action, name);
+  }
+
+  void issue(UUID id, Corporations.ShareIssue issue) {
     showCompanySnapshot(
-        founder.find(id("company")),
+        founder.find(id),
+        found -> {
+          var company =
+              found.orElseThrow(() -> new IllegalArgumentException("Company unavailable."));
+          var command = new Corporations.Issue(company.id(), company.revision(), issue);
+          offer(
+              "Issue " + CorporationOffice.shareTerms(issue) + " for " + company.name() + ".",
+              (service, op, attempt) -> service.submit(op, attempt, command));
+        });
+  }
+
+  void lifecycle(UUID companyId, Corporations.Action action, String name) {
+    showCompanySnapshot(
+        founder.find(companyId),
         result -> {
           var company =
               result.orElseThrow(() -> new IllegalArgumentException("Company unavailable."));
           var command = new Corporations.Change(company.id(), company.revision(), action, name);
           String effect =
               switch (action) {
-                case RENAME -> "Rename to “" + command.name() + "”. The old name stays reserved.";
-                case WIND_DOWN -> "Begin wind-down. New accounts and exposure stop.";
+                case RENAME ->
+                    "Rename to “" + command.name() + "”. The old name becomes available.";
+                case WIND_DOWN ->
+                    "Begin wind-down. The company can no longer open accounts or borrow money.";
                 case CANCEL -> "Cancel wind-down and restore active status.";
                 case DISSOLVE ->
                     "Permanently dissolve the company if all closure requirements are met. Its"
@@ -379,7 +450,7 @@ public final class CorporationCommands {
                 default -> throw new IllegalArgumentException("Invalid lifecycle action.");
               };
           offer(
-              company(company) + ". " + effect,
+              company.name() + "\n" + effect,
               (service, op, attempt) -> service.submit(op, attempt, command));
         });
   }
@@ -393,7 +464,16 @@ public final class CorporationCommands {
 
   private void changeManager(
       Managers.Mutation action, long revision, String capabilityText, String scopeText) {
-    UUID manager = id("manager");
+    changeManager(id("company"), id("manager"), action, revision, capabilityText, scopeText);
+  }
+
+  void changeManager(
+      UUID companyId,
+      UUID manager,
+      Managers.Mutation action,
+      long revision,
+      String capabilityText,
+      String scopeText) {
     var capabilities = EnumSet.noneOf(Managers.Capability.class);
     if (!capabilityText.equals("none")) {
       for (String token : capabilityText.split(",", -1))
@@ -402,7 +482,9 @@ public final class CorporationCommands {
               case "view" -> Managers.Capability.VIEW_HISTORY;
               case "pay" -> Managers.Capability.PAY_TRANSFER;
               case "accounts" -> Managers.Capability.MANAGE_ACCOUNTS;
-              default -> throw new IllegalArgumentException("Use view, pay, accounts or none.");
+              case "borrow" -> Managers.Capability.BORROW;
+              default ->
+                  throw new IllegalArgumentException("Use view, pay, accounts, borrow or none.");
             });
     }
     var scope =
@@ -418,7 +500,7 @@ public final class CorporationCommands {
         };
     var rights = new Managers.Rights(capabilities, scope);
     showCompanySnapshot(
-        founder.find(id("company")),
+        founder.find(companyId),
         result -> {
           var company =
               result.orElseThrow(() -> new IllegalArgumentException("Company unavailable."));
@@ -426,19 +508,47 @@ public final class CorporationCommands {
           var change =
               new Managers.Change(
                   company.id(), company.revision(), manager, revision, action, rights, mayPay);
-          offer(
-              company(company)
-                  + ". "
-                  + action
-                  + " manager "
-                  + manager
-                  + " at membership revision "
-                  + revision
-                  + ". Resulting "
-                  + rights(rights)
-                  + "."
-                  + (mayPay ? " " + Managers.PAYMENT_DISCLOSURE : ""),
-              (service, op, attempt) -> service.updateManager(op, attempt, change));
+          var who = CorporationOffice.playerName(player, manager);
+          String description =
+              switch (action) {
+                case REVOKE -> "Remove " + who + " as a manager of " + company.name() + "?";
+                case APPOINT -> "Add " + who + " as a manager of " + company.name() + "?";
+                case CHANGE -> "Change permissions for " + who + " at " + company.name() + "?";
+              };
+          if (action != Managers.Mutation.REVOKE) {
+            var abilities =
+                capabilities.stream()
+                    .map(
+                        capability ->
+                            switch (capability) {
+                              case VIEW_HISTORY -> "view history";
+                              case PAY_TRANSFER -> "make payments";
+                              case MANAGE_ACCOUNTS -> "manage accounts";
+                              case BORROW -> "borrow money";
+                            })
+                    .toList();
+            description +=
+                "\nAccess: "
+                    + (abilities.isEmpty()
+                        ? "No banking permissions"
+                        : String.join(", ", abilities));
+            if (scope.allAccounts()) description += "\nApplies to all company accounts.";
+            else if (office != null) {
+              var names =
+                  office.choices().stream()
+                      .filter(
+                          c ->
+                              scope.accounts().stream()
+                                  .anyMatch(id -> c.value().equals("scope:" + id)))
+                      .map(c -> c.label())
+                      .toList();
+              if (names.size() != scope.accounts().size())
+                throw new IllegalArgumentException("Select accounts from the list.");
+              description += "\nAccounts: " + (names.isEmpty() ? "None" : String.join(", ", names));
+            } else description += "\nAccounts: " + scope.accounts();
+            if (mayPay) description += "\n" + Managers.PAYMENT_DISCLOSURE;
+          }
+          offer(description, (service, op, attempt) -> service.updateManager(op, attempt, change));
         });
   }
 
@@ -449,14 +559,19 @@ public final class CorporationCommands {
     return data.getCompound(Player.PERSISTED_NBT_TAG);
   }
 
-  private UUID pending() {
+  UUID pending() {
     var tag = persisted();
     return tag.hasUUID(PENDING) ? tag.getUUID(PENDING) : null;
   }
 
   private void offer(String description, Submit submit) {
+    offer(description, submit, false);
+  }
+
+  private void offer(String description, Submit submit, boolean registration) {
     if (pending() != null) {
-      say("Resolve your previous operation first: " + PREFIX + "receipt " + pending());
+      if (office != null) receipt(pending());
+      else say("Resolve your previous operation first: " + PREFIX + "receipt " + pending());
       return;
     }
     var id = UUID.randomUUID();
@@ -482,19 +597,27 @@ public final class CorporationCommands {
               System.nanoTime() + REVIEW_LIFETIME,
               submit));
     }
+    if (office != null) {
+      if (office.valid(player)) CorporationOffice.review(office, id, description, registration);
+      return;
+    }
     say(description);
     String approve = PREFIX + "approve " + id;
     suggest("To approve within two minutes, enter " + approve, approve);
   }
 
   private void approve() {
-    UUID id = id("operation");
+    approve(id("operation"));
+  }
+
+  void approve(UUID id) {
     if (id.equals(pending())) {
       receipt(id);
       return;
     }
     if (pending() != null) {
-      say("Resolve your previous operation first: " + PREFIX + "receipt " + pending());
+      if (office != null) receipt(pending());
+      else say("Resolve your previous operation first: " + PREFIX + "receipt " + pending());
       return;
     }
     var review = REVIEWS.get(player);
@@ -512,39 +635,57 @@ public final class CorporationCommands {
       BankingSaves.player(player, services.partyWorld(), id);
     } catch (RuntimeException saveFailure) {
       persisted().remove(PENDING);
-      say("The operation was not submitted because the recovery marker could not be saved.");
+      say("The request could not be saved. Please try again.");
       return;
     }
-    say(
-        "Management operation "
-            + id
-            + ". Recover the original outcome with "
-            + PREFIX
-            + "receipt "
-            + id);
+    if (office != null) say("Saving company changes…");
+    else
+      say(
+          "Management operation "
+              + id
+              + ". Recover the original outcome with "
+              + PREFIX
+              + "receipt "
+              + id);
     CompletionStage<Journal.Outcome> result;
     try {
       result =
           review.submit().apply(founder, new OperationId(id), new RequestId(UUID.randomUUID()));
     } catch (RuntimeException admissionFailure) {
-      say("Admission unavailable. Resolve the saved operation with " + PREFIX + "receipt " + id);
+      say(
+          office == null
+              ? "Admission unavailable. Resolve the saved operation with "
+                  + PREFIX
+                  + "receipt "
+                  + id
+              : "Check Latest receipt before trying again.");
       return;
     }
     show(
         result,
         outcome -> {
-          if (outcome.status() != Journal.Status.UNKNOWN && id.equals(pending()))
+          if (outcome.status() != Journal.Status.UNKNOWN && id.equals(pending())) {
+            persisted().putUUID(LAST_RECEIPT, id);
             persisted().remove(PENDING);
-          say(
-              outcome.status()
-                  + " · "
-                  + outcome.result().code()
-                  + " "
-                  + outcome.result().payload());
+          }
+          if (office != null && outcome.status() == Journal.Status.COMMITTED) {
+            CorporationOffice.completed(office, outcome.result());
+          } else if (outcome.status() == Journal.Status.COMMITTED) {
+            receipt(id);
+          } else {
+            say(CorporationOffice.failureMessage(outcome.result().code()));
+          }
         });
   }
 
-  private void receipt(UUID operation) {
+  void latestReceipt() {
+    var id = pending();
+    if (id == null && persisted().hasUUID(LAST_RECEIPT)) id = persisted().getUUID(LAST_RECEIPT);
+    if (id == null) say("No recent company receipt.");
+    else receipt(id);
+  }
+
+  void receipt(UUID operation) {
     if (operation == null) {
       say(
           "No pending management operation. Use "
@@ -555,7 +696,27 @@ public final class CorporationCommands {
     show(
         founder.receipt(operation),
         result -> {
-          if (operation.equals(pending())) persisted().remove(PENDING);
+          if (operation.equals(pending()) && result.isPresent()) {
+            persisted().putUUID(LAST_RECEIPT, operation);
+            persisted().remove(PENDING);
+          } else if (operation.equals(pending())) persisted().remove(PENDING);
+          if (office != null) {
+            say(
+                result
+                    .map(
+                        r ->
+                            r.status().equals("COMMITTED")
+                                ? switch (r.code()) {
+                                  case "MEMBERSHIP_UPDATED" -> "Manager permissions saved.";
+                                  case "CORPORATION_SHARES_ISSUED" -> "Class A shares issued.";
+                                  case "CORPORATION_WINDING_DOWN" -> "The company is winding down.";
+                                  case "CORPORATION_DISSOLVED" -> "The company has closed.";
+                                  default -> "Company changes saved.";
+                                }
+                                : CorporationOffice.failureMessage(r.code()))
+                    .orElse("No company receipt found."));
+            return;
+          }
           say(
               result
                   .map(r -> operation + " · " + r.status() + " · " + r.code() + " " + r.details())

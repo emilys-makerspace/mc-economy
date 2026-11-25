@@ -78,9 +78,11 @@ class DepositsTest {
       assertEquals(64, lot(store, eur).remaining());
       assertEquals(
           1, store.transaction(tx -> DepositReturns.list(tx::query, owner, skippedId)).size());
-      assertThrows(
-          IllegalArgumentException.class,
-          () -> preview(store, List.of(slot(store, 0, cad, 4), slot(store, 1, eur, 1))));
+      var mismatch =
+          assertThrows(
+              Deposits.WrongCurrency.class,
+              () -> preview(store, List.of(slot(store, 0, cad, 4), slot(store, 1, eur, 1))));
+      assertEquals(List.of(CAD), mismatch.accepted);
       var mixed = preview(store, List.of(slot(store, 0, cad, 4)));
       assertEquals(100L, mixed.credit().minorUnits());
       assertEquals(1, skipped.returned().size());
@@ -356,6 +358,46 @@ class DepositsTest {
   }
 
   @Test
+  void boundKioskSettlesNativeAndForeignCashTogetherInTheAccountCurrency() throws Exception {
+    var store = open();
+    try {
+      seed(store);
+      store.transaction(
+          tx ->
+              tx.execute(
+                  "UPDATE terminal_settings SET terminal_kind='KIOSK',mode='DISABLED',currencies='',denominations='' WHERE generation=?",
+                  List.of(generation.toString())));
+      var coin = slot(store, 0, cad, 4);
+      var foreign = slot(store, 1, eur, 50);
+      var note =
+          new Deposits.Slot(
+              2,
+              new CashIssuance.Claim(
+                  store.snapshot().worldId(),
+                  UUID.randomUUID(),
+                  "economy:cad_bill_100_horizontal",
+                  1),
+              "creative-cad-bill",
+              true);
+      var preview = preview(store, List.of(coin, foreign, note));
+      var converted =
+          preview.groups().stream().filter(g -> g.currency() == EUR).findFirst().orElseThrow();
+      assertEquals(new Money(EUR, 50), converted.subtotal());
+      assertEquals(new Money(CAD, 100), converted.credit());
+      assertEquals(64, lot(store, eur).remaining());
+      var id = reserve(store, preview);
+      assertEquals(
+          Status.COMMITTED, change(store, Deposits.Action.SAVED, id, "saved", "confirm").status());
+      assertEquals(
+          Status.COMMITTED, change(store, Deposits.Action.COMMIT, id, "saved", "confirm").status());
+      assertEquals(10200L, balance(store));
+      assertEquals(14, lot(store, eur).remaining());
+    } finally {
+      store.close();
+    }
+  }
+
+  @Test
   void creativeHorizontalBillReviewDistinguishesDisabledUnacceptedAndEnabledTerminal()
       throws Exception {
     var store = open();
@@ -387,6 +429,11 @@ class DepositsTest {
       var unaccepted =
           assertThrows(IllegalArgumentException.class, () -> preview(store, List.of(creative)));
       assertEquals("DEPOSIT_DENOMINATION", unaccepted.getMessage());
+      var coin =
+          assertThrows(
+              IllegalArgumentException.class,
+              () -> preview(store, List.of(slot(store, 0, cad, 1))));
+      assertEquals("DEPOSIT_ATM_COIN", coin.getMessage());
       store.transaction(
           tx ->
               tx.execute(

@@ -7,7 +7,10 @@ import ca.emilybelnavis.mcmods.economy.api.Identifiers.*;
 import ca.emilybelnavis.mcmods.economy.api.Money;
 import ca.emilybelnavis.mcmods.economy.api.PartyRef;
 import ca.emilybelnavis.mcmods.economy.banking.BankingDashboardView.Availability;
+import ca.emilybelnavis.mcmods.economy.banking.BankingMenu;
 import ca.emilybelnavis.mcmods.economy.banking.UiText;
+import ca.emilybelnavis.mcmods.economy.fx.FxService;
+import ca.emilybelnavis.mcmods.economy.institution.BankProviders;
 import ca.emilybelnavis.mcmods.economy.journal.*;
 import ca.emilybelnavis.mcmods.economy.storage.SqliteStorage;
 import java.nio.file.Path;
@@ -21,6 +24,91 @@ import org.junit.jupiter.api.io.TempDir;
 
 class BankingDashboardTest {
   @TempDir Path world;
+
+  @Test
+  void firstAccountUsesTheLocalCurrencyOnBothKioskPages() throws Exception {
+    var store = new SqliteStorage();
+    try {
+      store.initialize(world.toRealPath());
+      var actor = new PlayerId(UUID.randomUUID());
+      var owner = new PartyRef(store.snapshot().worldId(), new PartyRef.Player(actor));
+      var engine =
+          new JournalEngine(
+              store,
+              (who, kind) -> true,
+              Map.of(FxService.OPEN, FxService.opening(java.time.Clock.systemUTC())));
+      assertEquals(
+          Journal.Status.COMMITTED,
+          engine
+              .submit(
+                  new Journal.Intent(
+                      new OperationId(UUID.randomUUID()),
+                      new RequestId(UUID.randomUUID()),
+                      actor,
+                      FxService.OPEN,
+                      new Journal.CanonicalRequest(1, Map.of("currency", "GBP")),
+                      null,
+                      null))
+              .status());
+      store.transaction(
+          tx -> {
+            for (var branch : Map.of("orchard_direct", "CAD", "crosswind", "USD").entrySet()) {
+              String bank = "economy:bank/" + branch.getKey();
+              for (var view :
+                  List.of(
+                      TerminalMenus.branch(
+                          tx::query,
+                          owner,
+                          bank,
+                          "manage_accounts",
+                          BankingMenu.Access.KIOSK,
+                          BankProviders.NO_TIER2),
+                      TerminalMenus.accounts(
+                          tx::query,
+                          owner,
+                          bank,
+                          false,
+                          0,
+                          BankingMenu.Access.KIOSK,
+                          BankProviders.NO_TIER2))) {
+                var opening =
+                    view.choices().stream()
+                        .filter(choice -> choice.action().equals("branch_open"))
+                        .findFirst()
+                        .orElseThrow();
+                assertEquals(
+                    "Open primary account (" + branch.getValue() + ")",
+                    UiText.render(opening.label(), "en_gb"));
+              }
+              assertTrue(
+                  TerminalMenus.accounts(
+                          tx::query,
+                          owner,
+                          bank,
+                          false,
+                          0,
+                          BankingMenu.Access.ATM,
+                          BankProviders.NO_TIER2)
+                      .choices()
+                      .isEmpty());
+            }
+            var specialist =
+                TerminalMenus.branch(
+                    tx::query,
+                    owner,
+                    "economy:bank/atlas_reserve",
+                    "manage_accounts",
+                    BankingMenu.Access.KIOSK,
+                    BankProviders.NO_TIER2);
+            assertTrue(
+                specialist.choices().stream().noneMatch(c -> c.action().equals("branch_open")));
+            assertTrue(UiText.render(specialist.lines().getFirst(), "en_gb").contains("Tier 2"));
+            return null;
+          });
+    } finally {
+      store.close();
+    }
+  }
 
   @Test
   void oneReadCapturesOwnerFundsAndFourNewestOriginalMovementsWithoutScanningHistory()
@@ -133,11 +221,25 @@ class BankingDashboardTest {
                 "INSERT INTO bank_account_providers VALUES(?,'economy:bank/crownstone',0,1,0)",
                 List.of(account.value().toString()));
             var terminalAccounts =
-                TerminalMenus.accounts(tx::query, owner, "economy:bank/crownstone", false, 0);
+                TerminalMenus.accounts(
+                    tx::query,
+                    owner,
+                    "economy:bank/crownstone",
+                    false,
+                    0,
+                    BankingMenu.Access.KIOSK,
+                    BankProviders.NO_TIER2);
             assertEquals(1, terminalAccounts.choices().size());
             assertEquals("terminal_account", terminalAccounts.choices().getFirst().action());
             assertTrue(
-                TerminalMenus.accounts(tx::query, owner, "economy:bank/other", false, 0)
+                TerminalMenus.accounts(
+                        tx::query,
+                        owner,
+                        "economy:bank/other",
+                        false,
+                        0,
+                        BankingMenu.Access.ATM,
+                        BankProviders.NO_TIER2)
                     .choices()
                     .isEmpty());
             new ca.emilybelnavis.mcmods.economy.banking.BankingNetwork.Action(

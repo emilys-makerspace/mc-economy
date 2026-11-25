@@ -93,6 +93,43 @@ final class CorporationSchema {
             + " mandate revision'); END");
   }
 
+  static List<String> capitalStatements() {
+    var sql =
+        new java.util.ArrayList<>(
+            List.of(
+                "CREATE TABLE corporation_registry(identifier TEXT PRIMARY KEY NOT NULL, party TEXT NOT NULL UNIQUE REFERENCES corporations(id), funded INTEGER NOT NULL DEFAULT 0 CHECK(funded IN (0,1)))",
+                "CREATE TABLE corporation_shares(company TEXT NOT NULL REFERENCES corporation_registry(identifier) ON UPDATE CASCADE,class TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(typeof(quantity)='integer' AND quantity>0),price_minor INTEGER NOT NULL CHECK(typeof(price_minor)='integer' AND price_minor>0),currency TEXT NOT NULL,PRIMARY KEY(company,class))"));
+    sql.add(
+        "CREATE TABLE corporate_credit_lines(account_id TEXT PRIMARY KEY NOT NULL REFERENCES account_catalog(account_id),company TEXT NOT NULL REFERENCES corporation_registry(identifier) ON UPDATE CASCADE,network TEXT NOT NULL,limit_minor INTEGER NOT NULL CHECK(limit_minor>0),principal INTEGER NOT NULL CHECK(principal>=0 AND principal<=limit_minor),interest INTEGER NOT NULL CHECK(interest>=0),carry INTEGER NOT NULL CHECK(carry>=0 AND carry<3640000),last_day INTEGER NOT NULL,revision INTEGER NOT NULL CHECK(revision>0),active INTEGER NOT NULL CHECK(active IN(0,1)),opened_operation TEXT NOT NULL)");
+    sql.addAll(ca.emilybelnavis.mcmods.economy.card.CorporateCards.schema());
+    return List.copyOf(sql);
+  }
+
+  // Legacy names could contain both spaces and dashes. Disambiguate historical collisions in
+  // ID order, using a suffix character that a new name cannot contain.
+  static void importIdentifiers(Connection connection) throws SQLException {
+    try (var query = connection.createStatement();
+        var insert =
+            connection.prepareStatement(
+                "INSERT INTO corporation_registry(identifier,party) VALUES(?,?) ON CONFLICT(identifier) DO NOTHING");
+        var rows = query.executeQuery("SELECT id,name FROM corporations ORDER BY id")) {
+      while (rows.next()) {
+        String base =
+            ca.emilybelnavis.mcmods.economy.corporation.Corporations.identifier(rows.getString(2));
+        insert.setString(2, rows.getString(1));
+        int duplicate = 0;
+        do {
+          insert.setString(1, duplicate == 0 ? base : base + "~" + duplicate);
+          duplicate++;
+        } while (insert.executeUpdate() == 0);
+      }
+    }
+  }
+
+  static void validateCapital(Connection c) throws SQLException {
+    validate(c, capitalStatements());
+  }
+
   static void validateIntegrations(Connection c) throws SQLException {
     validate(c, integrationStatements());
   }

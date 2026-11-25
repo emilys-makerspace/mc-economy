@@ -11,7 +11,6 @@ import java.util.*;
 import java.util.function.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.*;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.*;
 import net.minecraft.world.SimpleMenuProvider;
 
@@ -37,6 +36,7 @@ public final class BankingController {
     boolean inFlight;
     Journal.Outcome financialOutcome;
     boolean ownsInputs;
+    BankingOperation.View corporateCardReceipt;
     Set<UUID> claims = Set.of();
     List<UUID> claimOrder = List.of();
     UUID claimCursor;
@@ -59,6 +59,10 @@ public final class BankingController {
   }
 
   public static void open(ServerPlayer player, BlockPos clicked) {
+    openTerminal(player, clicked, true);
+  }
+
+  private static void openTerminal(ServerPlayer player, BlockPos clicked, boolean allowSettings) {
     var anchor = TerminalGeometry.resolveAnchor(player.serverLevel(), clicked);
     if (!(player.serverLevel().getBlockEntity(anchor) instanceof TerminalBlockEntity entity)
         || !TerminalLifecycle.matches(player.serverLevel(), anchor, entity.generation())) {
@@ -68,13 +72,19 @@ public final class BankingController {
           true);
       return;
     }
-    if ((entity.kind() == TerminalPolicy.Kind.ATM
+    if (allowSettings
+        && (entity.kind() == TerminalPolicy.Kind.ATM
             || entity.kind() == TerminalPolicy.Kind.KIOSK
             || entity.kind() == TerminalPolicy.Kind.TELLER)
         && player.getMainHandItem().isEmpty()
-        && player.isShiftKeyDown()
-        && mayConfigure(entity.owner(), player.getUUID(), player.hasPermissions(2))) {
-      openAdmin(player, anchor);
+        && player.isShiftKeyDown()) {
+      if (mayConfigure(entity.owner(), player.getUUID(), player.hasPermissions(2)))
+        openAdmin(player, anchor);
+      else
+        player.displayClientMessage(
+            UiText.component(
+                player, UiText.t("ui.bank.only_this_terminal_s_owner_or_an_operator_may_.2d039a")),
+            true);
       return;
     }
     var access =
@@ -90,6 +100,66 @@ public final class BankingController {
             anchor.getX(),
             anchor.getY(),
             anchor.getZ());
+    if (access == BankingMenu.Access.KIOSK) {
+      var services = services(player);
+      if (services != null && services.worldId() != null) {
+        var stack =
+            java.util.stream.Stream.of(player.getMainHandItem(), player.getOffhandItem())
+                .filter(
+                    item ->
+                        ca.emilybelnavis.mcmods.economy.card.CardCatalog.find(item)
+                            .filter(c -> c.id().startsWith("economy:issued_corporate_"))
+                            .isPresent())
+                .findFirst();
+        if (stack.isPresent()) {
+          var token =
+              ca.emilybelnavis.mcmods.economy.card.CardStackIdentity.mark(
+                  stack.get(), services.worldId());
+          if (token.isEmpty()) {
+            player.displayClientMessage(
+                UiText.component(
+                    player, UiText.t("ui.bank.this_card_is_unavailable_expired_or_revoked.a04e80")),
+                true);
+            return;
+          }
+          var original = player.containerMenu;
+          var generation = entity.generation();
+          services
+              .ledger()
+              .corporateCardAccess(actor(player), services.worldId(), token.get().token())
+              .whenComplete(
+                  (found, error) -> {
+                    if (player.server.getPlayerList().getPlayer(player.getUUID()) != player
+                        || player.containerMenu != original
+                        || !player.isAlive()
+                        || !player
+                            .serverLevel()
+                            .dimension()
+                            .location()
+                            .toString()
+                            .equals(terminalAnchor.dimension())
+                        || player.distanceToSqr(
+                                anchor.getX() + .5, anchor.getY() + .5, anchor.getZ() + .5)
+                            > 36
+                        || !TerminalLifecycle.matches(player.serverLevel(), anchor, generation))
+                      return;
+                    if (error != null
+                        || found.isEmpty()
+                        || !heldIssuedCard(player, services.worldId(), found.get())) {
+                      player.displayClientMessage(
+                          UiText.component(
+                              player,
+                              UiText.t(
+                                  "ui.bank.this_card_is_unavailable_expired_or_revoked.a04e80")),
+                          true);
+                      return;
+                    }
+                    open(player, terminalAnchor, generation, access, token.get().token());
+                  });
+          return;
+        }
+      }
+    }
     if (access == BankingMenu.Access.ATM) {
       var services = services(player);
       if (services == null
@@ -105,8 +175,7 @@ public final class BankingController {
               .findFirst()
               .orElse(null);
       if (mark == null) {
-        player.displayClientMessage(
-            Component.literal("Use a bank or credit card to access this ATM."), true);
+        openAtmEnrollment(player, services, terminalAnchor, anchor, entity.generation());
         return;
       }
       services
@@ -133,11 +202,84 @@ public final class BankingController {
     } else open(player, terminalAnchor, entity.generation(), access);
   }
 
+  private static void openAtmEnrollment(
+      ServerPlayer player,
+      ServerServices services,
+      TerminalPolicy.Anchor anchor,
+      BlockPos position,
+      UUID generation) {
+    var grant = FinanceMenuSupport.grant(player, services);
+    if (grant == null) return;
+    var originalMenu = player.containerMenu;
+    String pendingBank = BankingAccounts.pendingPrimaryBank(player, services.worldId());
+    if ((player.getPersistentData().getCompound("economy_banking_pending").hasUUID("operation")
+            && pendingBank == null)
+        || player.getPersistentData().getCompound(PENDING).hasUUID("operation")) {
+      player.displayClientMessage(
+          UiText.component(player, UiText.t("ui.bank.previous_operation_unresolved.fde0de")), true);
+      return;
+    }
+    TerminalMenus.atmEnrollment(services, grant, anchor, generation, pendingBank)
+        .whenComplete(
+            (offer, error) -> {
+              if (player.server.getPlayerList().getPlayer(player.getUUID()) != player
+                  || !player.isAlive()
+                  || player.containerMenu != originalMenu
+                  || !player
+                      .serverLevel()
+                      .dimension()
+                      .location()
+                      .toString()
+                      .equals(anchor.dimension())
+                  || player.distanceToSqr(
+                          position.getX() + .5, position.getY() + .5, position.getZ() + .5)
+                      > 36
+                  || !TerminalLifecycle.matches(player.serverLevel(), position, generation)) return;
+              if (error != null || offer.isEmpty()) {
+                String message =
+                    error != null ? "ui.terminal.opening.unavailable" : "ui.bank.atm_card_required";
+                if (error == null
+                    && player.serverLevel().getBlockEntity(position)
+                        instanceof TerminalBlockEntity entity
+                    && mayConfigure(entity.owner(), player.getUUID(), player.hasPermissions(2))) {
+                  player.displayClientMessage(
+                      UiText.component(player, UiText.t(message))
+                          .copy()
+                          .append(" ")
+                          .append(
+                              UiText.component(
+                                  player,
+                                  UiText.t(
+                                      "ui.bank.owner_sneak_right_click_with_an_empty_hand_to_.2fa93f"))),
+                      true);
+                } else
+                  player.displayClientMessage(UiText.component(player, UiText.t(message)), true);
+                return;
+              }
+              if (pendingBank != null && !offer.orElseThrow().bankKey().equals(pendingBank)) {
+                player.displayClientMessage(
+                    UiText.component(
+                        player, UiText.t("ui.bank.previous_operation_unresolved.fde0de")),
+                    true);
+                return;
+              }
+              var menu = open(player, anchor, generation, BankingMenu.Access.ATM_ENROLLMENT, null);
+              if (menu != null) menu.showEnrollment(offer.orElseThrow());
+            });
+  }
+
   public static boolean openAdmin(ServerPlayer player, BlockPos clicked) {
     var anchor = TerminalGeometry.resolveAnchor(player.serverLevel(), clicked);
     if (!(player.serverLevel().getBlockEntity(anchor) instanceof TerminalBlockEntity entity)
         || !TerminalLifecycle.matches(player.serverLevel(), anchor, entity.generation())
         || !mayConfigure(entity.owner(), player.getUUID(), player.hasPermissions(2))) return false;
+    if (services(player) == null || services(player).state() != ServerServices.State.READY) {
+      player.displayClientMessage(
+          UiText.component(
+              player, UiText.t("ui.bank.terminal_is_still_preparing_try_again_shortly.0401c4")),
+          true);
+      return false;
+    }
     open(
         player,
         new TerminalPolicy.Anchor(
@@ -148,6 +290,21 @@ public final class BankingController {
         entity.generation(),
         BankingMenu.Access.ADMIN);
     return true;
+  }
+
+  public static void openCorporation(ServerPlayer player) {
+    var services = services(player);
+    if (services == null || services.state() != ServerServices.State.READY)
+      throw new IllegalStateException("Banking is still starting.");
+    var pos = player.blockPosition();
+    var anchor =
+        new TerminalPolicy.Anchor(
+            player.serverLevel().dimension().location().toString(),
+            pos.getX(),
+            pos.getY(),
+            pos.getZ());
+    var menu = open(player, anchor, services.sessionId(), BankingMenu.Access.CORPORATION, null);
+    if (menu != null) CorporationOffice.home(player, menu);
   }
 
   public static boolean mayConfigure(UUID owner, UUID player, boolean operator) {
@@ -257,9 +414,13 @@ public final class BankingController {
     long revision = menu.revision();
     var session = menu.session();
     menu.setBusy(true);
-    services
-        .ledger()
-        .usableCardAccess(actor(player), services.worldId(), menu.issuedToken())
+    (menu.access() == BankingMenu.Access.KIOSK
+            ? services
+                .ledger()
+                .corporateCardAccess(actor(player), services.worldId(), menu.issuedToken())
+            : services
+                .ledger()
+                .usableCardAccess(actor(player), services.worldId(), menu.issuedToken()))
         .whenComplete(
             (found, error) -> {
               if (player.server.getPlayerList().getPlayer(player.getUUID()) != player
@@ -298,13 +459,14 @@ public final class BankingController {
     open(player, anchor, generation, access, null);
   }
 
-  private static void open(
+  private static BankingMenu open(
       ServerPlayer player,
       TerminalPolicy.Anchor anchor,
       UUID generation,
       BankingMenu.Access access,
       UUID issuedToken) {
-    if (services(player) == null || services(player).state() != ServerServices.State.READY) return;
+    if (services(player) == null || services(player).state() != ServerServices.State.READY)
+      return null;
     var session = UUID.randomUUID();
     var holder = new BankingMenu[1];
     player.openMenu(
@@ -319,7 +481,13 @@ public final class BankingController {
                         ? UiText.t("ui.bank.terminal_configuration.9560f9")
                         : UiText.t("ui.bank.banking.fff5a7"))),
         buffer -> holder[0].writeOpening(buffer));
+    if (access == BankingMenu.Access.ATM_ENROLLMENT || access == BankingMenu.Access.CORPORATION)
+      return holder[0];
     if (holder[0] != null && issuedToken != null) holder[0].setIssuedToken(issuedToken);
+    if (holder[0] != null && issuedToken != null && access == BankingMenu.Access.KIOSK) {
+      BankingAccounts.action(player, holder[0], "corp_list", "");
+      return holder[0];
+    }
     if (holder[0] != null && access != BankingMenu.Access.WORLD_SETUP) {
       try {
         recoverInputs(player, holder[0]);
@@ -363,6 +531,7 @@ public final class BankingController {
           "home", List.of(), UiText.t("ui.bank.register_services.176010"), registerDestinations());
     if (holder[0] != null && access == BankingMenu.Access.ADMIN)
       BankingAccounts.action(player, holder[0], "settings", "");
+    return holder[0];
   }
 
   public static void action(ServerPlayer player, BankingMenu menu, String action, String value) {
@@ -376,18 +545,19 @@ public final class BankingController {
           UiText.t("ui.bank.this_control_is_not_available_here.a3df37"));
       return;
     }
+    if (action.startsWith("corp_cc_")) {
+      CorporateCreditMenu.action(player, menu, action, value);
+      return;
+    }
+    if (menu.access() == BankingMenu.Access.CORPORATION
+        && (action.startsWith("office_") || action.equals("home"))) {
+      CorporationOffice.action(player, menu, action, value);
+      return;
+    }
     if (action.equals("banking")) {
       var anchor = new BlockPos(menu.anchor().x(), menu.anchor().y(), menu.anchor().z());
-      if (!(player.serverLevel().getBlockEntity(anchor) instanceof TerminalBlockEntity entity))
-        return;
-      var access =
-          switch (entity.kind()) {
-            case ATM -> BankingMenu.Access.ATM;
-            case TELLER -> BankingMenu.Access.TELLER;
-            case KIOSK -> BankingMenu.Access.KIOSK;
-            case REGISTER -> BankingMenu.Access.REGISTER;
-          };
-      open(player, menu.anchor(), menu.generation(), access);
+      player.closeContainer();
+      openTerminal(player, anchor, false);
       return;
     }
     if (menu.worldSetup()) {
@@ -718,11 +888,20 @@ public final class BankingController {
   static void fail(BankingMenu menu, Throwable error) {
     var cause = error;
     while (cause.getCause() != null) cause = cause.getCause();
-    com.mojang.logging.LogUtils.getLogger()
-        .warn(
-            "event=BANKING_REQUEST_FAILED session={} reason={}",
-            menu.session(),
-            shortText(cause.getMessage(), 128));
+    if (cause instanceof Deposits.WrongCurrency mismatch)
+      com.mojang.logging.LogUtils.getLogger()
+          .warn(
+              "event=DEPOSIT_WRONG_CURRENCY session={} slot={} currency={} accepted={}",
+              menu.session(),
+              mismatch.slot + 1,
+              mismatch.currency,
+              mismatch.accepted);
+    else
+      com.mojang.logging.LogUtils.getLogger()
+          .warn(
+              "event=BANKING_REQUEST_FAILED session={} reason={}",
+              menu.session(),
+              shortText(cause.getMessage(), 128));
     var player = menu.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
     String status =
         player != null && services(player).debugGui()
@@ -736,13 +915,21 @@ public final class BankingController {
         menu.page(),
         List.of(UiText.t("ui.bank.the_current_request_could_not_be_completed_pre.44c91e")),
         status,
-        List.of(),
+        menu.page().equals("deposit")
+            ? menu.choices().stream().filter(c -> c.action().equals("account_select")).toList()
+            : List.of(),
         BankingOperation.View.of(
             BankingOperation.State.DECLINED, "screen.economy.operation.declined"),
         null);
   }
 
   static String depositProblem(Throwable failure) {
+    if (failure instanceof Deposits.WrongCurrency mismatch)
+      return UiText.t(
+          "ui.bank.deposit.wrong_currency",
+          mismatch.slot + 1,
+          mismatch.currency.code(),
+          String.join(", ", mismatch.accepted.stream().map(EconomyCurrency::code).toList()));
     String code = failure.getMessage() == null ? "" : failure.getMessage();
     return switch (code) {
       case "PRICING_BATCH_LIMIT" ->
@@ -755,7 +942,9 @@ public final class BankingController {
           UiText.t("ui.bank.account_pricing_changed_or_is_unavailable_revi.fd999e");
       case "DEPOSIT_MODE" ->
           UiText.t("ui.bank.deposits_are_disabled_on_this_atm_its_owner_ca.706e0e");
-      case "DEPOSIT_DENOMINATION" -> UiText.t("ui.bank.386c9aa2e8");
+      case "DEPOSIT_DENOMINATION" -> UiText.t("ui.bank.deposit.unaccepted_value");
+      case "DEPOSIT_ATM_COIN" -> UiText.t("ui.bank.deposit.atm_coin");
+      case "DEPOSIT_UNKNOWN_ITEM" -> UiText.t("ui.bank.deposit.unknown_item");
       case "DEPOSIT_ACCOUNT", "DEPOSIT_ACCOUNT_STALE" ->
           UiText.t("ui.bank.choose_an_open_account_then_review_again_creat.02a29e");
       case "DEPOSIT_TERMINAL", "DEPOSIT_TERMINAL_STALE" ->
@@ -1942,6 +2131,8 @@ public final class BankingController {
    * delivery.
    */
   public static void deliver(ServerPlayer player, BankingMenu menu, WorldId world, UUID custody) {
+    if (menu.page().equals("corp_receipt") && custody.equals(menu.operation().operationId()))
+      FLOWS.computeIfAbsent(menu, ignored -> new Flow()).corporateCardReceipt = menu.operation();
     services(player)
         .ledger()
         .custodyCase(actor(player), custody, (who, reads) -> false)
@@ -2307,6 +2498,26 @@ public final class BankingController {
                     }
                     if (!menu.valid(player)) return;
                     menu.setBusy(false);
+                    if (flow != null
+                        && flow.corporateCardReceipt != null
+                        && current.id().equals(flow.corporateCardReceipt.operationId())) {
+                      menu.publish(
+                          "corp_receipt",
+                          List.of(UiText.t("ui.player.card_received")),
+                          "",
+                          BankingAccounts.hasSelectedCompany(menu)
+                              ? List.of(
+                                  new BankingNetwork.Choice(
+                                      "corp_summary",
+                                      "",
+                                      UiText.t("ui.bank.corporate.back_company"),
+                                      false))
+                              : List.of(),
+                          flow.corporateCardReceipt,
+                          null);
+                      flow.corporateCardReceipt = null;
+                      return;
+                    }
                     menu.publish(
                         "claims",
                         List.of(
@@ -2465,6 +2676,7 @@ public final class BankingController {
   }
 
   public static void closed(ServerPlayer player, BankingMenu menu) {
+    ca.emilybelnavis.mcmods.economy.institution.KioskAdmission.closed(player.server, menu);
     BankingHome.closed(menu);
     TerminalMenus.closed(menu);
     BankingHistory.closed(menu);
@@ -2477,6 +2689,8 @@ public final class BankingController {
     FinanceReports.closed(menu);
     FinanceCollections.closed(menu);
     CreditUse.closed(menu);
+    if (menu.access() == BankingMenu.Access.ATM_ENROLLMENT
+        || menu.access() == BankingMenu.Access.CORPORATION) return;
     if (player.server.getPlayerList().getPlayer(player.getUUID()) != player) return;
     var flow = FLOWS.get(menu);
     if (flow == null || !flow.ownsInputs) {

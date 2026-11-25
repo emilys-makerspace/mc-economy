@@ -10,8 +10,8 @@
     "slot": "economy:block/banking/greenhaven_teller_slot",
     "vent": "economy:block/banking/greenhaven_teller_vent",
     "screen": "economy:block/banking/greenhaven_teller_front",
-    "glass": "economy:block/banking/greenhaven_teller_front",
-    "chart": "economy:block/banking/greenhaven_teller_front",
+    "glass": "economy:block/teller_glass",
+    "chart": "economy:block/trading_chart",
     "particle": "economy:block/banking/greenhaven_teller_shell"
   },
   "elements": [

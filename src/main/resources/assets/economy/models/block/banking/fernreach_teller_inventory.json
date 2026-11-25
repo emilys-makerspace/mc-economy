@@ -10,8 +10,8 @@
     "slot": "economy:block/banking/fernreach_teller_slot",
     "vent": "economy:block/banking/fernreach_teller_vent",
     "screen": "economy:block/banking/fernreach_teller_front",
-    "glass": "economy:block/banking/fernreach_teller_front",
-    "chart": "economy:block/banking/fernreach_teller_front",
+    "glass": "economy:block/teller_glass",
+    "chart": "economy:block/trading_chart",
     "particle": "economy:block/banking/fernreach_teller_shell"
   },
   "render_type": "minecraft:cutout",
